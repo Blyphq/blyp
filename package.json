@@ -15,12 +15,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mohammedibrahim8887/blyp.git"
+    "url": "https://github.com/Blyphq/blyp.git"
   },
   "bugs": {
-    "url": "https://github.com/mohammedibrahim8887/blyp/issues"
+    "url": "https://github.com/Blyphq/blyp/issues"
   },
-  "homepage": "https://github.com/mohammedibrahim8887/blyp#readme",
+  "homepage": "https://github.com/Blyphq/blyp#readme",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./types/index.d.ts",
