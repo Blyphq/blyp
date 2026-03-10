@@ -58,7 +58,7 @@ export const DEFAULT_CONFIG: BlypConfig = {
 };
 
 let cachedConfig: BlypConfig | null = null;
-const PACKAGE_NAME = 'blyp';
+const PACKAGE_NAME = 'blyp-js';
 const CONFIG_FILE_NAME = 'blyp.config.json';
 const GITIGNORE_FILE_NAME = '.gitignore';
 

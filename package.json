@@ -1,5 +1,5 @@
 {
-  "name": "blyp",
+  "name": "blyp-js",
   "version": "0.1.0",
   "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino with and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, TanStack Start, and SvelteKit.",
   "keywords": [

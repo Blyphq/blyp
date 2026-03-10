@@ -25,7 +25,7 @@ This document contains detailed usage, all framework integrations, configuration
 ## Basic logger usage
 
 ```typescript
-import { logger } from 'blyp';
+import { logger } from 'blyp-js';
 
 // Basic logging
 logger.info('Hello world');
@@ -56,7 +56,7 @@ logger.info('User login', {
 ### Application Errors
 
 ```typescript
-import { createError, HTTP_CODES } from 'blyp';
+import { createError, HTTP_CODES } from 'blyp-js';
 
 throw createError({
   status: 404,
@@ -84,7 +84,7 @@ throw PAYMENT_AMOUNT_INVALID.create({
 ### Client Error Parsing
 
 ```typescript
-import { parseError } from 'blyp/client';
+import { parseError } from 'blyp-js/client';
 
 const response = await fetch('/api/payments', {
   method: 'POST',
@@ -110,7 +110,7 @@ const error = parseError({
 ### Client Logger Sync
 
 ```typescript
-import { createClientLogger } from 'blyp/client';
+import { createClientLogger } from 'blyp-js/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -134,7 +134,7 @@ The client logger logs to the browser console by default and best-effort syncs t
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createLogger } from 'blyp/elysia';
+import { createLogger } from 'blyp-js/elysia';
 
 const app = new Elysia()
   .use(createLogger({
@@ -154,7 +154,7 @@ const app = new Elysia()
 
 ```typescript
 import { Hono } from 'hono';
-import { createLogger } from 'blyp/hono';
+import { createLogger } from 'blyp-js/hono';
 
 const app = new Hono();
 
@@ -176,7 +176,7 @@ import express from 'express';
 import {
   createLogger,
   createExpressErrorLogger,
-} from 'blyp/express';
+} from 'blyp-js/express';
 
 const app = express();
 
@@ -200,7 +200,7 @@ app.use((error, _req, res, _next) => {
 
 ```typescript
 import Fastify from 'fastify';
-import { createLogger } from 'blyp/fastify';
+import { createLogger } from 'blyp-js/fastify';
 
 const app = Fastify();
 
@@ -220,8 +220,8 @@ app.get('/posts', async (request) => {
 import 'reflect-metadata';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { logger } from 'blyp';
-import { createLogger, BlypModule } from 'blyp/nestjs';
+import { logger } from 'blyp-js';
+import { createLogger, BlypModule } from 'blyp-js/nestjs';
 
 @Module({
   imports: [BlypModule.forRoot()],
@@ -244,7 +244,7 @@ Call `createLogger(...)` before `NestFactory.create(...)`. `BlypModule` wires HT
 ### Next.js App Router
 
 ```typescript
-import { createLogger } from 'blyp/nextjs';
+import { createLogger } from 'blyp-js/nextjs';
 
 const nextLogger = createLogger({
   level: 'info',
@@ -262,7 +262,7 @@ export const POST = nextLogger.clientLogHandler;
 ### TanStack Start
 
 ```typescript
-import { createLogger } from 'blyp/tanstack-start';
+import { createLogger } from 'blyp-js/tanstack-start';
 
 const tanstackLogger = createLogger({
   level: 'info',
@@ -277,7 +277,7 @@ export const POST = tanstackLogger.clientLogHandlers.POST;
 ### SvelteKit
 
 ```typescript
-import { createLogger } from 'blyp/sveltekit';
+import { createLogger } from 'blyp-js/sveltekit';
 
 const svelteLogger = createLogger({
   level: 'info',
@@ -292,7 +292,7 @@ export const POST = svelteLogger.clientLogHandler;
 ### Cloudflare Workers
 
 ```typescript
-import { initWorkersLogger, createWorkersLogger } from 'blyp/workers';
+import { initWorkersLogger, createWorkersLogger } from 'blyp-js/workers';
 
 initWorkersLogger({
   env: { service: 'my-worker' },
@@ -325,14 +325,14 @@ try {
 }
 ```
 
-The Workers integration is console-based. It does not use file logging, does not read `blyp.config.json`, and does not include client-log ingestion in this first version. Use the subpath import `blyp/workers`.
+The Workers integration is console-based. It does not use file logging, does not read `blyp.config.json`, and does not include client-log ingestion in this first version. Use the subpath import `blyp-js/workers`.
 
 ---
 
 ## Advanced configuration
 
 ```typescript
-import { createLogger } from 'blyp/elysia';
+import { createLogger } from 'blyp-js/elysia';
 
 const logger = createLogger({
   level: 'info',
@@ -370,7 +370,7 @@ const logger = createLogger({
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createLogger } from 'blyp/elysia';
+import { createLogger } from 'blyp-js/elysia';
 
 const app = new Elysia()
   .use(createLogger({
@@ -399,7 +399,7 @@ Set `"enabled": false` to disable the auto-registered ingestion route.
 ## Runtime detection
 
 ```typescript
-import { runtime } from 'blyp/utils';
+import { runtime } from 'blyp-js/utils';
 
 console.log(`Running on: ${runtime.type}`); // 'bun' or 'node'
 console.log(`Is Bun: ${runtime.isBun}`);
@@ -422,7 +422,7 @@ import {
   getMethodColor, 
   getStatusColor, 
   getColoredLevel 
-} from 'blyp/utils';
+} from 'blyp-js/utils';
 
 // Color HTTP methods
 console.log(getMethodColor('GET'));    // Green GET
@@ -533,7 +533,7 @@ Defaults:
 Example configuration:
 
 ```typescript
-import { createStandaloneLogger } from 'blyp';
+import { createStandaloneLogger } from 'blyp-js';
 
 const logger = createStandaloneLogger({
   pretty: true,
@@ -550,7 +550,7 @@ const logger = createStandaloneLogger({
 ### Reading stored logs
 
 ```typescript
-import { readLogFile } from 'blyp';
+import { readLogFile } from 'blyp-js';
 
 const pretty = await readLogFile('logs/log.ndjson');
 const records = await readLogFile('logs/archive/log.20260309T101530Z.ndjson.gz', {

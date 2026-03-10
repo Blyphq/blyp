@@ -49,17 +49,17 @@ blyp/
 ## Installation
 
 ```bash
-bun add blyp
+bun add blyp-js
 ```
 
-Also: `npm install blyp` | `yarn add blyp` | `pnpm add blyp`
+Also: `npm install blyp-js` | `yarn add blyp-js` | `pnpm add blyp-js`
 
 ## Usage
 
 ### Basic logger
 
 ```typescript
-import { logger } from 'blyp';
+import { logger } from 'blyp-js';
 
 logger.info('Hello world');
 logger.success('Operation completed');
@@ -70,7 +70,7 @@ logger.warning('Warning message');
 ### Errors
 
 ```typescript
-import { createError } from 'blyp';
+import { createError } from 'blyp-js';
 
 throw createError({ status: 404, message: 'Not found' });
 ```
@@ -83,7 +83,7 @@ Blyp supports **Elysia**, **Hono**, **Express**, **Fastify**, **NestJS**, **Next
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createLogger } from 'blyp/elysia';
+import { createLogger } from 'blyp-js/elysia';
 
 const app = new Elysia()
   .use(createLogger({ level: 'info', autoLogging: true }))
@@ -137,7 +137,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 ## Links
 
 - [GitHub Repository](https://github.com/Blyphq/blyp)
-- [NPM Package](https://www.npmjs.com/package/blyp)
+- [NPM Package](https://www.npmjs.com/package/blyp-js)
 - [Documentation](docs/README.md)
 - [Issues](https://github.com/Blyphq/blyp/issues)
 
