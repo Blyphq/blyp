@@ -118,6 +118,10 @@ bun run build
 bun run type-check
 ```
 
+## Publishing
+
+GitHub Actions publishes the package to npm when a GitHub Release is published. Add an `NPM_TOKEN` repository secret before using the workflow.
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get set up and submit changes.
