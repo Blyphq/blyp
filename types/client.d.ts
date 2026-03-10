@@ -1,3 +1,26 @@
 /// <reference lib="dom" />
 
-export * from '../dist/client';
+export {
+  BlypError,
+  HTTP_CODES,
+  getHttpCode,
+  parseError,
+} from '../dist/index';
+export type {
+  BlypErrorCode,
+  BlypErrorCodeDefinition,
+  BlypErrorLike,
+  ErrorLogLevel,
+  ErrorLoggerLike,
+  ParseErrorOptions,
+  ParseableErrorPayload,
+} from '../dist/index';
+export { createClientLogger, logger } from './frameworks/client';
+export type {
+  ClientLogger,
+  ClientLoggerConfig,
+  ClientLogBrowserContext,
+  ClientLogEvent,
+  ClientLogLevel,
+  ClientLogPageContext,
+} from './frameworks/client';

@@ -1,0 +1,37 @@
+import fs from 'fs';
+import path from 'path';
+import { describe, expect, it } from 'bun:test';
+
+const repoRoot = path.resolve(import.meta.dir, '..');
+
+function readRepoFile(relativePath: string): string {
+  return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+}
+
+describe('Package type shims', () => {
+  it('points client and workers exports at shipped declaration files', () => {
+    const packageJson = JSON.parse(readRepoFile('package.json')) as {
+      exports: Record<string, { types?: string }>;
+    };
+
+    expect(packageJson.exports['./client']?.types).toBe('./types/client.d.ts');
+    expect(packageJson.exports['./workers']?.types).toBe('./types/workers.d.ts');
+
+    expect(fs.existsSync(path.join(repoRoot, 'types/client.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/workers.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/client.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/workers.d.ts'))).toBe(true);
+  });
+
+  it('declares the public client and workers entrypoints directly', () => {
+    const clientTypes = readRepoFile('types/client.d.ts');
+    const workersTypes = readRepoFile('types/workers.d.ts');
+
+    expect(clientTypes).toContain('createClientLogger');
+    expect(clientTypes).toContain("from './frameworks/client'");
+    expect(workersTypes).toContain('createWorkersLogger');
+    expect(workersTypes).toContain("from './frameworks/workers'");
+    expect(clientTypes).not.toContain("../dist/client");
+    expect(workersTypes).not.toContain("../dist/workers");
+  });
+});
