@@ -1,0 +1,73 @@
+import { defineConfig } from 'tsup'
+
+export default defineConfig([
+  {
+    entry: {
+      index: 'src/index.ts',
+      standalone: 'src/frameworks/standalone/index.ts',
+      elysia: 'src/frameworks/elysia/index.ts',
+      hono: 'src/frameworks/hono/index.ts',
+      express: 'src/frameworks/express/index.ts',
+      fastify: 'src/frameworks/fastify/index.ts',
+      nestjs: 'src/frameworks/nestjs/index.ts',
+      nextjs: 'src/frameworks/nextjs/index.ts',
+      'tanstack-start': 'src/frameworks/tanstack-start/index.ts',
+      sveltekit: 'src/frameworks/sveltekit/index.ts',
+    },
+    format: ['cjs', 'esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    clean: true,
+    outDir: 'dist',
+    target: 'es2020',
+    minify: false,
+    treeshake: true,
+    external: [
+      'elysia',
+      'hono',
+      'express',
+      'fastify',
+      'fastify-plugin',
+      '@nestjs/common',
+      '@nestjs/core',
+      '@nestjs/platform-express',
+      '@nestjs/platform-fastify',
+      '@nestjs/microservices',
+      '@nestjs/microservices/microservices-module',
+      '@nestjs/websockets',
+      '@nestjs/websockets/socket-module',
+      'class-transformer',
+      'class-validator',
+      'next',
+      'rxjs',
+      '@tanstack/react-start',
+      '@sveltejs/kit',
+      'winston',
+      'chalk',
+    ],
+    noExternal: [],
+    esbuildOptions(options) {
+      options.define = {
+        'require.resolve': 'undefined'
+      }
+    },
+    platform: 'node',
+  },
+  {
+    entry: {
+      client: 'src/frameworks/client/index.ts',
+      workers: 'src/frameworks/workers/index.ts',
+    },
+    format: ['cjs', 'esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    clean: false,
+    outDir: 'dist',
+    target: 'es2020',
+    minify: false,
+    treeshake: true,
+    platform: 'browser',
+  },
+])

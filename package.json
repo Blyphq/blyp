@@ -1,0 +1,219 @@
+{
+  "name": "blyp",
+  "version": "0.1.0",
+  "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino with and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, TanStack Start, and SvelteKit.",
+  "keywords": [
+    "logger",
+    "pino",
+    "elysia",
+    "standalone",
+    "bun",
+    "typescript",
+    "logging"
+  ],
+  "author": "Mohammed Ibrahim",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mohammedibrahim8887/blyp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mohammedibrahim8887/blyp/issues"
+  },
+  "homepage": "https://github.com/mohammedibrahim8887/blyp#readme",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./standalone": {
+      "types": "./types/frameworks/standalone.d.ts",
+      "import": "./exports/frameworks/standalone.mjs",
+      "require": "./exports/frameworks/standalone.js"
+    },
+    "./elysia": {
+      "types": "./types/frameworks/elysia.d.ts",
+      "import": "./exports/frameworks/elysia.mjs",
+      "require": "./exports/frameworks/elysia.js"
+    },
+    "./hono": {
+      "types": "./types/frameworks/hono.d.ts",
+      "import": "./exports/frameworks/hono.mjs",
+      "require": "./exports/frameworks/hono.js"
+    },
+    "./express": {
+      "types": "./types/frameworks/express.d.ts",
+      "import": "./exports/frameworks/express.mjs",
+      "require": "./exports/frameworks/express.js"
+    },
+    "./fastify": {
+      "types": "./types/frameworks/fastify.d.ts",
+      "import": "./exports/frameworks/fastify.mjs",
+      "require": "./exports/frameworks/fastify.js"
+    },
+    "./nestjs": {
+      "types": "./types/frameworks/nestjs.d.ts",
+      "import": "./exports/frameworks/nestjs.mjs",
+      "require": "./exports/frameworks/nestjs.js"
+    },
+    "./nextjs": {
+      "types": "./types/frameworks/nextjs.d.ts",
+      "import": "./exports/frameworks/nextjs.mjs",
+      "require": "./exports/frameworks/nextjs.js"
+    },
+    "./tanstack-start": {
+      "types": "./types/frameworks/tanstack-start.d.ts",
+      "import": "./exports/frameworks/tanstack-start.mjs",
+      "require": "./exports/frameworks/tanstack-start.js"
+    },
+    "./sveltekit": {
+      "types": "./types/frameworks/sveltekit.d.ts",
+      "import": "./exports/frameworks/sveltekit.mjs",
+      "require": "./exports/frameworks/sveltekit.js"
+    },
+    "./client": {
+      "types": "./types/client.d.ts",
+      "import": "./exports/client.mjs",
+      "require": "./exports/client.js"
+    },
+    "./workers": {
+      "types": "./types/workers.d.ts",
+      "import": "./exports/workers.mjs",
+      "require": "./exports/workers.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "client": [
+        "./types/client.d.ts"
+      ],
+      "elysia": [
+        "./types/frameworks/elysia.d.ts"
+      ],
+      "hono": [
+        "./types/frameworks/hono.d.ts"
+      ],
+      "express": [
+        "./types/frameworks/express.d.ts"
+      ],
+      "fastify": [
+        "./types/frameworks/fastify.d.ts"
+      ],
+      "nestjs": [
+        "./types/frameworks/nestjs.d.ts"
+      ],
+      "nextjs": [
+        "./types/frameworks/nextjs.d.ts"
+      ],
+      "tanstack-start": [
+        "./types/frameworks/tanstack-start.d.ts"
+      ],
+      "sveltekit": [
+        "./types/frameworks/sveltekit.d.ts"
+      ],
+      "standalone": [
+        "./types/frameworks/standalone.d.ts"
+      ],
+      "workers": [
+        "./types/workers.d.ts"
+      ],
+      "*": [
+        "./types/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "exports",
+    "types",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "bun test tests/",
+    "test:watch": "bun test tests/ --watch",
+    "test:all": "bun test tests/",
+    "build": "tsup",
+    "prepublishOnly": "bun run build",
+    "type-check": "bun run tsc --noEmit",
+    "dev": "bun run test:watch",
+    "lint": "bun run type-check",
+    "clean": "rm -rf dist .log"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.8",
+    "@nestjs/core": "^11.1.8",
+    "@nestjs/platform-express": "^11.1.8",
+    "@nestjs/platform-fastify": "^11.1.8",
+    "@types/bun": "latest",
+    "@types/express": "^5.0.3",
+    "elysia": "^1.4.27",
+    "express": "^5.1.0",
+    "fastify": "^5.6.1",
+    "fastify-plugin": "^5.1.0",
+    "hono": "^4.10.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "tsup": "^8.5.0"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^10 || ^11",
+    "@nestjs/core": "^10 || ^11",
+    "@nestjs/platform-express": "^10 || ^11",
+    "@nestjs/platform-fastify": "^10 || ^11",
+    "@sveltejs/kit": "^2",
+    "@tanstack/react-start": "^1",
+    "elysia": "^1.4.27",
+    "express": "^5",
+    "fastify": "^5",
+    "hono": "^4",
+    "next": "^15",
+    "rxjs": "^7",
+    "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@nestjs/core": {
+      "optional": true
+    },
+    "@nestjs/platform-express": {
+      "optional": true
+    },
+    "@nestjs/platform-fastify": {
+      "optional": true
+    },
+    "@sveltejs/kit": {
+      "optional": true
+    },
+    "@tanstack/react-start": {
+      "optional": true
+    },
+    "elysia": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "fastify": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "rxjs": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0"
+  }
+}
