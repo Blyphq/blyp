@@ -1,4 +1,5 @@
 import {
+  type ClientLogEvent,
   createRandomId,
   normalizeClientLogLevel,
   normalizeClientPayloadData,
@@ -6,13 +7,24 @@ import {
   normalizeMetadata,
   serializeLogMessage,
 } from '../../shared/client-log';
+import {
+  createRemoteDeliveryManager,
+  type DeliveryAttemptResult,
+} from '../../shared/remote-delivery';
 import type { ExpoLogger, ExpoLoggerConfig } from '../../types/frameworks/expo';
-import { getExpoNetworkSnapshot, loadExpoNetworkModule } from './network';
+import {
+  getExpoNetworkSnapshot,
+  loadExpoNetworkModule,
+  subscribeToExpoNetworkState,
+} from './network';
 
 interface ExpoLoggerState {
   readonly pageId: string;
   readonly sessionId: string;
   readonly bindings: Record<string, unknown>;
+  readonly delivery?: {
+    enqueue: (event: ClientLogEvent) => void;
+  };
 }
 
 type ExpoLogLevel =
@@ -48,6 +60,10 @@ function isAbsoluteHttpUrl(value: string | undefined): value is string {
   } catch {
     return false;
   }
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
 }
 
 function resolveHeaders(headers: Record<string, string> | undefined): Record<string, string> {
@@ -98,17 +114,18 @@ async function sendRemoteLog(
     headers?: Record<string, string>;
     metadata?: ExpoLoggerConfig['metadata'];
   },
-  state: ExpoLoggerState,
-  level: ExpoLogLevel,
-  message: unknown,
-  args: unknown[]
-): Promise<void> {
+  event: ClientLogEvent
+): Promise<DeliveryAttemptResult> {
   if (!isAbsoluteHttpUrl(config.endpoint)) {
     warnOnce(
       'invalid-endpoint',
       '[blyp/expo] `endpoint` must be an absolute http(s) URL. Remote sync skipped.'
     );
-    return;
+    return {
+      outcome: 'failure',
+      reason: 'invalid_endpoint',
+      suppressWarning: true,
+    };
   }
 
   const expoNetworkModule = await loadExpoNetworkModule();
@@ -117,42 +134,71 @@ async function sendRemoteLog(
       'missing-expo-network',
       '[blyp/expo] Install `expo-network` to enable remote sync in Expo.'
     );
-    return;
+    return {
+      outcome: 'failure',
+      reason: 'missing_transport',
+      suppressWarning: true,
+    };
   }
 
   if (typeof fetch !== 'function') {
-    return;
+    return {
+      outcome: 'failure',
+      reason: 'missing_transport',
+    };
   }
 
-  const payload = {
-    type: 'client_log' as const,
-    source: 'client' as const,
-    id: createRandomId(),
-    level: normalizeClientLogLevel(level),
-    message: serializeLogMessage(message),
-    data: normalizeClientPayloadData(message, args),
-    bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) : undefined,
-    clientTimestamp: new Date().toISOString(),
-    page: {},
-    browser: {},
+  const network = await getExpoNetworkSnapshot();
+  if (network?.isConnected === false || network?.isInternetReachable === false) {
+    return {
+      outcome: 'retry',
+      reason: 'offline',
+    };
+  }
+
+  const payload: ClientLogEvent = {
+    ...event,
     device: {
-      runtime: 'expo' as const,
-      network: await getExpoNetworkSnapshot(),
+      runtime: 'expo',
+      network,
     },
-    session: {
-      pageId: state.pageId,
-      sessionId: state.sessionId,
-    },
-    metadata: normalizeMetadata(config.metadata),
   };
 
   try {
-    await fetch(config.endpoint, {
+    const response = await fetch(config.endpoint, {
       method: 'POST',
       headers: resolveHeaders(config.headers),
       body: JSON.stringify(payload),
     });
-  } catch {}
+
+    if (response.ok) {
+      return {
+        outcome: 'success',
+        transport: 'fetch',
+        status: response.status,
+      };
+    }
+
+    if (isRetryableStatus(response.status)) {
+      return {
+        outcome: 'retry',
+        reason: 'response_status',
+        status: response.status,
+      };
+    }
+
+    return {
+      outcome: 'failure',
+      reason: 'response_status',
+      status: response.status,
+    };
+  } catch (error) {
+    return {
+      outcome: 'retry',
+      reason: 'network_error',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function buildExpoLogger(
@@ -167,6 +213,26 @@ function buildExpoLogger(
     metadata: config?.metadata,
   };
 
+  const delivery = state.delivery ??
+    (
+      resolvedConfig.remoteSync
+        ? createRemoteDeliveryManager({
+            runtime: 'expo',
+            delivery: config?.delivery,
+            send: (event) => sendRemoteLog(resolvedConfig, event),
+            subscribeToResume: (resume) => {
+              return subscribeToExpoNetworkState((network) => {
+                if (network?.isConnected === false || network?.isInternetReachable === false) {
+                  return;
+                }
+
+                resume();
+              });
+            },
+          })
+        : undefined
+    );
+
   const writeLog = (level: ExpoLogLevel, message: unknown, args: unknown[]): void => {
     if (resolvedConfig.localConsole) {
       emitLocalConsole(level, message, args);
@@ -176,7 +242,28 @@ function buildExpoLogger(
       return;
     }
 
-    void sendRemoteLog(resolvedConfig, state, level, message, args);
+    const payload: ClientLogEvent = {
+      type: 'client_log',
+      source: 'client',
+      id: createRandomId(),
+      level: normalizeClientLogLevel(level),
+      message: serializeLogMessage(message),
+      data: normalizeClientPayloadData(message, args),
+      bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) as Record<string, unknown> : undefined,
+      clientTimestamp: new Date().toISOString(),
+      page: {},
+      browser: {},
+      device: {
+        runtime: 'expo',
+      },
+      session: {
+        pageId: state.pageId,
+        sessionId: state.sessionId,
+      },
+      metadata: normalizeMetadata(resolvedConfig.metadata),
+    };
+
+    delivery?.enqueue(payload);
   };
 
   return {
@@ -211,6 +298,7 @@ function buildExpoLogger(
           ...state.bindings,
           ...bindings,
         },
+        delivery,
       });
     },
   };

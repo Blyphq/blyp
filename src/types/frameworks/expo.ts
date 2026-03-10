@@ -4,6 +4,12 @@ import type {
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext,
 } from '../../shared/client-log';
 
 export interface ExpoLoggerConfig {
@@ -12,6 +18,7 @@ export interface ExpoLoggerConfig {
   localConsole?: boolean;
   remoteSync?: boolean;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
+  delivery?: RemoteDeliveryConfig;
 }
 
 export interface ExpoLogger {
@@ -32,4 +39,10 @@ export type {
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext,
 };

@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 
 import {
+  type ClientLogEvent,
   DEFAULT_CLIENT_LOG_ENDPOINT,
   createRandomId,
   getBrowserContext,
@@ -12,6 +13,10 @@ import {
   normalizeMetadata,
   serializeLogMessage,
 } from '../../shared/client-log';
+import {
+  createRemoteDeliveryManager,
+  type DeliveryAttemptResult,
+} from '../../shared/remote-delivery';
 import type {
   ClientLogger,
   ClientLoggerConfig,
@@ -21,6 +26,9 @@ interface ClientLoggerState {
   readonly pageId: string;
   readonly sessionId: string;
   readonly bindings: Record<string, unknown>;
+  readonly delivery?: {
+    enqueue: (event: ClientLogEvent) => void;
+  };
 }
 
 function resolveHeaders(headers: Record<string, string> | undefined): Record<string, string> {
@@ -34,14 +42,33 @@ function shouldUseBeaconFallback(headers: Record<string, string> | undefined): b
   return Object.keys(headers ?? {}).length === 0;
 }
 
-function sendRemoteLog(
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function isBrowserRuntime(): boolean {
+  return typeof navigator !== 'undefined' && typeof location !== 'undefined';
+}
+
+async function sendRemoteLog(
   config: Required<Pick<ClientLoggerConfig, 'endpoint' | 'credentials'>> & {
     headers?: Record<string, string>;
   },
-  payload: unknown
-): void {
+  payload: ClientLogEvent
+): Promise<DeliveryAttemptResult> {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return {
+      outcome: 'retry',
+      reason: 'offline',
+    };
+  }
+
   if (typeof fetch !== 'function') {
-    return;
+    return {
+      outcome: 'failure',
+      reason: 'missing_transport',
+      suppressWarning: true,
+    };
   }
 
   const body = JSON.stringify(payload);
@@ -52,39 +79,65 @@ function sendRemoteLog(
     typeof Blob !== 'undefined';
 
   try {
-    fetch(config.endpoint, {
+    const response = await fetch(config.endpoint, {
       method: 'POST',
       keepalive: true,
       credentials: config.credentials,
       headers,
       body,
-    }).catch(() => {
-      if (!canUseBeacon) {
-        return;
-      }
-
-      try {
-        navigator.sendBeacon(
-          config.endpoint,
-          new Blob([body], { type: 'application/json' })
-        );
-      } catch {}
     });
-  } catch {
-    if (!canUseBeacon) {
-      return;
+
+    if (response.ok) {
+      return {
+        outcome: 'success',
+        transport: 'fetch',
+        status: response.status,
+      };
     }
 
-    try {
-      navigator.sendBeacon(
-        config.endpoint,
-        new Blob([body], { type: 'application/json' })
-      );
-    } catch {}
+    if (isRetryableStatus(response.status)) {
+      return {
+        outcome: 'retry',
+        reason: 'response_status',
+        status: response.status,
+      };
+    }
+
+    return {
+      outcome: 'failure',
+      reason: 'response_status',
+      status: response.status,
+    };
+  } catch (error) {
+    if (canUseBeacon) {
+      try {
+        if (
+          navigator.sendBeacon(
+            config.endpoint,
+            new Blob([body], { type: 'application/json' })
+          )
+        ) {
+          return {
+            outcome: 'success',
+            transport: 'beacon',
+          };
+        }
+      } catch {}
+    }
+
+    return {
+      outcome: 'retry',
+      reason: 'network_error',
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
-function emitLocalConsole(level: 'warn' | 'debug' | 'info' | 'warning' | 'error' | 'critical' | 'success' | 'table', message: unknown, args: unknown[]): void {
+function emitLocalConsole(
+  level: 'warn' | 'debug' | 'info' | 'warning' | 'error' | 'critical' | 'success' | 'table',
+  message: unknown,
+  args: unknown[]
+): void {
   if (typeof console === 'undefined') {
     return;
   }
@@ -129,6 +182,36 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
     metadata: config.metadata,
   };
 
+  const delivery = state.delivery ??
+    (
+      resolvedConfig.remoteSync &&
+      isBrowserRuntime() &&
+      typeof fetch === 'function'
+        ? createRemoteDeliveryManager({
+            runtime: 'browser',
+            delivery: config.delivery,
+            send: (event) => sendRemoteLog(resolvedConfig, event),
+            subscribeToResume: (resume) => {
+              if (typeof globalThis.addEventListener !== 'function') {
+                return;
+              }
+
+              const listener = () => {
+                resume();
+              };
+
+              globalThis.addEventListener('online', listener);
+
+              return () => {
+                if (typeof globalThis.removeEventListener === 'function') {
+                  globalThis.removeEventListener('online', listener);
+                }
+              };
+            },
+          })
+        : undefined
+    );
+
   const writeLog = (
     level: 'warn' | 'debug' | 'info' | 'warning' | 'error' | 'critical' | 'success' | 'table',
     message: unknown,
@@ -146,14 +229,14 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
     const normalizedMessage = serializeLogMessage(message);
     const normalizedData = normalizeClientPayloadData(message, args);
     const metadata = normalizeMetadata(resolvedConfig.metadata);
-    const payload = {
-      type: 'client_log' as const,
-      source: 'client' as const,
+    const payload: ClientLogEvent = {
+      type: 'client_log',
+      source: 'client',
       id: createRandomId(),
       level: normalizedLevel,
       message: normalizedMessage,
       data: normalizedData,
-      bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) : undefined,
+      bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) as Record<string, unknown> : undefined,
       clientTimestamp: new Date().toISOString(),
       page: getBrowserPageContext(),
       browser: getBrowserContext(),
@@ -164,7 +247,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
       metadata,
     };
 
-    sendRemoteLog(resolvedConfig, payload);
+    delivery?.enqueue(payload);
   };
 
   return {
@@ -199,6 +282,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
           ...state.bindings,
           ...bindings,
         },
+        delivery,
       });
     },
   };

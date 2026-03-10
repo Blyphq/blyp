@@ -62,6 +62,65 @@ export interface ClientLogEvent {
   metadata?: Record<string, unknown>;
 }
 
+export type RemoteDeliveryRuntime = 'browser' | 'expo';
+
+export type RemoteDeliveryTransport = 'fetch' | 'beacon';
+
+export type RemoteDeliveryFailureReason =
+  | 'offline'
+  | 'network_error'
+  | 'response_status'
+  | 'invalid_endpoint'
+  | 'missing_transport'
+  | 'queue_overflow';
+
+export interface RemoteDeliverySuccessContext {
+  runtime: RemoteDeliveryRuntime;
+  event: ClientLogEvent;
+  attempt: number;
+  status?: number;
+  transport: RemoteDeliveryTransport;
+}
+
+export interface RemoteDeliveryRetryContext {
+  runtime: RemoteDeliveryRuntime;
+  event: ClientLogEvent;
+  attempt: number;
+  retriesRemaining: number;
+  nextRetryAt: string;
+  reason: 'offline' | 'network_error' | 'response_status';
+  status?: number;
+  error?: string;
+}
+
+export interface RemoteDeliveryFailureContext {
+  runtime: RemoteDeliveryRuntime;
+  event: ClientLogEvent;
+  attempt: number;
+  reason: RemoteDeliveryFailureReason;
+  status?: number;
+  error?: string;
+}
+
+export interface RemoteDeliveryDropContext {
+  runtime: RemoteDeliveryRuntime;
+  droppedEvent: ClientLogEvent;
+  replacementEvent: ClientLogEvent;
+  maxQueueSize: number;
+  reason: 'queue_overflow';
+}
+
+export interface RemoteDeliveryConfig {
+  maxRetries?: number;
+  retryDelayMs?: number;
+  maxQueueSize?: number;
+  warnOnFailure?: boolean;
+  onSuccess?: (ctx: RemoteDeliverySuccessContext) => void;
+  onRetry?: (ctx: RemoteDeliveryRetryContext) => void;
+  onFailure?: (ctx: RemoteDeliveryFailureContext) => void;
+  onDrop?: (ctx: RemoteDeliveryDropContext) => void;
+}
+
 export interface ClientLoggerConfig {
   endpoint?: string;
   headers?: Record<string, string>;
@@ -69,6 +128,7 @@ export interface ClientLoggerConfig {
   localConsole?: boolean;
   remoteSync?: boolean;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
+  delivery?: RemoteDeliveryConfig;
 }
 
 export interface ClientLogger {

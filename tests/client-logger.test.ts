@@ -7,7 +7,9 @@ type GlobalKey =
   | 'navigator'
   | 'location'
   | 'document'
-  | 'sessionStorage';
+  | 'sessionStorage'
+  | 'addEventListener'
+  | 'removeEventListener';
 
 const globalTarget = globalThis as Record<string, unknown>;
 const originalDescriptors = new Map<PropertyKey, PropertyDescriptor | undefined>();
@@ -52,10 +54,24 @@ function createSessionStorage() {
   };
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function installBrowserGlobals(options: {
   fetchImpl?: typeof fetch;
   sendBeaconImpl?: (url: string, data?: BodyInit | null) => boolean;
-} = {}): void {
+  online?: boolean;
+} = {}): {
+  dispatch: (event: 'online') => void;
+  setOnline: (value: boolean) => void;
+  listenerCounts: Record<'online', number>;
+} {
+  const listeners: Record<'online', Array<() => void>> = {
+    online: [],
+  };
+  let isOnline = options.online ?? true;
+
   setGlobal('location', {
     href: 'https://dashboard.example.test/app?tab=logs#state',
     pathname: '/app',
@@ -71,11 +87,42 @@ function installBrowserGlobals(options: {
     userAgent: 'Mozilla/5.0 Test Browser',
     language: 'en-US',
     platform: 'MacIntel',
+    get onLine() {
+      return isOnline;
+    },
     sendBeacon: options.sendBeaconImpl,
   });
+  setGlobal('addEventListener', ((type: string, listener: () => void) => {
+    if (type === 'online') {
+      listeners.online.push(listener);
+    }
+  }) as typeof globalThis.addEventListener);
+  setGlobal('removeEventListener', ((type: string, listener: () => void) => {
+    if (type !== 'online') {
+      return;
+    }
+
+    listeners.online = listeners.online.filter((entry) => entry !== listener);
+  }) as typeof globalThis.removeEventListener);
   if (options.fetchImpl) {
     setGlobal('fetch', options.fetchImpl);
   }
+
+  return {
+    dispatch(event) {
+      for (const listener of [...listeners[event]]) {
+        listener();
+      }
+    },
+    setOnline(value) {
+      isOnline = value;
+    },
+    listenerCounts: {
+      get online() {
+        return listeners.online.length;
+      },
+    } as Record<'online', number>,
+  };
 }
 
 function flushAsyncWork(): Promise<void> {
@@ -265,6 +312,164 @@ describe('Client Logger', () => {
     await flushAsyncWork();
 
     expect(beaconCallCount).toBe(0);
+  });
+
+  it('retries transient fetch failures and succeeds later', async () => {
+    const attempts: string[] = [];
+    const retryCalls: Array<{ attempt: number; retriesRemaining: number }> = [];
+    const successCalls: Array<{ attempt: number; transport: string }> = [];
+    let attemptCount = 0;
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        attempts.push(String(init?.body ?? ''));
+        attemptCount += 1;
+
+        if (attemptCount < 3) {
+          return Promise.reject(new Error('network down'));
+        }
+
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }) as typeof fetch,
+    });
+
+    createClientLogger({
+      delivery: {
+        retryDelayMs: 5,
+        onRetry: (ctx) => {
+          retryCalls.push({
+            attempt: ctx.attempt,
+            retriesRemaining: ctx.retriesRemaining,
+          });
+        },
+        onSuccess: (ctx) => {
+          successCalls.push({
+            attempt: ctx.attempt,
+            transport: ctx.transport,
+          });
+        },
+      },
+    }).info('retry later');
+
+    await wait(30);
+
+    expect(attempts).toHaveLength(3);
+    expect(retryCalls).toEqual([
+      { attempt: 1, retriesRemaining: 3 },
+      { attempt: 2, retriesRemaining: 2 },
+    ]);
+    expect(successCalls).toEqual([
+      { attempt: 3, transport: 'fetch' },
+    ]);
+  });
+
+  it('queues while offline and flushes when the browser comes back online', async () => {
+    const fetchCalls: string[] = [];
+    const browser = installBrowserGlobals({
+      online: false,
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        fetchCalls.push(String(init?.body ?? ''));
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }) as typeof fetch,
+    });
+
+    createClientLogger({
+      delivery: {
+        retryDelayMs: 50,
+      },
+    }).info('offline first');
+    await flushAsyncWork();
+
+    expect(fetchCalls).toHaveLength(0);
+    expect(browser.listenerCounts.online).toBe(1);
+
+    browser.setOnline(true);
+    browser.dispatch('online');
+    await flushAsyncWork();
+
+    expect(fetchCalls).toHaveLength(1);
+    expect(JSON.parse(fetchCalls[0] ?? '').message).toBe('offline first');
+    expect(browser.listenerCounts.online).toBe(0);
+  });
+
+  it('retries retryable HTTP responses but fails fast on other 4xx responses', async () => {
+    const failureCalls: Array<{ reason: string; status?: number }> = [];
+    const retryCalls: Array<{ reason: string; status?: number }> = [];
+    let fetchCount = 0;
+
+    installBrowserGlobals({
+      fetchImpl: (() => {
+        fetchCount += 1;
+
+        if (fetchCount === 1) {
+          return Promise.resolve(new Response(null, { status: 429 }));
+        }
+
+        return Promise.resolve(new Response(null, { status: 400 }));
+      }) as unknown as typeof fetch,
+    });
+
+    const logger = createClientLogger({
+      delivery: {
+        retryDelayMs: 5,
+        onRetry: (ctx) => {
+          retryCalls.push({ reason: ctx.reason, status: ctx.status });
+        },
+        onFailure: (ctx) => {
+          failureCalls.push({ reason: ctx.reason, status: ctx.status });
+        },
+      },
+    });
+
+    logger.info('retryable');
+    logger.info('terminal');
+    await wait(30);
+
+    expect(retryCalls).toContainEqual({ reason: 'response_status', status: 429 });
+    expect(failureCalls).toContainEqual({ reason: 'response_status', status: 400 });
+  });
+
+  it('drops the oldest queued event when the queue cap is reached', async () => {
+    const dropCalls: Array<{ dropped: string; kept: string }> = [];
+    const deliveredMessages: string[] = [];
+    const browser = installBrowserGlobals({
+      online: false,
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        const payload = JSON.parse(String(init?.body ?? '')) as Record<string, unknown>;
+        deliveredMessages.push(String(payload.message));
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }) as typeof fetch,
+    });
+
+    const logger = createClientLogger({
+      delivery: {
+        maxQueueSize: 2,
+        retryDelayMs: 50,
+        onDrop: (ctx) => {
+          dropCalls.push({
+            dropped: ctx.droppedEvent.message,
+            kept: ctx.replacementEvent.message,
+          });
+        },
+      },
+    });
+
+    logger.info('first');
+    logger.child({ feature: 'checkout' }).info('second');
+    logger.info('third');
+    await flushAsyncWork();
+
+    expect(dropCalls).toEqual([
+      { dropped: 'second', kept: 'third' },
+    ]);
+    expect(browser.listenerCounts.online).toBe(1);
+
+    browser.setOnline(true);
+    browser.dispatch('online');
+    await wait(20);
+
+    expect(deliveredMessages).toEqual(['first', 'third']);
+    expect(browser.listenerCounts.online).toBe(0);
   });
 
   it('skips remote sync safely outside the browser runtime', () => {

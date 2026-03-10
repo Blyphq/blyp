@@ -126,6 +126,12 @@ export type {
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext,
 } from './frameworks/client';
 export type {
   ExpoLogger,

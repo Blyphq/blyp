@@ -7,4 +7,10 @@ export type {
   ClientLogPageContext,
   ExpoLogger,
   ExpoLoggerConfig,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext,
 } from './frameworks/expo';

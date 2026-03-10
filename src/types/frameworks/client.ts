@@ -6,6 +6,12 @@ import type {
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext,
 } from '../../shared/client-log';
 import type {
   ErrorLogLevel,
@@ -24,6 +30,7 @@ export interface ClientLoggerConfig {
   localConsole?: boolean;
   remoteSync?: boolean;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
+  delivery?: RemoteDeliveryConfig;
 }
 
 export interface ClientLogger {
@@ -44,6 +51,12 @@ export type {
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext,
   ErrorLogLevel,
   ErrorLoggerLike,
   ParseErrorOptions,

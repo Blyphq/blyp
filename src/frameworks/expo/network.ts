@@ -1,11 +1,20 @@
 import type { ClientLogDeviceContext } from '../../shared/client-log';
 
+interface ExpoNetworkSubscription {
+  remove: () => void;
+}
+
+interface ExpoNetworkState {
+  type?: unknown;
+  isConnected?: unknown;
+  isInternetReachable?: unknown;
+}
+
 interface ExpoNetworkModule {
-  getNetworkStateAsync: () => Promise<{
-    type?: unknown;
-    isConnected?: unknown;
-    isInternetReachable?: unknown;
-  }>;
+  getNetworkStateAsync: () => Promise<ExpoNetworkState>;
+  addNetworkStateListener?: (
+    listener: (event: ExpoNetworkState) => void
+  ) => ExpoNetworkSubscription;
 }
 
 type ExpoNetworkLoader = () => Promise<ExpoNetworkModule | null>;
@@ -24,7 +33,23 @@ let expoNetworkLoader: ExpoNetworkLoader = async () => {
 };
 
 let expoNetworkModulePromise: Promise<ExpoNetworkModule | null> | undefined;
-let expoNetworkSnapshotPromise: Promise<ClientLogDeviceContext['network'] | undefined> | undefined;
+let lastKnownExpoNetworkState: ClientLogDeviceContext['network'] | undefined;
+
+function normalizeNetworkState(
+  state: ExpoNetworkState | undefined
+): ClientLogDeviceContext['network'] | undefined {
+  if (!state) {
+    return undefined;
+  }
+
+  return {
+    type: typeof state.type === 'string' ? state.type : undefined,
+    isConnected: typeof state.isConnected === 'boolean' ? state.isConnected : undefined,
+    isInternetReachable: typeof state.isInternetReachable === 'boolean'
+      ? state.isInternetReachable
+      : undefined,
+  };
+}
 
 export function loadExpoNetworkModule(): Promise<ExpoNetworkModule | null> {
   if (!expoNetworkModulePromise) {
@@ -34,31 +59,43 @@ export function loadExpoNetworkModule(): Promise<ExpoNetworkModule | null> {
   return expoNetworkModulePromise;
 }
 
-export function getExpoNetworkSnapshot(): Promise<ClientLogDeviceContext['network'] | undefined> {
-  if (!expoNetworkSnapshotPromise) {
-    expoNetworkSnapshotPromise = loadExpoNetworkModule()
-      .then(async (module) => {
-        if (!module) {
-          return undefined;
-        }
-
-        try {
-          const state = await module.getNetworkStateAsync();
-
-          return {
-            type: typeof state.type === 'string' ? state.type : undefined,
-            isConnected: typeof state.isConnected === 'boolean' ? state.isConnected : undefined,
-            isInternetReachable: typeof state.isInternetReachable === 'boolean'
-              ? state.isInternetReachable
-              : undefined,
-          };
-        } catch {
-          return undefined;
-        }
-      });
+export async function getExpoNetworkSnapshot(): Promise<ClientLogDeviceContext['network'] | undefined> {
+  const module = await loadExpoNetworkModule();
+  if (!module) {
+    return undefined;
   }
 
-  return expoNetworkSnapshotPromise;
+  try {
+    const state = normalizeNetworkState(await module.getNetworkStateAsync());
+    lastKnownExpoNetworkState = state;
+    return state;
+  } catch {
+    return lastKnownExpoNetworkState;
+  }
+}
+
+export function subscribeToExpoNetworkState(
+  listener: (state: ClientLogDeviceContext['network'] | undefined) => void
+): () => void {
+  let isActive = true;
+  let subscription: ExpoNetworkSubscription | undefined;
+
+  void loadExpoNetworkModule().then((module) => {
+    if (!isActive || !module || typeof module.addNetworkStateListener !== 'function') {
+      return;
+    }
+
+    subscription = module.addNetworkStateListener((event) => {
+      const state = normalizeNetworkState(event);
+      lastKnownExpoNetworkState = state;
+      listener(state);
+    });
+  });
+
+  return () => {
+    isActive = false;
+    subscription?.remove();
+  };
 }
 
 export function setExpoNetworkLoaderForTests(loader: ExpoNetworkLoader): void {
@@ -68,5 +105,5 @@ export function setExpoNetworkLoaderForTests(loader: ExpoNetworkLoader): void {
 
 export function resetExpoNetworkStateForTests(): void {
   expoNetworkModulePromise = undefined;
-  expoNetworkSnapshotPromise = undefined;
+  lastKnownExpoNetworkState = undefined;
 }

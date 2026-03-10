@@ -117,6 +117,10 @@ const logger = createClientLogger({
   metadata: () => ({
     app: 'dashboard',
   }),
+  delivery: {
+    maxRetries: 3,
+    retryDelayMs: 5000,
+  },
 });
 
 logger.info('hydrated', { route: window.location.pathname });
@@ -124,7 +128,7 @@ logger.error(new Error('Button failed to render'));
 logger.child({ feature: 'checkout' }).warn('Client validation failed');
 ```
 
-The client logger logs to the browser console by default and best-effort syncs the same structured event to your backend. It uses `POST /inngest` by default, but you can override the path.
+The client logger logs to the browser console by default and queues remote events in memory when delivery fails. By default it retries offline, network, `429`, and `5xx` failures up to `3` times with a `5000ms` delay and keeps up to `100` pending events before dropping the oldest queued item. It uses `POST /inngest` by default, but you can override the path and delivery policy.
 
 ### Expo Logger Sync
 
@@ -136,6 +140,10 @@ const logger = createExpoLogger({
   metadata: () => ({
     app: 'mobile',
   }),
+  delivery: {
+    maxRetries: 3,
+    retryDelayMs: 5000,
+  },
 });
 
 logger.info('mounted', { screen: 'home' });
@@ -148,7 +156,7 @@ Install `expo-network` in your Expo app before using the logger:
 npx expo install expo-network
 ```
 
-The Expo logger uses the runtime `fetch` implementation to send logs and reads connectivity metadata from `expo-network`. The `endpoint` must be an absolute `http://` or `https://` URL because Expo apps do not have a browser origin. Delivery is best-effort only: failed requests are swallowed and not retried or queued.
+The Expo logger uses the runtime `fetch` implementation to send logs and reads connectivity metadata from `expo-network`. The `endpoint` must be an absolute `http://` or `https://` URL because Expo apps do not have a browser origin. Failed deliveries are queued in memory and retried by default `3` times with `5000ms` delay, with a default queue limit of `100`.
 
 ---
 
@@ -504,6 +512,18 @@ interface ClientLoggerConfig {
   localConsole?: boolean;
   remoteSync?: boolean;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
+  delivery?: RemoteDeliveryConfig;
+}
+
+interface RemoteDeliveryConfig {
+  maxRetries?: number; // default 3
+  retryDelayMs?: number; // default 5000
+  maxQueueSize?: number; // default 100
+  warnOnFailure?: boolean; // default true
+  onSuccess?: (ctx: RemoteDeliverySuccessContext) => void;
+  onRetry?: (ctx: RemoteDeliveryRetryContext) => void;
+  onFailure?: (ctx: RemoteDeliveryFailureContext) => void;
+  onDrop?: (ctx: RemoteDeliveryDropContext) => void;
 }
 ```
 
