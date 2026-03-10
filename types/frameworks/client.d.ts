@@ -11,7 +11,9 @@ import type {
 } from '../../dist/index';
 
 export interface ClientLogPageContext {
+  hash?: string;
   pathname?: string;
+  search?: string;
   url?: string;
   title?: string;
   referrer?: string;
@@ -20,11 +22,15 @@ export interface ClientLogPageContext {
 export interface ClientLogBrowserContext {
   userAgent?: string;
   language?: string;
-  languages?: readonly string[];
-  online?: boolean;
-  viewport?: {
-    width?: number;
-    height?: number;
+  platform?: string;
+}
+
+export interface ClientLogDeviceContext {
+  runtime?: 'expo' | 'browser';
+  network?: {
+    type?: string;
+    isConnected?: boolean;
+    isInternetReachable?: boolean;
   };
 }
 
@@ -48,6 +54,7 @@ export interface ClientLogEvent {
   clientTimestamp: string;
   page?: ClientLogPageContext;
   browser?: ClientLogBrowserContext;
+  device?: ClientLogDeviceContext;
   session?: {
     pageId?: string;
     sessionId?: string;
@@ -78,6 +85,9 @@ export interface ClientLogger {
 
 export declare function createClientLogger(config?: ClientLoggerConfig): ClientLogger;
 export declare const logger: ClientLogger;
+export type {
+  ClientLogDeviceContext,
+};
 
 export type {
   BlypErrorCode,

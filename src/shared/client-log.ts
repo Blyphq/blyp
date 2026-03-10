@@ -27,6 +27,15 @@ export interface ClientLogBrowserContext {
   platform?: string;
 }
 
+export interface ClientLogDeviceContext {
+  runtime?: 'expo' | 'browser';
+  network?: {
+    type?: string;
+    isConnected?: boolean;
+    isInternetReachable?: boolean;
+  };
+}
+
 export interface ClientLogSessionContext {
   pageId: string;
   sessionId: string;
@@ -43,6 +52,7 @@ export interface ClientLogEvent {
   clientTimestamp: string;
   page: ClientLogPageContext;
   browser: ClientLogBrowserContext;
+  device?: ClientLogDeviceContext;
   session: ClientLogSessionContext;
   metadata?: Record<string, unknown>;
 }

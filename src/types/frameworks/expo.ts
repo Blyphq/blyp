@@ -1,5 +1,3 @@
-/// <reference lib="dom" />
-
 import type {
   ClientLogBrowserContext,
   ClientLogDeviceContext,
@@ -7,26 +5,16 @@ import type {
   ClientLogLevel,
   ClientLogPageContext,
 } from '../../shared/client-log';
-import type {
-  ErrorLogLevel,
-  ErrorLoggerLike,
-  ParseErrorOptions,
-  ParseableErrorPayload,
-  BlypErrorCode,
-  BlypErrorCodeDefinition,
-  BlypErrorLike,
-} from '../../shared/errors';
 
-export interface ClientLoggerConfig {
-  endpoint?: string;
+export interface ExpoLoggerConfig {
+  endpoint: string;
   headers?: Record<string, string>;
-  credentials?: RequestCredentials;
   localConsole?: boolean;
   remoteSync?: boolean;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
 }
 
-export interface ClientLogger {
+export interface ExpoLogger {
   success: (message: unknown, ...args: unknown[]) => void;
   critical: (message: unknown, ...args: unknown[]) => void;
   warning: (message: unknown, ...args: unknown[]) => void;
@@ -35,7 +23,7 @@ export interface ClientLogger {
   error: (message: unknown, ...args: unknown[]) => void;
   warn: (message: unknown, ...args: unknown[]) => void;
   table: (message: string, data?: unknown) => void;
-  child: (bindings: Record<string, unknown>) => ClientLogger;
+  child: (bindings: Record<string, unknown>) => ExpoLogger;
 }
 
 export type {
@@ -44,11 +32,4 @@ export type {
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,
-  ErrorLogLevel,
-  ErrorLoggerLike,
-  ParseErrorOptions,
-  ParseableErrorPayload,
-  BlypErrorCode,
-  BlypErrorCodeDefinition,
-  BlypErrorLike,
 };

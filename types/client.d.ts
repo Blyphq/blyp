@@ -20,6 +20,7 @@ export type {
   ClientLogger,
   ClientLoggerConfig,
   ClientLogBrowserContext,
+  ClientLogDeviceContext,
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,

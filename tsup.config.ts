@@ -57,6 +57,7 @@ export default defineConfig([
   {
     entry: {
       client: 'src/frameworks/client/index.ts',
+      expo: 'src/frameworks/expo/index.ts',
       workers: 'src/frameworks/workers/index.ts',
     },
     format: ['cjs', 'esm'],
@@ -69,5 +70,6 @@ export default defineConfig([
     minify: false,
     treeshake: true,
     platform: 'browser',
+    external: ['expo-network'],
   },
 ])

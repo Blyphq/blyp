@@ -126,6 +126,30 @@ logger.child({ feature: 'checkout' }).warn('Client validation failed');
 
 The client logger logs to the browser console by default and best-effort syncs the same structured event to your backend. It uses `POST /inngest` by default, but you can override the path.
 
+### Expo Logger Sync
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  metadata: () => ({
+    app: 'mobile',
+  }),
+});
+
+logger.info('mounted', { screen: 'home' });
+logger.error(new Error('Failed to load profile'));
+```
+
+Install `expo-network` in your Expo app before using the logger:
+
+```bash
+npx expo install expo-network
+```
+
+The Expo logger uses the runtime `fetch` implementation to send logs and reads connectivity metadata from `expo-network`. The `endpoint` must be an absolute `http://` or `https://` URL because Expo apps do not have a browser origin. Delivery is best-effort only: failed requests are swallowed and not retried or queued.
+
 ---
 
 ## Framework integrations

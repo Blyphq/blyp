@@ -15,23 +15,30 @@ describe('Package type shims', () => {
     };
 
     expect(packageJson.exports['./client']?.types).toBe('./types/client.d.ts');
+    expect(packageJson.exports['./expo']?.types).toBe('./types/expo.d.ts');
     expect(packageJson.exports['./workers']?.types).toBe('./types/workers.d.ts');
 
     expect(fs.existsSync(path.join(repoRoot, 'types/client.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/expo.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/workers.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/client.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/expo.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/workers.d.ts'))).toBe(true);
   });
 
-  it('declares the public client and workers entrypoints directly', () => {
+  it('declares the public client, expo, and workers entrypoints directly', () => {
     const clientTypes = readRepoFile('types/client.d.ts');
+    const expoTypes = readRepoFile('types/expo.d.ts');
     const workersTypes = readRepoFile('types/workers.d.ts');
 
     expect(clientTypes).toContain('createClientLogger');
     expect(clientTypes).toContain("from './frameworks/client'");
+    expect(expoTypes).toContain('createExpoLogger');
+    expect(expoTypes).toContain("from './frameworks/expo'");
     expect(workersTypes).toContain('createWorkersLogger');
     expect(workersTypes).toContain("from './frameworks/workers'");
     expect(clientTypes).not.toContain("../dist/client");
+    expect(expoTypes).not.toContain("../dist/expo");
     expect(workersTypes).not.toContain("../dist/workers");
   });
 });

@@ -122,7 +122,12 @@ export type {
 export type {
   ClientLoggerConfig,
   ClientLogBrowserContext,
+  ClientLogDeviceContext,
   ClientLogEvent,
   ClientLogLevel,
   ClientLogPageContext,
 } from './frameworks/client';
+export type {
+  ExpoLogger,
+  ExpoLoggerConfig,
+} from './types/frameworks/expo';

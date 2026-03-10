@@ -13,6 +13,7 @@
 - **Runtime detection** — Automatically optimizes for Bun vs Node.js
 - **TypeScript** — Full type safety throughout
 - **Framework integrations** — Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, TanStack Start, SvelteKit, Cloudflare Workers
+- **Expo integration** — Mobile client logging for Expo apps with structured backend sync
 - **Standalone usage** — Use without any framework
 - **Structured file logging** — NDJSON with size-based rotation and gzip archives
 - **Client log sync** — Browser logs ingested into your backend stream
@@ -50,6 +51,7 @@ blyp/
 
 ```bash
 bun add blyp-js
+npx expo install expo-network
 ```
 
 Also: `npm install blyp-js` | `yarn add blyp-js` | `pnpm add blyp-js`
@@ -92,6 +94,20 @@ const app = new Elysia()
 ```
 
 For other frameworks, client logging, advanced configuration, and utilities, see [Full documentation](docs/README.md).
+
+### Expo
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+});
+
+logger.info('app mounted');
+```
+
+Expo uses the runtime `fetch` implementation for delivery and `expo-network` for connectivity metadata. Install `expo-network` in your app and use an absolute ingestion URL.
 
 Log levels, HTTP request logging, and file logging (rotation, archives, reading stored logs) are documented in [docs](docs/README.md#file-logging).
 

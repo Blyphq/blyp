@@ -80,6 +80,11 @@
       "import": "./exports/client.mjs",
       "require": "./exports/client.js"
     },
+    "./expo": {
+      "types": "./types/expo.d.ts",
+      "import": "./exports/expo.mjs",
+      "require": "./exports/expo.js"
+    },
     "./workers": {
       "types": "./types/workers.d.ts",
       "import": "./exports/workers.mjs",
@@ -90,6 +95,9 @@
     "*": {
       "client": [
         "./types/client.d.ts"
+      ],
+      "expo": [
+        "./types/expo.d.ts"
       ],
       "elysia": [
         "./types/frameworks/elysia.d.ts"
@@ -151,6 +159,7 @@
     "@types/bun": "latest",
     "@types/express": "^5.0.3",
     "elysia": "^1.4.27",
+    "expo-network": "^55.0.8",
     "express": "^5.1.0",
     "fastify": "^5.6.1",
     "fastify-plugin": "^5.1.0",
