@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import { gzipSync } from 'zlib';
+import { gzipSync } from 'fflate';
 import type { BlypConfig } from './config';
+
+function gzipBuffer(buf: Buffer): Buffer {
+  return Buffer.from(gzipSync(buf));
+}
 
 export interface LogRecord {
   timestamp: string;
@@ -162,7 +166,7 @@ export class RotatingFileLogger {
 
   constructor(config: BlypConfig, dependencies: FileLoggerDependencies = {}) {
     this.config = resolveFileLoggerConfig(config);
-    this.gzip = dependencies.gzip ?? gzipSync;
+    this.gzip = dependencies.gzip ?? gzipBuffer;
     this.warn = dependencies.warn ?? warnWithConsole;
     this.combined = {
       activePath: path.join(this.config.dir, 'log.ndjson'),

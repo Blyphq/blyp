@@ -1,35 +1,41 @@
-import type { BlypConnectorsConfig } from '../../core/config';
 import { resolveConfig } from '../../core/config';
-import type { BlypLogger } from '../../core/logger';
 import {
   buildRecord,
   buildStructuredRecord,
   resolveStructuredWriteLevel,
   type LogMethodName,
 } from '../../core/log-record';
-import { createSentrySender, type SentrySender } from '../../core/sentry';
 import {
   createStructuredLog,
   type StructuredLog,
   type StructuredLogPayload,
 } from '../../core/structured-log';
+import {
+  createOTLPRegistry,
+} from './sender';
+import type {
+  OTLPLogger,
+  OTLPLoggerConfig,
+  OTLPSender,
+} from '../../types/connectors/otlp';
 
-export interface SentryLoggerConfig {
-  connectors?: BlypConnectorsConfig;
-}
+export type {
+  OTLPLogger,
+  OTLPLoggerConfig,
+} from '../../types/connectors/otlp';
 
-export interface SentryLogger extends BlypLogger {}
-
-function resolveSender(config: SentryLoggerConfig = {}): SentrySender {
-  return createSentrySender(resolveConfig({
+function resolveSender(config: OTLPLoggerConfig = { name: '' }): OTLPSender {
+  const registry = createOTLPRegistry(resolveConfig({
     ...(config.connectors ? { connectors: config.connectors } : {}),
   }));
+
+  return registry.get(config.name);
 }
 
-function createSentryLoggerInstance(
-  sender: SentrySender,
+function createOTLPLoggerInstance(
+  sender: OTLPSender,
   bindings: Record<string, unknown> = {}
-): SentryLogger {
+): OTLPLogger {
   const writeRecord = (
     level: LogMethodName,
     message: unknown,
@@ -94,7 +100,7 @@ function createSentryLoggerInstance(
       });
     },
     child: (childBindings: Record<string, unknown>) => {
-      return createSentryLoggerInstance(sender, {
+      return createOTLPLoggerInstance(sender, {
         ...bindings,
         ...childBindings,
       });
@@ -102,18 +108,18 @@ function createSentryLoggerInstance(
   };
 }
 
-export function createSentryLogger(config: SentryLoggerConfig = {}): SentryLogger {
-  return createSentryLoggerInstance(resolveSender(config));
+export function createOtlpLogger(config: OTLPLoggerConfig = { name: '' }): OTLPLogger {
+  return createOTLPLoggerInstance(resolveSender(config));
 }
 
-export function createStructuredSentryLogger<
+export function createStructuredOtlpLogger<
   TFields extends Record<string, unknown> = Record<string, unknown>,
 >(
   groupId: string,
   initial?: TFields,
-  config: SentryLoggerConfig = {}
+  config?: OTLPLoggerConfig
 ): StructuredLog<TFields> {
-  const sender = resolveSender(config);
+  const sender = resolveSender(config ?? { name: '' });
 
   return createStructuredLog(groupId, {
     initialFields: initial,

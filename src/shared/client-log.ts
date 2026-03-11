@@ -1,10 +1,16 @@
 /// <reference lib="dom" />
 
+import { z } from 'zod';
 import {
   normalizeError,
   normalizeLogValue,
   serializeLogMessage,
 } from './log-value';
+import {
+  isPlainObject,
+  nonEmptyStringSchema,
+  plainObjectSchema,
+} from './validation';
 
 export const DEFAULT_CLIENT_LOG_ENDPOINT = '/inngest';
 const SESSION_STORAGE_KEY = 'blyp:session-id';
@@ -137,25 +143,22 @@ const CLIENT_LOG_LEVELS: ClientLogLevel[] = [
   'success',
   'table',
 ];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
+const clientConnectorRequestSchema = z.union([
+  z.literal('posthog'),
+  z.literal('sentry'),
+  z.undefined(),
+  z.object({
+    type: z.literal('otlp'),
+    name: nonEmptyStringSchema,
+  }),
+]);
 
 function isClientLogLevel(value: unknown): value is ClientLogLevel {
   return typeof value === 'string' && CLIENT_LOG_LEVELS.includes(value as ClientLogLevel);
 }
 
 function isClientConnectorRequest(value: unknown): value is ClientConnectorRequest {
-  if (value === 'posthog' || value === 'sentry' || value === undefined) {
-    return true;
-  }
-
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return value.type === 'otlp' && typeof value.name === 'string' && value.name.length > 0;
+  return clientConnectorRequestSchema.safeParse(value).success;
 }
 
 function safeGet<T>(getter: () => T): T | undefined {
@@ -255,7 +258,7 @@ export function normalizeMetadata(
   }
 
   const resolved = typeof metadata === 'function' ? safeGet(metadata) : metadata;
-  if (!isRecord(resolved)) {
+  if (!isPlainObject(resolved)) {
     return undefined;
   }
 
@@ -263,7 +266,7 @@ export function normalizeMetadata(
 }
 
 export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
-  if (!isRecord(payload)) {
+  if (!isPlainObject(payload)) {
     return false;
   }
 
@@ -278,7 +281,11 @@ export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
     return false;
   }
 
-  if (!isRecord(payload.page) || !isRecord(payload.browser) || !isRecord(payload.session)) {
+  const pageResult = plainObjectSchema.safeParse(payload.page);
+  const browserResult = plainObjectSchema.safeParse(payload.browser);
+  const sessionResult = plainObjectSchema.safeParse(payload.session);
+
+  if (!pageResult.success || !browserResult.success || !sessionResult.success) {
     return false;
   }
 
@@ -287,8 +294,8 @@ export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
   }
 
   return (
-    typeof payload.session.pageId === 'string' &&
-    typeof payload.session.sessionId === 'string'
+    typeof sessionResult.data.pageId === 'string' &&
+    typeof sessionResult.data.sessionId === 'string'
   );
 }
 

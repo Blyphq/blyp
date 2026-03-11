@@ -158,6 +158,8 @@ type HttpCodeRegistry = {
   readonly [K in keyof typeof HTTP_STATUS_DEFINITIONS]: BlypErrorCode;
 };
 
+import { isPlainObject } from './validation';
+
 const ERROR_KEYS = [
   'status',
   'statusCode',
@@ -175,10 +177,6 @@ const ERROR_KEYS = [
   'error',
   'data',
 ] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function isErrorLogLevel(value: unknown): value is ErrorLogLevel {
   return (
@@ -203,7 +201,7 @@ function parseStatus(value: unknown): number | undefined {
 }
 
 function normalizeDetails(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined;
+  return isPlainObject(value) ? value : undefined;
 }
 
 function hasMeaningfulErrorData(candidate: BlypErrorLike): boolean {
@@ -292,7 +290,7 @@ function isResponseLike(input: unknown): input is Response {
     return true;
   }
 
-  return isRecord(input) &&
+  return isPlainObject(input) &&
     typeof input.status === 'number' &&
     typeof input.statusText === 'string' &&
     typeof input.clone === 'function' &&
@@ -553,7 +551,7 @@ export function extractErrorCandidate(payload: unknown): BlypErrorLike | string 
     return payload;
   }
 
-  if (!isRecord(payload)) {
+  if (!isPlainObject(payload)) {
     return undefined;
   }
 
@@ -563,12 +561,12 @@ export function extractErrorCandidate(payload: unknown): BlypErrorLike | string 
       return mergeCandidates(payload, nested);
     }
 
-    if (isRecord(nested)) {
+    if (isPlainObject(nested)) {
       return mergeCandidates(payload, extractErrorCandidate(nested));
     }
   }
 
-  if (isRecord(payload.data)) {
+  if (isPlainObject(payload.data)) {
     const nested = payload.data;
     if (nested.error !== undefined || hasErrorShape(nested)) {
       return mergeCandidates(payload, extractErrorCandidate(nested));

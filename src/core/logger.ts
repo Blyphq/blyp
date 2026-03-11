@@ -15,16 +15,16 @@ import {
 import {
   createPostHogSender,
   isClientLogRecord,
-  type PostHogSender,
-} from './posthog';
+} from '../connectors/posthog/sender';
 import {
   createSentrySender,
-  type SentrySender,
-} from './sentry';
+} from '../connectors/sentry/sender';
 import {
   createOTLPRegistry,
-  type OTLPRegistry,
-} from './otlp';
+} from '../connectors/otlp/sender';
+import type { PostHogSender } from '../types/connectors/posthog';
+import type { SentrySender } from '../types/connectors/sentry';
+import type { OTLPRegistry } from '../types/connectors/otlp';
 import { runtime } from './runtime';
 import {
   createStructuredLog as createStructuredLogCollector,

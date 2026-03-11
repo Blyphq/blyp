@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { gunzipSync } from 'zlib';
+import { gunzipSync } from 'fflate';
 import type { LogRecord } from './file-logger';
 
 export interface ReadLogFileOptions {
@@ -26,7 +26,7 @@ function parseLogLine(line: string): LogRecord {
 function readRawFile(filePath: string): string {
   const content = fs.readFileSync(filePath);
   if (filePath.endsWith('.gz')) {
-    return gunzipSync(content).toString('utf8');
+    return Buffer.from(gunzipSync(content)).toString('utf8');
   }
   return content.toString('utf8');
 }

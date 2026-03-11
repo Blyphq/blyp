@@ -3,80 +3,30 @@ import type {
   BlypConfig,
   ResolvedSentryConnectorConfig,
   SentryConnectorConfig,
-} from './config';
-import type { LogRecord } from './file-logger';
-import { serializeLogRecord } from './file-logger';
-
-type SentryLogSource = 'server' | 'client';
-
-interface SentrySendOptions {
-  source?: SentryLogSource;
-  warnIfUnavailable?: boolean;
-}
-
-interface SentryClientLike {
-  getOptions?: () => {
-    dsn?: unknown;
-    environment?: unknown;
-    release?: unknown;
-  };
-}
-
-interface SentryModuleLike {
-  init: (options: Record<string, unknown>) => unknown;
-  getClient: () => SentryClientLike | undefined;
-  captureException: (error: unknown) => unknown;
-  flush: (timeout?: number) => PromiseLike<boolean>;
-  withScope: (callback: (scope: Sentry.Scope) => void) => void;
-  logger: {
-    debug: (message: string, attributes?: Record<string, unknown>) => void;
-    info: (message: string, attributes?: Record<string, unknown>) => void;
-    warn: (message: string, attributes?: Record<string, unknown>) => void;
-    error: (message: string, attributes?: Record<string, unknown>) => void;
-    fatal: (message: string, attributes?: Record<string, unknown>) => void;
-  };
-}
-
-interface SentryTestHooks {
-  module?: SentryModuleLike;
-}
-
-export interface SentrySender {
-  readonly enabled: boolean;
-  readonly ready: boolean;
-  readonly mode: 'auto' | 'manual';
-  readonly status: 'enabled' | 'missing';
-  shouldAutoForwardServerLogs: () => boolean;
-  send: (record: LogRecord, options?: SentrySendOptions) => void;
-  flush: () => Promise<void>;
-}
+} from '../../core/config';
+import type { LogRecord } from '../../core/file-logger';
+import { serializeLogRecord } from '../../core/file-logger';
+import { createErrorOnceLogger } from '../../shared/once';
+import { hasNonEmptyString, isPlainObject } from '../../shared/validation';
+import type {
+  SentryClientLike,
+  SentryLogSource,
+  SentryModuleLike,
+  SentrySender,
+  SentryTestHooks,
+} from '../../types/connectors/sentry';
+import {
+  getClientPageField,
+  getClientSessionField,
+  getField,
+  getPrimaryPayload,
+  getRecordType,
+  isBlypConfig,
+} from '../shared';
 
 const warnedKeys = new Set<string>();
 let testHooks: SentryTestHooks = {};
-
-function warnOnce(key: string, message: string, error?: unknown): void {
-  if (warnedKeys.has(key)) {
-    return;
-  }
-
-  warnedKeys.add(key);
-  if (error === undefined) {
-    console.error(message);
-    return;
-  }
-
-  console.error(message, error);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isBlypConfig(
-  config: BlypConfig | ResolvedSentryConnectorConfig | SentryConnectorConfig
-): config is BlypConfig {
-  return 'connectors' in config || 'pretty' in config || 'level' in config;
-}
+const warnOnce = createErrorOnceLogger(warnedKeys);
 
 function getSentryModule(): SentryModuleLike {
   return testHooks.module ?? (Sentry as unknown as SentryModuleLike);
@@ -90,7 +40,7 @@ function resolveConnectorConfig(
     : config;
   const enabled = connector?.enabled ?? false;
   const dsn = connector?.dsn;
-  const ready = enabled && typeof dsn === 'string' && dsn.trim().length > 0;
+  const ready = enabled && hasNonEmptyString(dsn);
 
   return {
     enabled,
@@ -101,55 +51,6 @@ function resolveConnectorConfig(
     ready,
     status: ready ? 'enabled' : 'missing',
   };
-}
-
-function getPrimaryPayload(record: LogRecord): Record<string, unknown> {
-  if (isRecord(record.data)) {
-    return record.data;
-  }
-
-  return record;
-}
-
-function getField<T extends string | number>(
-  record: LogRecord,
-  key: string
-): T | undefined {
-  if (key in record) {
-    const direct = record[key];
-    if (typeof direct === 'string' || typeof direct === 'number') {
-      return direct as T;
-    }
-  }
-
-  const payload = getPrimaryPayload(record);
-  const nested = payload[key];
-  if (typeof nested === 'string' || typeof nested === 'number') {
-    return nested as T;
-  }
-
-  return undefined;
-}
-
-function getClientPageField(record: LogRecord, key: 'pathname' | 'url'): string | undefined {
-  const payload = getPrimaryPayload(record);
-  const page = isRecord(payload.page) ? payload.page : undefined;
-  const value = page?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getClientSessionField(
-  record: LogRecord,
-  key: 'sessionId' | 'pageId'
-): string | undefined {
-  const payload = getPrimaryPayload(record);
-  const session = isRecord(payload.session) ? payload.session : undefined;
-  const value = session?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getRecordType(record: LogRecord): string | undefined {
-  return getField<string>(record, 'type');
 }
 
 function normalizeAttributes(
@@ -173,49 +74,23 @@ function normalizeAttributes(
   const sessionId = getClientSessionField(record, 'sessionId');
   const pageId = getClientSessionField(record, 'pageId');
 
-  if (recordType) {
-    attributes['blyp.type'] = recordType;
-  }
-
-  if (caller) {
-    attributes['blyp.caller'] = caller;
-  }
-
-  if (groupId) {
-    attributes['blyp.group_id'] = groupId;
-  }
-
-  if (method) {
-    attributes['http.method'] = method;
-  }
-
-  if (path) {
-    attributes['url.path'] = path;
-  }
-
-  if (status !== undefined) {
-    attributes['http.status_code'] = status;
-  }
-
-  if (duration !== undefined) {
-    attributes['blyp.duration_ms'] = duration;
-  }
-
-  if (pagePath) {
-    attributes['client.page_path'] = pagePath;
-  }
-
-  if (pageUrl) {
-    attributes['client.page_url'] = pageUrl;
-  }
-
-  if (sessionId) {
-    attributes['client.session_id'] = sessionId;
-  }
-
-  if (pageId) {
-    attributes['client.page_id'] = pageId;
-  }
+  const ifTruthy: Array<[string, unknown]> = [
+    ['blyp.type', recordType],
+    ['blyp.caller', caller],
+    ['blyp.group_id', groupId],
+    ['http.method', method],
+    ['url.path', path],
+    ['client.page_path', pagePath],
+    ['client.page_url', pageUrl],
+    ['client.session_id', sessionId],
+    ['client.page_id', pageId],
+  ];
+  const ifDefined: Array<[string, unknown]> = [
+    ['http.status_code', status],
+    ['blyp.duration_ms', duration],
+  ];
+  for (const [k, v] of ifTruthy) if (v) attributes[k] = v;
+  for (const [k, v] of ifDefined) if (v !== undefined) attributes[k] = v;
 
   return attributes;
 }
@@ -262,7 +137,7 @@ function normalizeScopeLevel(level: string): Sentry.SeverityLevel {
 }
 
 function toExceptionCandidate(value: unknown): unknown {
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     return undefined;
   }
 
@@ -301,7 +176,7 @@ function extractExceptionCandidate(record: LogRecord): unknown {
     return direct;
   }
 
-  if (isRecord(record.data)) {
+  if (isPlainObject(record.data)) {
     const directData = toExceptionCandidate(record.data);
     if (directData) {
       return directData;
@@ -314,7 +189,7 @@ function extractExceptionCandidate(record: LogRecord): unknown {
   }
 
   const payload = getPrimaryPayload(record);
-  if (isRecord(payload)) {
+  if (isPlainObject(payload)) {
     const nested = toExceptionCandidate(payload.error);
     if (nested) {
       return nested;
@@ -332,10 +207,6 @@ function getClientOptions(client: SentryClientLike | undefined): {
   return client?.getOptions?.() ?? {};
 }
 
-function hasValue(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
 function hasConfigMismatch(
   connector: ResolvedSentryConnectorConfig,
   client: SentryClientLike | undefined
@@ -343,9 +214,9 @@ function hasConfigMismatch(
   const options = getClientOptions(client);
 
   return (
-    (hasValue(connector.dsn) && connector.dsn !== options.dsn) ||
-    (hasValue(connector.environment) && connector.environment !== options.environment) ||
-    (hasValue(connector.release) && connector.release !== options.release)
+    (hasNonEmptyString(connector.dsn) && connector.dsn !== options.dsn) ||
+    (hasNonEmptyString(connector.environment) && connector.environment !== options.environment) ||
+    (hasNonEmptyString(connector.release) && connector.release !== options.release)
   );
 }
 
@@ -357,7 +228,7 @@ export function createSentrySender(
   const module = getSentryModule();
   let client = connector.enabled ? module.getClient() : undefined;
 
-  if (!client && connector.enabled && typeof connector.dsn === 'string' && connector.dsn.trim().length > 0) {
+  if (!client && connector.enabled && hasNonEmptyString(connector.dsn)) {
     try {
       module.init({
         dsn: connector.dsn,

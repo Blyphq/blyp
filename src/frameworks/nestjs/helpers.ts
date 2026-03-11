@@ -5,6 +5,7 @@ import {
   extractPathname,
   readNodeRequestBody,
 } from '../shared';
+import { isPlainObject } from '../../shared/validation';
 import type {
   NestAdapterType,
   NestLoggerContext,
@@ -12,16 +13,12 @@ import type {
 
 type NestHeaderRecord = Record<string, string | string[] | undefined>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object';
-}
-
 export function resolveNestAdapterType(
   request: unknown,
   response: unknown
 ): NestAdapterType {
   if (
-    isRecord(response) &&
+    isPlainObject(response) &&
     'raw' in response &&
     response.raw !== undefined
   ) {
@@ -29,7 +26,7 @@ export function resolveNestAdapterType(
   }
 
   if (
-    isRecord(request) &&
+    isPlainObject(request) &&
     'raw' in request &&
     request.raw !== undefined
   ) {
@@ -40,7 +37,7 @@ export function resolveNestAdapterType(
 }
 
 export function getNestRequestMethod(request: unknown): string {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return 'GET';
   }
 
@@ -48,7 +45,7 @@ export function getNestRequestMethod(request: unknown): string {
     return request.method;
   }
 
-  if (isRecord(request.raw) && typeof request.raw.method === 'string') {
+  if (isPlainObject(request.raw) && typeof request.raw.method === 'string') {
     return request.raw.method;
   }
 
@@ -56,15 +53,15 @@ export function getNestRequestMethod(request: unknown): string {
 }
 
 export function getNestRequestHeaders(request: unknown): NestHeaderRecord | undefined {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return undefined;
   }
 
-  if (isRecord(request.headers)) {
+  if (isPlainObject(request.headers)) {
     return request.headers as NestHeaderRecord;
   }
 
-  if (isRecord(request.raw) && isRecord(request.raw.headers)) {
+  if (isPlainObject(request.raw) && isPlainObject(request.raw.headers)) {
     return request.raw.headers as NestHeaderRecord;
   }
 
@@ -72,7 +69,7 @@ export function getNestRequestHeaders(request: unknown): NestHeaderRecord | unde
 }
 
 export function getNestRequestUrl(request: unknown): string {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return '/';
   }
 
@@ -84,7 +81,7 @@ export function getNestRequestUrl(request: unknown): string {
     return request.url;
   }
 
-  if (isRecord(request.raw) && typeof request.raw.url === 'string' && request.raw.url.length > 0) {
+  if (isPlainObject(request.raw) && typeof request.raw.url === 'string' && request.raw.url.length > 0) {
     return request.raw.url;
   }
 
@@ -96,7 +93,7 @@ export function getNestRequestPath(request: unknown): string {
 }
 
 export async function readNestRequestBody(request: unknown): Promise<unknown> {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return undefined;
   }
 
@@ -104,7 +101,7 @@ export async function readNestRequestBody(request: unknown): Promise<unknown> {
     return request.body;
   }
 
-  if (isRecord(request.raw) && 'body' in request.raw && request.raw.body !== undefined) {
+  if (isPlainObject(request.raw) && 'body' in request.raw && request.raw.body !== undefined) {
     return request.raw.body;
   }
 
@@ -115,7 +112,7 @@ export async function readNestRequestBody(request: unknown): Promise<unknown> {
   }
 
   if (
-    isRecord(request.raw) &&
+    isPlainObject(request.raw) &&
     Symbol.asyncIterator in request.raw
   ) {
     return await readNodeRequestBody(
@@ -127,7 +124,7 @@ export async function readNestRequestBody(request: unknown): Promise<unknown> {
 }
 
 export function setNestRequestStartTime(request: unknown, startTime: number): void {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return;
   }
 
@@ -135,7 +132,7 @@ export function setNestRequestStartTime(request: unknown, startTime: number): vo
 }
 
 export function getNestRequestStartTime(request: unknown): number | undefined {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return undefined;
   }
 
@@ -145,7 +142,7 @@ export function getNestRequestStartTime(request: unknown): number | undefined {
 }
 
 export function setNestStructuredLogEmitted(request: unknown, emitted: boolean): void {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return;
   }
 
@@ -153,7 +150,7 @@ export function setNestStructuredLogEmitted(request: unknown, emitted: boolean):
 }
 
 export function getNestStructuredLogEmitted(request: unknown): boolean {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return false;
   }
 
@@ -161,7 +158,7 @@ export function getNestStructuredLogEmitted(request: unknown): boolean {
 }
 
 export function attachNestRequestLogger(request: unknown, logger: unknown): void {
-  if (!isRecord(request)) {
+  if (!isPlainObject(request)) {
     return;
   }
 
@@ -176,7 +173,7 @@ export function buildNestRequestLike(request: unknown) {
 }
 
 export function getNestResponseStatus(response: unknown): number {
-  if (!isRecord(response)) {
+  if (!isPlainObject(response)) {
     return 200;
   }
 
@@ -184,7 +181,7 @@ export function getNestResponseStatus(response: unknown): number {
     return response.statusCode;
   }
 
-  if (isRecord(response.raw) && typeof response.raw.statusCode === 'number') {
+  if (isPlainObject(response.raw) && typeof response.raw.statusCode === 'number') {
     return response.raw.statusCode;
   }
 
@@ -199,7 +196,7 @@ export function setNestResponseHeaders(
   response: unknown,
   headers: Record<string, string>
 ): void {
-  if (!isRecord(response)) {
+  if (!isPlainObject(response)) {
     return;
   }
 
@@ -217,7 +214,7 @@ export function setNestResponseHeaders(
     return;
   }
 
-  if (isRecord(response.raw) && typeof response.raw.setHeader === 'function') {
+  if (isPlainObject(response.raw) && typeof response.raw.setHeader === 'function') {
     for (const [key, value] of Object.entries(headers)) {
       response.raw.setHeader(key, value);
     }
@@ -225,7 +222,7 @@ export function setNestResponseHeaders(
 }
 
 export function sendNestStatusResponse(response: unknown, statusCode: number): void {
-  if (!isRecord(response)) {
+  if (!isPlainObject(response)) {
     return;
   }
 
@@ -241,7 +238,7 @@ export function sendNestStatusResponse(response: unknown, statusCode: number): v
     return;
   }
 
-  if (isRecord(response.raw)) {
+  if (isPlainObject(response.raw)) {
     setRawStatus(response.raw, statusCode);
     if (typeof response.raw.end === 'function') {
       response.raw.end();

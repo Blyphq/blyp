@@ -11,6 +11,11 @@ import {
   createRemoteDeliveryManager,
   type DeliveryAttemptResult,
 } from '../../shared/remote-delivery';
+import {
+  createErrorOnceLogger,
+  createWarnOnceLogger,
+} from '../../shared/once';
+import { isAbsoluteHttpUrl } from '../../shared/validation';
 import type { ExpoLogger, ExpoLoggerConfig } from '../../types/frameworks/expo';
 import {
   getExpoNetworkSnapshot,
@@ -39,37 +44,8 @@ type ExpoLogLevel =
 
 const expoSessionId = createRandomId();
 const warnedMessages = new Set<string>();
-
-function warnOnce(key: string, message: string): void {
-  if (warnedMessages.has(key) || typeof console === 'undefined') {
-    return;
-  }
-
-  warnedMessages.add(key);
-  console.warn(message);
-}
-
-function errorOnce(key: string, message: string): void {
-  if (warnedMessages.has(key) || typeof console === 'undefined') {
-    return;
-  }
-
-  warnedMessages.add(key);
-  console.error(message);
-}
-
-function isAbsoluteHttpUrl(value: string | undefined): value is string {
-  if (!value) {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+const warnOnce = createWarnOnceLogger(warnedMessages);
+const errorOnce = createErrorOnceLogger(warnedMessages);
 
 function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;

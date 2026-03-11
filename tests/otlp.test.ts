@@ -5,9 +5,9 @@ import { resetConfigCache, resolveConfig } from '../src/core/config';
 import {
   resetOTLPTestHooks,
   setOTLPTestHooks,
-  type OTLPNormalizedRecord,
-} from '../src/core/otlp';
-import { createOtlpLogger, createStructuredOtlpLogger } from '../src/frameworks/otlp';
+} from '../src/connectors/otlp/sender';
+import type { OTLPNormalizedRecord } from '../src/types/connectors/otlp';
+import { createOtlpLogger, createStructuredOtlpLogger } from '../src/connectors/otlp';
 import { resolveServerLogger, handleClientLogIngestion } from '../src/frameworks/shared';
 import { createStandaloneLogger } from '../src/frameworks/standalone';
 import { createClientPayload } from './helpers/client-payload';

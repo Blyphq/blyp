@@ -1,34 +1,32 @@
-import type { BlypConnectorsConfig } from '../../core/config';
 import { resolveConfig } from '../../core/config';
-import type { BlypLogger } from '../../core/logger';
 import {
   buildRecord,
   buildStructuredRecord,
   resolveStructuredWriteLevel,
   type LogMethodName,
 } from '../../core/log-record';
-import { createPostHogSender, type PostHogSender } from '../../core/posthog';
 import {
   createStructuredLog,
   type StructuredLog,
   type StructuredLogPayload,
 } from '../../core/structured-log';
+import {
+  createPostHogSender,
+} from './sender';
+import type {
+  PostHogErrorTracker,
+  PostHogExceptionCaptureOptions,
+  PostHogLogger,
+  PostHogLoggerConfig,
+  PostHogSender,
+} from '../../types/connectors/posthog';
 
-export interface PostHogLoggerConfig {
-  connectors?: BlypConnectorsConfig;
-}
-
-export interface PostHogLogger extends BlypLogger {}
-
-export interface PostHogExceptionCaptureOptions {
-  distinctId?: string;
-  properties?: Record<string, unknown>;
-}
-
-export interface PostHogErrorTracker {
-  capture: (error: unknown, options?: PostHogExceptionCaptureOptions) => void;
-  child: (bindings: Record<string, unknown>) => PostHogErrorTracker;
-}
+export type {
+  PostHogErrorTracker,
+  PostHogExceptionCaptureOptions,
+  PostHogLogger,
+  PostHogLoggerConfig,
+} from '../../types/connectors/posthog';
 
 function resolveSender(config: PostHogLoggerConfig = {}): PostHogSender {
   return createPostHogSender(resolveConfig({

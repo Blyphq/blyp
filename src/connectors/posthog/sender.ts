@@ -10,173 +10,38 @@ import type {
   BlypConfig,
   PostHogConnectorConfig,
   ResolvedPostHogConnectorConfig,
-} from './config';
-import type { LogRecord } from './file-logger';
-import { serializeLogRecord } from './file-logger';
-import { normalizeLogValue } from '../shared/log-value';
-
-type PostHogSource = 'server' | 'client';
+} from '../../core/config';
+import type { LogRecord } from '../../core/file-logger';
+import { serializeLogRecord } from '../../core/file-logger';
+import { normalizeLogValue } from '../../shared/log-value';
+import { createErrorOnceLogger } from '../../shared/once';
+import { hasNonEmptyString, isPlainObject } from '../../shared/validation';
+import type {
+  NormalizedPostHogException,
+  PostHogExceptionClient,
+  PostHogLogTransport,
+  PostHogNormalizedRecord,
+  PostHogSender,
+  PostHogSource,
+  PostHogTestHooks
+} from '../../types/connectors/posthog';
+import {
+  getClientPageField,
+  getClientSessionField,
+  getField,
+  getRecordType,
+  isBlypConfig,
+} from '../shared';
 
 const PREVIOUSLY_CAPTURED_ERROR_KEY = '__posthog_previously_captured_error';
 
-interface PostHogLogTransport {
-  emit: (payload: PostHogNormalizedRecord) => void | Promise<void>;
-  flush?: () => Promise<void>;
-  shutdown?: () => Promise<void>;
-}
-
-interface PostHogExceptionClient {
-  captureException: (
-    error: unknown,
-    distinctId?: string,
-    additionalProperties?: Record<string | number, unknown>
-  ) => void | Promise<void>;
-  shutdown?: () => Promise<void>;
-}
-
-interface PostHogSendOptions {
-  source?: PostHogSource;
-  warnIfUnavailable?: boolean;
-}
-
-export interface PostHogCaptureExceptionOptions {
-  source?: PostHogSource;
-  warnIfUnavailable?: boolean;
-  distinctId?: string;
-  properties?: Record<string, unknown>;
-}
-
-export interface PostHogNormalizedRecord {
-  body: string;
-  severityText: string;
-  severityNumber: SeverityNumber;
-  attributes: Record<string, unknown>;
-  resourceAttributes: {
-    'service.name': string;
-  };
-}
-
-export interface PostHogSender {
-  readonly enabled: boolean;
-  readonly ready: boolean;
-  readonly mode: 'auto' | 'manual';
-  readonly serviceName: string;
-  readonly host: string;
-  readonly status: 'enabled' | 'missing';
-  readonly errorTracking: {
-    enabled: boolean;
-    ready: boolean;
-    mode: 'auto' | 'manual';
-    status: 'enabled' | 'missing';
-    enableExceptionAutocapture: boolean;
-  };
-  shouldAutoForwardServerLogs: () => boolean;
-  shouldAutoCaptureExceptions: () => boolean;
-  send: (record: LogRecord, options?: PostHogSendOptions) => void;
-  captureException: (
-    error: unknown,
-    options?: PostHogCaptureExceptionOptions
-  ) => void;
-  flush: () => Promise<void>;
-}
-
-interface PostHogTestHooks {
-  createTransport?: (
-    config: ResolvedPostHogConnectorConfig
-  ) => PostHogLogTransport;
-  createExceptionClient?: (
-    config: ResolvedPostHogConnectorConfig
-  ) => PostHogExceptionClient;
-}
-
-interface NormalizedException {
-  error: Error;
-  properties: Record<string, unknown>;
-}
-
 const warnedKeys = new Set<string>();
 let testHooks: PostHogTestHooks = {};
-
-function warnOnce(key: string, message: string, error?: unknown): void {
-  if (warnedKeys.has(key)) {
-    return;
-  }
-
-  warnedKeys.add(key);
-  if (error === undefined) {
-    console.error(message);
-    return;
-  }
-
-  console.error(message, error);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function hasString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
+const warnOnce = createErrorOnceLogger(warnedKeys);
 
 function normalizeHost(host: string | undefined): string {
   const trimmed = (host || 'https://us.i.posthog.com').trim();
   return trimmed.replace(/\/+$/, '');
-}
-
-function isBlypConfig(
-  config: BlypConfig | ResolvedPostHogConnectorConfig | PostHogConnectorConfig
-): config is BlypConfig {
-  return 'connectors' in config || 'pretty' in config || 'level' in config;
-}
-
-function getPrimaryPayload(record: LogRecord): Record<string, unknown> {
-  if (isRecord(record.data)) {
-    return record.data;
-  }
-
-  return record;
-}
-
-function getField<T extends string | number>(
-  record: LogRecord,
-  key: string
-): T | undefined {
-  if (key in record) {
-    const direct = record[key];
-    if (typeof direct === 'string' || typeof direct === 'number') {
-      return direct as T;
-    }
-  }
-
-  const payload = getPrimaryPayload(record);
-  const nested = payload[key];
-  if (typeof nested === 'string' || typeof nested === 'number') {
-    return nested as T;
-  }
-
-  return undefined;
-}
-
-function getClientPageField(record: LogRecord, key: 'pathname' | 'url'): string | undefined {
-  const payload = getPrimaryPayload(record);
-  const page = isRecord(payload.page) ? payload.page : undefined;
-  const value = page?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getClientSessionField(
-  record: LogRecord,
-  key: 'sessionId' | 'pageId'
-): string | undefined {
-  const payload = getPrimaryPayload(record);
-  const session = isRecord(payload.session) ? payload.session : undefined;
-  const value = session?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getRecordType(record: LogRecord): string | undefined {
-  return getField<string>(record, 'type');
 }
 
 function buildRecordAttributes(
@@ -201,55 +66,29 @@ function buildRecordAttributes(
     'blyp.payload': serializeLogRecord(record),
   };
 
-  if (recordType) {
-    attributes['blyp.type'] = recordType;
-  }
-
-  if (caller) {
-    attributes['blyp.caller'] = caller;
-  }
-
-  if (groupId) {
-    attributes['blyp.group_id'] = groupId;
-  }
-
-  if (method) {
-    attributes['http.method'] = method;
-  }
-
-  if (path) {
-    attributes['url.path'] = path;
-  }
-
-  if (status !== undefined) {
-    attributes['http.status_code'] = status;
-  }
-
-  if (duration !== undefined) {
-    attributes['blyp.duration_ms'] = duration;
-  }
-
-  if (pagePath) {
-    attributes['client.page_path'] = pagePath;
-  }
-
-  if (pageUrl) {
-    attributes['client.page_url'] = pageUrl;
-  }
-
-  if (sessionId) {
-    attributes['client.session_id'] = sessionId;
-  }
-
-  if (pageId) {
-    attributes['client.page_id'] = pageId;
-  }
+  const ifTruthy: Array<[string, unknown]> = [
+    ['blyp.type', recordType],
+    ['blyp.caller', caller],
+    ['blyp.group_id', groupId],
+    ['http.method', method],
+    ['url.path', path],
+    ['client.page_path', pagePath],
+    ['client.page_url', pageUrl],
+    ['client.session_id', sessionId],
+    ['client.page_id', pageId],
+  ];
+  const ifDefined: Array<[string, unknown]> = [
+    ['http.status_code', status],
+    ['blyp.duration_ms', duration],
+  ];
+  for (const [k, v] of ifTruthy) if (v) attributes[k] = v;
+  for (const [k, v] of ifDefined) if (v !== undefined) attributes[k] = v;
 
   return attributes;
 }
 
 function normalizeExceptionProperties(value: unknown): Record<string, unknown> {
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     return {};
   }
 
@@ -275,10 +114,10 @@ function createSyntheticError(
   source: Record<string, unknown>
 ): Error {
   const error = new Error(message);
-  const name = hasString(source.name) ? source.name : 'Error';
+  const name = hasNonEmptyString(source.name) ? source.name : 'Error';
   error.name = name;
 
-  if (hasString(source.stack)) {
+  if (hasNonEmptyString(source.stack)) {
     error.stack = source.stack;
   }
 
@@ -297,7 +136,7 @@ function createSyntheticError(
 function normalizeExceptionInput(
   input: unknown,
   fallbackMessage: string = 'Unknown error'
-): NormalizedException {
+): NormalizedPostHogException {
   if (input instanceof Error) {
     return {
       error: input,
@@ -305,10 +144,10 @@ function normalizeExceptionInput(
     };
   }
 
-  if (isRecord(input)) {
-    const message = hasString(input.message)
+  if (isPlainObject(input)) {
+    const message = hasNonEmptyString(input.message)
       ? input.message
-      : hasString(input.error)
+      : hasNonEmptyString(input.error)
         ? input.error
         : fallbackMessage;
 
@@ -343,11 +182,11 @@ function createExceptionPropertiesFromRecord(
 }
 
 export function isPreviouslyCapturedPostHogError(value: unknown): boolean {
-  return isRecord(value) && value[PREVIOUSLY_CAPTURED_ERROR_KEY] === true;
+  return isPlainObject(value) && value[PREVIOUSLY_CAPTURED_ERROR_KEY] === true;
 }
 
 export function markPostHogCapturedError(value: unknown): void {
-  if (!isRecord(value) || isPreviouslyCapturedPostHogError(value)) {
+  if (!isPlainObject(value) || isPreviouslyCapturedPostHogError(value)) {
     return;
   }
 
@@ -489,7 +328,7 @@ function resolveConnectorConfig(
   const errorTrackingReady =
     enabled &&
     errorTrackingEnabled &&
-    hasString(projectKey);
+    hasNonEmptyString(projectKey);
 
   return {
     enabled,
@@ -516,7 +355,7 @@ export function createPostHogSender(
   const key = `${connector.serviceName}:${connector.host}:${connector.mode}`;
   const ready =
     connector.enabled === true &&
-    hasString(connector.projectKey);
+    hasNonEmptyString(connector.projectKey);
   const transport = ready
     ? (testHooks.createTransport?.(connector) ?? createDefaultTransport(connector))
     : undefined;

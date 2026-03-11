@@ -9,146 +9,30 @@ import type {
   BlypConfig,
   OTLPConnectorConfig,
   ResolvedOTLPConnectorConfig,
-} from './config';
-import type { LogRecord } from './file-logger';
-import { serializeLogRecord } from './file-logger';
-
-type OTLPLogSource = 'server' | 'client';
-
-interface OTLPTransport {
-  emit: (payload: OTLPNormalizedRecord) => void | Promise<void>;
-  flush?: () => Promise<void>;
-  shutdown?: () => Promise<void>;
-}
-
-interface OTLPSendOptions {
-  source?: OTLPLogSource;
-  warnIfUnavailable?: boolean;
-}
-
-export interface OTLPNormalizedRecord {
-  body: string;
-  severityText: string;
-  severityNumber: SeverityNumber;
-  attributes: Record<string, unknown>;
-  resourceAttributes: {
-    'service.name': string;
-  };
-}
-
-export interface OTLPSender {
-  readonly name: string;
-  readonly enabled: boolean;
-  readonly ready: boolean;
-  readonly mode: 'auto' | 'manual';
-  readonly serviceName: string;
-  readonly endpoint?: string;
-  readonly status: 'enabled' | 'missing';
-  send: (record: LogRecord, options?: OTLPSendOptions) => void;
-  flush: () => Promise<void>;
-}
-
-export interface OTLPRegistry {
-  get: (name: string) => OTLPSender;
-  getAutoForwardTargets: () => OTLPSender[];
-  send: (name: string, record: LogRecord, options?: OTLPSendOptions) => void;
-  flush: () => Promise<void>;
-}
-
-interface OTLPTestHooks {
-  createTransport?: (
-    config: ResolvedOTLPConnectorConfig
-  ) => OTLPTransport;
-}
+} from '../../core/config';
+import type { LogRecord } from '../../core/file-logger';
+import { serializeLogRecord } from '../../core/file-logger';
+import { createErrorOnceLogger } from '../../shared/once';
+import { isAbsoluteHttpUrl } from '../../shared/validation';
+import type {
+  OTLPLogSource,
+  OTLPNormalizedRecord,
+  OTLPRegistry,
+  OTLPSender,
+  OTLPTestHooks,
+  OTLPTransport,
+} from '../../types/connectors/otlp';
+import {
+  getClientPageField,
+  getClientSessionField,
+  getField,
+  getRecordType,
+  isBlypConfig,
+} from '../shared';
 
 const warnedKeys = new Set<string>();
 let testHooks: OTLPTestHooks = {};
-
-function warnOnce(key: string, message: string, error?: unknown): void {
-  if (warnedKeys.has(key)) {
-    return;
-  }
-
-  warnedKeys.add(key);
-  if (error === undefined) {
-    console.error(message);
-    return;
-  }
-
-  console.error(message, error);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isAbsoluteHttpUrl(value: string | undefined): value is string {
-  if (!value) {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-function isBlypConfig(
-  config: BlypConfig | ResolvedOTLPConnectorConfig[] | OTLPConnectorConfig[]
-): config is BlypConfig {
-  return 'connectors' in config || 'pretty' in config || 'level' in config;
-}
-
-function getPrimaryPayload(record: LogRecord): Record<string, unknown> {
-  if (isRecord(record.data)) {
-    return record.data;
-  }
-
-  return record;
-}
-
-function getField<T extends string | number>(
-  record: LogRecord,
-  key: string
-): T | undefined {
-  if (key in record) {
-    const direct = record[key];
-    if (typeof direct === 'string' || typeof direct === 'number') {
-      return direct as T;
-    }
-  }
-
-  const payload = getPrimaryPayload(record);
-  const nested = payload[key];
-  if (typeof nested === 'string' || typeof nested === 'number') {
-    return nested as T;
-  }
-
-  return undefined;
-}
-
-function getClientPageField(record: LogRecord, key: 'pathname' | 'url'): string | undefined {
-  const payload = getPrimaryPayload(record);
-  const page = isRecord(payload.page) ? payload.page : undefined;
-  const value = page?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getClientSessionField(
-  record: LogRecord,
-  key: 'sessionId' | 'pageId'
-): string | undefined {
-  const payload = getPrimaryPayload(record);
-  const session = isRecord(payload.session) ? payload.session : undefined;
-  const value = session?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getRecordType(record: LogRecord): string | undefined {
-  return getField<string>(record, 'type');
-}
+const warnOnce = createErrorOnceLogger(warnedKeys);
 
 export function normalizeOTLPRecord(
   record: LogRecord,
@@ -175,49 +59,23 @@ export function normalizeOTLPRecord(
     'blyp.payload': serializeLogRecord(record),
   };
 
-  if (recordType) {
-    attributes['blyp.type'] = recordType;
-  }
-
-  if (caller) {
-    attributes['blyp.caller'] = caller;
-  }
-
-  if (groupId) {
-    attributes['blyp.group_id'] = groupId;
-  }
-
-  if (method) {
-    attributes['http.method'] = method;
-  }
-
-  if (path) {
-    attributes['url.path'] = path;
-  }
-
-  if (status !== undefined) {
-    attributes['http.status_code'] = status;
-  }
-
-  if (duration !== undefined) {
-    attributes['blyp.duration_ms'] = duration;
-  }
-
-  if (pagePath) {
-    attributes['client.page_path'] = pagePath;
-  }
-
-  if (pageUrl) {
-    attributes['client.page_url'] = pageUrl;
-  }
-
-  if (sessionId) {
-    attributes['client.session_id'] = sessionId;
-  }
-
-  if (pageId) {
-    attributes['client.page_id'] = pageId;
-  }
+  const ifTruthy: Array<[string, unknown]> = [
+    ['blyp.type', recordType],
+    ['blyp.caller', caller],
+    ['blyp.group_id', groupId],
+    ['http.method', method],
+    ['url.path', path],
+    ['client.page_path', pagePath],
+    ['client.page_url', pageUrl],
+    ['client.session_id', sessionId],
+    ['client.page_id', pageId],
+  ];
+  const ifDefined: Array<[string, unknown]> = [
+    ['http.status_code', status],
+    ['blyp.duration_ms', duration],
+  ];
+  for (const [k, v] of ifTruthy) if (v) attributes[k] = v;
+  for (const [k, v] of ifDefined) if (v !== undefined) attributes[k] = v;
 
   return {
     body,

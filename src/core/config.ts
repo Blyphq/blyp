@@ -2,6 +2,11 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { createJiti } from 'jiti';
 import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../shared/client-log';
+import { createWarnOnceLogger } from '../shared/once';
+import { hasNonEmptyString, isAbsoluteHttpUrl } from '../shared/validation';
+import type { ConnectorMode } from '../types/connectors/mode';
+
+export type { ConnectorMode } from '../types/connectors/mode';
 
 export interface LogRotationConfig {
   enabled?: boolean;
@@ -25,7 +30,7 @@ export interface ClientLoggingConfig {
 
 export interface PostHogConnectorConfig {
   enabled?: boolean;
-  mode?: 'auto' | 'manual';
+  mode?: ConnectorMode;
   projectKey?: string;
   host?: string;
   serviceName?: string;
@@ -34,13 +39,13 @@ export interface PostHogConnectorConfig {
 
 export interface PostHogErrorTrackingConfig {
   enabled?: boolean;
-  mode?: 'auto' | 'manual';
+  mode?: ConnectorMode;
   enableExceptionAutocapture?: boolean;
 }
 
 export interface ResolvedPostHogErrorTrackingConfig {
   enabled: boolean;
-  mode: 'auto' | 'manual';
+  mode: ConnectorMode;
   enableExceptionAutocapture: boolean;
   ready: boolean;
   status: 'enabled' | 'missing';
@@ -48,7 +53,7 @@ export interface ResolvedPostHogErrorTrackingConfig {
 
 export interface ResolvedPostHogConnectorConfig {
   enabled: boolean;
-  mode: 'auto' | 'manual';
+  mode: ConnectorMode;
   projectKey?: string;
   host: string;
   serviceName: string;
@@ -57,7 +62,7 @@ export interface ResolvedPostHogConnectorConfig {
 
 export interface SentryConnectorConfig {
   enabled?: boolean;
-  mode?: 'auto' | 'manual';
+  mode?: ConnectorMode;
   dsn?: string;
   environment?: string;
   release?: string;
@@ -65,7 +70,7 @@ export interface SentryConnectorConfig {
 
 export interface ResolvedSentryConnectorConfig {
   enabled: boolean;
-  mode: 'auto' | 'manual';
+  mode: ConnectorMode;
   dsn?: string;
   environment?: string;
   release?: string;
@@ -76,7 +81,7 @@ export interface ResolvedSentryConnectorConfig {
 export interface OTLPConnectorConfig {
   name: string;
   enabled?: boolean;
-  mode?: 'auto' | 'manual';
+  mode?: ConnectorMode;
   endpoint?: string;
   headers?: Record<string, string>;
   auth?: string;
@@ -86,7 +91,7 @@ export interface OTLPConnectorConfig {
 export interface ResolvedOTLPConnectorConfig {
   name: string;
   enabled: boolean;
-  mode: 'auto' | 'manual';
+  mode: ConnectorMode;
   endpoint?: string;
   headers: Record<string, string>;
   auth?: string;
@@ -131,6 +136,7 @@ const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const DEFAULT_CONNECTOR_SERVICE_NAME = 'blyp-app';
 const DEFAULT_POSTHOG_SERVICE_NAME = DEFAULT_CONNECTOR_SERVICE_NAME;
 const warnedKeys = new Set<string>();
+const warnOnce = createWarnOnceLogger(warnedKeys);
 
 export const DEFAULT_ROTATION_CONFIG: Required<LogRotationConfig> = {
   enabled: true,
@@ -162,20 +168,6 @@ export const DEFAULT_CONFIG: BlypConfig = {
 
 let cachedConfig: BlypConfig | null = null;
 
-function warnOnce(key: string, message: string, error?: unknown): void {
-  if (warnedKeys.has(key)) {
-    return;
-  }
-
-  warnedKeys.add(key);
-  if (error === undefined) {
-    console.warn(message);
-    return;
-  }
-
-  console.warn(message, error);
-}
-
 function findNearestPackageName(startDir: string): string | undefined {
   let currentDir = startDir;
 
@@ -186,7 +178,7 @@ function findNearestPackageName(startDir: string): string | undefined {
         const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
           name?: unknown;
         };
-        if (typeof packageJson.name === 'string' && packageJson.name.length > 0) {
+        if (hasNonEmptyString(packageJson.name)) {
           return packageJson.name;
         }
       } catch {}
@@ -203,19 +195,6 @@ function findNearestPackageName(startDir: string): string | undefined {
 
 function resolveDefaultConnectorServiceName(cwd: string = process.cwd()): string {
   return findNearestPackageName(cwd) ?? DEFAULT_POSTHOG_SERVICE_NAME;
-}
-
-function isAbsoluteHttpUrl(value: string | undefined): value is string {
-  if (!value) {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 function getBootstrapConfig(): BlypConfig {

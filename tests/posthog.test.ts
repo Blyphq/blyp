@@ -6,14 +6,14 @@ import { resetConfigCache, resolveConfig } from '../src/core/config';
 import {
   resetPostHogTestHooks,
   setPostHogTestHooks,
-  type PostHogNormalizedRecord,
-} from '../src/core/posthog';
+} from '../src/connectors/posthog/sender';
+import type { PostHogNormalizedRecord } from '../src/types/connectors/posthog';
 import {
   capturePosthogException,
   createPosthogErrorTracker,
   createPosthogLogger,
   createStructuredPosthogLogger,
-} from '../src/frameworks/posthog';
+} from '../src/connectors/posthog';
 import {
   createRequestLike,
   emitHttpErrorLog,

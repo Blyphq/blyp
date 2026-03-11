@@ -26,19 +26,26 @@
 blyp/
 ├── exports/
 │   ├── client.js              # Public client entry shim
+│   ├── connectors/
+│   │   └── posthog.js         # Public connector entry shims
 │   └── frameworks/
 │       └── elysia.js          # Public framework entry shims
 ├── index.ts                   # Main source export bridge
 ├── src/
 │   ├── core/                  # Logger runtime and file logging internals
+│   ├── connectors/            # Connector implementations
 │   ├── frameworks/            # Framework implementations
 │   ├── shared/                # Shared runtime/error utilities
 │   └── types/
 │       ├── framework.types.ts # Shared public contracts
+│       ├── connectors/
+│       │   └── posthog.ts     # Connector-specific source types
 │       └── frameworks/
 │           └── elysia.ts      # Framework-specific source types
 ├── types/
 │   ├── index.d.ts             # Public type entry shim
+│   ├── connectors/
+│   │   └── posthog.d.ts       # Public connector type shims
 │   └── frameworks/
 │       └── elysia.d.ts        # Public framework type shims
 ├── tests/

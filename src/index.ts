@@ -50,6 +50,7 @@ export type {
   BlypConnectorsConfig,
   ClientLoggingConfig,
   BlypConfig,
+  ConnectorMode,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
@@ -66,21 +67,21 @@ export type { ReadLogFileOptions } from './core/log-reader';
 export type { LogRecord } from './core/file-logger';
 export * from './core/helpers';
 export * from './core/colors';
-export { normalizeOTLPRecord } from './core/otlp';
+export { normalizeOTLPRecord } from './connectors/otlp/sender';
 export {
   capturePosthogException,
   createPosthogErrorTracker,
   createPosthogLogger,
   createStructuredPosthogLogger,
-} from './frameworks/posthog';
+} from './connectors/posthog';
 export type {
   PostHogErrorTracker,
   PostHogExceptionCaptureOptions,
   PostHogLogger,
   PostHogLoggerConfig,
-} from './frameworks/posthog';
-export { createSentryLogger, createStructuredSentryLogger } from './frameworks/sentry';
-export type { SentryLogger, SentryLoggerConfig } from './frameworks/sentry';
+} from './connectors/posthog';
+export { createSentryLogger, createStructuredSentryLogger } from './connectors/sentry';
+export type { SentryLogger, SentryLoggerConfig } from './connectors/sentry';
 export { logger, createStandaloneLogger } from './frameworks/standalone';
 export type { StandaloneLogger, StandaloneLoggerConfig } from './frameworks/standalone';
 export { createElysiaLogger, createLogger } from './frameworks/elysia';
@@ -177,11 +178,11 @@ export type {
 export {
   createOtlpLogger,
   createStructuredOtlpLogger,
-} from './frameworks/otlp';
+} from './connectors/otlp';
 export type {
   OTLPLogger,
   OTLPLoggerConfig,
-} from './frameworks/otlp';
+} from './connectors/otlp';
 
 export function createStructuredLog<
   TFields extends Record<string, unknown> = Record<string, unknown>,

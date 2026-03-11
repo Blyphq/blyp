@@ -5,11 +5,11 @@ import { resetConfigCache, resolveConfig } from '../src/core/config';
 import {
   resetSentryTestHooks,
   setSentryTestHooks,
-} from '../src/core/sentry';
+} from '../src/connectors/sentry/sender';
 import {
   createSentryLogger,
   createStructuredSentryLogger,
-} from '../src/frameworks/sentry';
+} from '../src/connectors/sentry';
 import { resolveServerLogger, handleClientLogIngestion } from '../src/frameworks/shared';
 import { createStandaloneLogger } from '../src/frameworks/standalone';
 import { createClientPayload } from './helpers/client-payload';
