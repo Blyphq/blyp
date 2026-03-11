@@ -64,7 +64,7 @@ function isBrowserRuntime(): boolean {
 async function sendRemoteLog(
   config: Required<Pick<ClientLoggerConfig, 'endpoint' | 'credentials'>> & {
     headers?: Record<string, string>;
-    connector?: 'posthog';
+    connector?: ClientLoggerConfig['connector'];
   },
   payload: ClientLogEvent
 ): Promise<DeliveryAttemptResult> {
@@ -100,13 +100,22 @@ async function sendRemoteLog(
     });
 
     if (response.ok) {
-      if (
-        config.connector === 'posthog' &&
-        response.headers.get('x-blyp-posthog-status') === 'missing'
-      ) {
+      if (config.connector === 'posthog' && response.headers.get('x-blyp-posthog-status') === 'missing') {
         errorOnce(
           'posthog-missing',
           '[blyp/client] PostHog connector requested but not configured on the server. Continuing without PostHog forwarding.'
+        );
+      }
+
+      if (
+        config.connector &&
+        typeof config.connector === 'object' &&
+        config.connector.type === 'otlp' &&
+        response.headers.get('x-blyp-otlp-status') === 'missing'
+      ) {
+        errorOnce(
+          `otlp-missing:${config.connector.name}`,
+          `[blyp/client] OTLP target "${config.connector.name}" was requested but not configured on the server. Continuing without OTLP forwarding.`
         );
       }
 

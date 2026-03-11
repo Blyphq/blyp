@@ -121,7 +121,7 @@ async function sendRemoteLog(
   config: {
     endpoint?: string;
     headers?: Record<string, string>;
-    connector?: 'posthog';
+    connector?: ExpoLoggerConfig['connector'];
     metadata?: ExpoLoggerConfig['metadata'];
   },
   event: ClientLogEvent
@@ -182,13 +182,22 @@ async function sendRemoteLog(
     });
 
     if (response.ok) {
-      if (
-        config.connector === 'posthog' &&
-        response.headers.get('x-blyp-posthog-status') === 'missing'
-      ) {
+      if (config.connector === 'posthog' && response.headers.get('x-blyp-posthog-status') === 'missing') {
         errorOnce(
           'missing-posthog-server-config',
           '[blyp/expo] PostHog connector requested but not configured on the server. Continuing without PostHog forwarding.'
+        );
+      }
+
+      if (
+        config.connector &&
+        typeof config.connector === 'object' &&
+        config.connector.type === 'otlp' &&
+        response.headers.get('x-blyp-otlp-status') === 'missing'
+      ) {
+        errorOnce(
+          `missing-otlp-server-config:${config.connector.name}`,
+          `[blyp/expo] OTLP target "${config.connector.name}" was requested but not configured on the server. Continuing without OTLP forwarding.`
         );
       }
 

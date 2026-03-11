@@ -3,6 +3,7 @@ export type {
   ExpoLogger,
   ExpoLoggerConfig,
   ClientLogBrowserContext,
+  ClientConnectorRequest,
   ClientLogDeviceContext,
   ClientLogEvent,
   ClientLogLevel,

@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 
 import type {
+  ClientConnectorRequest,
   ClientLogBrowserContext,
   ClientLogDeviceContext,
   ClientLogEvent,
@@ -29,7 +30,7 @@ export interface ClientLoggerConfig {
   credentials?: RequestCredentials;
   localConsole?: boolean;
   remoteSync?: boolean;
-  connector?: 'posthog';
+  connector?: ClientConnectorRequest;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
   delivery?: RemoteDeliveryConfig;
 }
@@ -48,6 +49,7 @@ export interface ClientLogger {
 
 export type {
   ClientLogBrowserContext,
+  ClientConnectorRequest,
   ClientLogDeviceContext,
   ClientLogEvent,
   ClientLogLevel,

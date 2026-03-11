@@ -41,13 +41,17 @@ export interface ClientLogSessionContext {
   sessionId: string;
 }
 
+export type ClientConnectorRequest =
+  | 'posthog'
+  | { type: 'otlp'; name: string };
+
 export interface ClientLogEvent {
   type: 'client_log';
   source: 'client';
   id: string;
   level: ClientLogLevel;
   message: string;
-  connector?: 'posthog';
+  connector?: ClientConnectorRequest;
   data?: unknown;
   bindings?: Record<string, unknown>;
   clientTimestamp: string;
@@ -133,6 +137,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isClientLogLevel(value: unknown): value is ClientLogLevel {
   return typeof value === 'string' && CLIENT_LOG_LEVELS.includes(value as ClientLogLevel);
+}
+
+function isClientConnectorRequest(value: unknown): value is ClientConnectorRequest {
+  if (value === 'posthog' || value === undefined) {
+    return true;
+  }
+
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return value.type === 'otlp' && typeof value.name === 'string' && value.name.length > 0;
 }
 
 function safeGet<T>(getter: () => T): T | undefined {
@@ -336,7 +352,7 @@ export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
     return false;
   }
 
-  if (payload.connector !== undefined && payload.connector !== 'posthog') {
+  if (!isClientConnectorRequest(payload.connector)) {
     return false;
   }
 

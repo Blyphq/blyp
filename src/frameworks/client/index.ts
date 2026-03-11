@@ -9,6 +9,7 @@ export type {
   ClientLogger,
   ClientLoggerConfig,
   ClientLogBrowserContext,
+  ClientConnectorRequest,
   ClientLogDeviceContext,
   ClientLogEvent,
   ClientLogLevel,

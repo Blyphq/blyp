@@ -52,13 +52,16 @@ export type {
   BlypConfig,
   LogFileConfig,
   LogRotationConfig,
+  OTLPConnectorConfig,
   PostHogConnectorConfig,
+  ResolvedOTLPConnectorConfig,
 } from './core/config';
 export { readLogFile, formatLogRecord } from './core/log-reader';
 export type { ReadLogFileOptions } from './core/log-reader';
 export type { LogRecord } from './core/file-logger';
 export * from './core/helpers';
 export * from './core/colors';
+export { normalizeOTLPRecord } from './core/otlp';
 export { logger, createStandaloneLogger } from './frameworks/standalone';
 export type { StandaloneLogger, StandaloneLoggerConfig } from './frameworks/standalone';
 export { createElysiaLogger, createLogger } from './frameworks/elysia';
@@ -135,6 +138,7 @@ export type {
 } from './frameworks/nestjs';
 export type {
   ClientLoggerConfig,
+  ClientConnectorRequest,
   ClientLogBrowserContext,
   ClientLogDeviceContext,
   ClientLogEvent,
@@ -151,6 +155,14 @@ export type {
   ExpoLogger,
   ExpoLoggerConfig,
 } from './types/frameworks/expo';
+export {
+  createOtlpLogger,
+  createStructuredOtlpLogger,
+} from './frameworks/otlp';
+export type {
+  OTLPLogger,
+  OTLPLoggerConfig,
+} from './frameworks/otlp';
 
 export function createStructuredLog<
   TFields extends Record<string, unknown> = Record<string, unknown>,

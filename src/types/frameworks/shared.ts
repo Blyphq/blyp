@@ -49,9 +49,51 @@ export interface ResolvedPostHogConnector {
   ) => void;
 }
 
+export interface ResolvedOTLPConnector {
+  name: string;
+  enabled: boolean;
+  ready: boolean;
+  mode: 'auto' | 'manual';
+  serviceName: string;
+  endpoint?: string;
+  status: 'enabled' | 'missing';
+  send: (
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+}
+
+export interface ResolvedOTLPRegistry {
+  get: (name: string) => ResolvedOTLPConnector;
+  getAutoForwardTargets: () => ResolvedOTLPConnector[];
+  send: (
+    name: string,
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+  flush: () => Promise<void>;
+}
+
 export interface ResolvedServerLogger<Ctx> {
   logger: BlypLogger;
   posthog: ResolvedPostHogConnector;
+  otlp: ResolvedOTLPRegistry;
   resolvedConfig: BlypConfig;
   level: string;
   pretty: boolean;

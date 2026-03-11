@@ -14,6 +14,7 @@ export default defineConfig([
       'tanstack-start': 'src/frameworks/tanstack-start/index.ts',
       sveltekit: 'src/frameworks/sveltekit/index.ts',
       posthog: 'src/frameworks/posthog/index.ts',
+      otlp: 'src/frameworks/otlp/index.ts',
     },
     format: ['cjs', 'esm'],
     dts: true,

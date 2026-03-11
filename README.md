@@ -15,6 +15,7 @@
 - **Framework integrations** — Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, TanStack Start, SvelteKit, Cloudflare Workers
 - **Expo integration** — Mobile client logging for Expo apps with structured backend sync
 - **PostHog connector** — Automatic or manual PostHog log forwarding for server, browser, and Expo flows
+- **OTLP connector** — Automatic or manual OpenTelemetry log forwarding for Grafana, Datadog, Honeycomb, and any OTLP-compatible backend
 - **Standalone usage** — Use without any framework
 - **Structured file logging** — NDJSON with size-based rotation and gzip archives
 - **Client log sync** — Browser logs ingested into your backend stream
@@ -207,6 +208,78 @@ const logger = createClientLogger({
 ```
 
 The client and Expo connector flow still posts to Blyp first. Blyp forwards to PostHog only when the server connector is configured.
+
+### OTLP
+
+Use `connectors.otlp` when you want to send logs to named OTLP-compatible backends such as Grafana Cloud, Datadog, Honeycomb, or a self-hosted OpenTelemetry Collector:
+
+```typescript
+export default {
+  connectors: {
+    otlp: [
+      {
+        name: 'grafana',
+        enabled: true,
+        mode: 'auto',
+        endpoint: 'http://localhost:4318',
+        headers: {
+          'x-scope-orgid': process.env.GRAFANA_SCOPE_ID!,
+        },
+        auth: process.env.GRAFANA_AUTH,
+      },
+      {
+        name: 'honeycomb',
+        enabled: true,
+        mode: 'manual',
+        endpoint: 'https://api.honeycomb.io',
+        headers: {
+          'x-honeycomb-team': process.env.HONEYCOMB_API_KEY!,
+        },
+      },
+    ],
+  },
+};
+```
+
+In `auto` mode, normal Blyp server loggers forward to every ready OTLP target automatically. In `manual` mode, use `blyp-js/otlp` and select a named target:
+
+```typescript
+import { createOtlpLogger, createStructuredOtlpLogger } from 'blyp-js/otlp';
+
+createOtlpLogger({
+  name: 'grafana',
+}).info('manual otlp log');
+
+const structured = createStructuredOtlpLogger(
+  'checkout',
+  { orderId: 'ord_123' },
+  { name: 'honeycomb' }
+);
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request server-side forwarding to a named OTLP target through the existing ingestion endpoint:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: { type: 'otlp', name: 'grafana' },
+});
+```
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: { type: 'otlp', name: 'grafana' },
+});
+```
+
+The browser and Expo OTLP flows still post to Blyp first. Blyp forwards to the named OTLP target only when that server connector is configured and ready.
 
 Log levels, HTTP request logging, and file logging (rotation, archives, reading stored logs) are documented in [docs](docs/README.md#file-logging).
 

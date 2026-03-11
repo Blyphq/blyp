@@ -276,6 +276,116 @@ The browser and Expo connectors do not send directly to PostHog. They continue t
 
 ---
 
+## OTLP connector
+
+Use OTLP when you want to forward Blyp logs to Grafana Cloud, Datadog, Honeycomb, Jaeger, Splunk, New Relic, or any OTLP-compatible backend.
+
+Configure one or more named targets in `connectors.otlp`:
+
+```typescript
+export default {
+  connectors: {
+    otlp: [
+      {
+        name: 'grafana',
+        enabled: true,
+        mode: 'auto',
+        endpoint: 'http://localhost:4318',
+        headers: {
+          'x-scope-orgid': process.env.GRAFANA_SCOPE_ID!,
+        },
+        auth: process.env.GRAFANA_AUTH,
+      },
+      {
+        name: 'datadog',
+        enabled: true,
+        mode: 'manual',
+        endpoint: 'https://http-intake.logs.datadoghq.com',
+        headers: {
+          'dd-api-key': process.env.DATADOG_API_KEY!,
+        },
+      },
+      {
+        name: 'honeycomb',
+        enabled: true,
+        mode: 'manual',
+        endpoint: 'https://api.honeycomb.io',
+        headers: {
+          'x-honeycomb-team': process.env.HONEYCOMB_API_KEY!,
+        },
+      },
+    ],
+  },
+};
+```
+
+Static JSON config works too:
+
+```json
+{
+  "connectors": {
+    "otlp": [
+      {
+        "name": "collector",
+        "enabled": true,
+        "mode": "auto",
+        "endpoint": "http://localhost:4318"
+      }
+    ]
+  }
+}
+```
+
+Notes:
+
+- `enabled: true` is required for each OTLP target.
+- `endpoint` must be an absolute `http://` or `https://` URL.
+- Blyp passes `endpoint` directly to the OpenTelemetry HTTP exporter. Collector base URLs such as `http://localhost:4318` are valid.
+- If `headers.Authorization` is set, it wins over `auth`. Otherwise Blyp maps `auth` to the `Authorization` header.
+
+`mode: "auto"` forwards normal server-side Blyp logs to every ready OTLP target automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the OTLP subpath:
+
+```typescript
+import { createOtlpLogger, createStructuredOtlpLogger } from 'blyp-js/otlp';
+
+const otlpLogger = createOtlpLogger({
+  name: 'grafana',
+});
+otlpLogger.info('manual otlp log');
+
+const structured = createStructuredOtlpLogger('checkout', {
+  orderId: 'ord_123',
+}, {
+  name: 'honeycomb',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request named OTLP forwarding through the existing Blyp ingestion route:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: { type: 'otlp', name: 'grafana' },
+});
+```
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: { type: 'otlp', name: 'grafana' },
+});
+```
+
+The browser and Expo OTLP connectors do not send directly to Grafana, Datadog, or other OTLP backends. They continue to send to Blyp's ingestion endpoint and Blyp forwards to the requested named OTLP target when the server connector is configured and ready. Workers are still out of scope for this connector.
+
+---
+
 ## Framework integrations
 
 ### Elysia

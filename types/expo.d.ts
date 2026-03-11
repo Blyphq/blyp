@@ -1,6 +1,7 @@
 export { createExpoLogger } from './frameworks/expo';
 export type {
   ClientLogBrowserContext,
+  ClientConnectorRequest,
   ClientLogDeviceContext,
   ClientLogEvent,
   ClientLogLevel,

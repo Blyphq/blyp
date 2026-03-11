@@ -1,4 +1,5 @@
 import type {
+  ClientConnectorRequest,
   ClientLogBrowserContext,
   ClientLogDeviceContext,
   ClientLogEvent,
@@ -17,7 +18,7 @@ export interface ExpoLoggerConfig {
   headers?: Record<string, string>;
   localConsole?: boolean;
   remoteSync?: boolean;
-  connector?: 'posthog';
+  connector?: ClientConnectorRequest;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
   delivery?: RemoteDeliveryConfig;
 }
@@ -36,6 +37,7 @@ export interface ExpoLogger {
 
 export type {
   ClientLogBrowserContext,
+  ClientConnectorRequest,
   ClientLogDeviceContext,
   ClientLogEvent,
   ClientLogLevel,

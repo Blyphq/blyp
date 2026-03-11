@@ -3,7 +3,7 @@ import type { ClientLogEvent } from '../../shared/client-log';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
-import { createBaseLogger, getPostHogSender } from '../../core/logger';
+import { createBaseLogger, getOtlpRegistry, getPostHogSender } from '../../core/logger';
 import {
   buildClientDetails,
   buildInfoLogMessage,
@@ -102,6 +102,7 @@ export function resolveServerLogger<Ctx>(
   return {
     logger,
     posthog: getPostHogSender(logger),
+    otlp: getOtlpRegistry(logger),
     resolvedConfig,
     level,
     pretty,
@@ -321,6 +322,21 @@ export async function handleClientLogIngestion<Ctx>(options: {
 
     if (config.posthog.ready) {
       config.posthog.send({
+        timestamp: structuredPayload.receivedAt as string,
+        level: payload.level,
+        message: `[client] ${payload.message}`,
+        data: structuredPayload,
+      }, {
+        source: 'client',
+      });
+    }
+  } else if (payload.connector?.type === 'otlp') {
+    const sender = config.otlp.get(payload.connector.name);
+
+    headers['x-blyp-otlp-status'] = sender.ready ? 'enabled' : 'missing';
+
+    if (sender.ready) {
+      sender.send({
         timestamp: structuredPayload.receivedAt as string,
         level: payload.level,
         message: `[client] ${payload.message}`,

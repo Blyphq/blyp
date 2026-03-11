@@ -39,8 +39,31 @@ export interface ResolvedPostHogConnectorConfig {
   serviceName: string;
 }
 
+export interface OTLPConnectorConfig {
+  name: string;
+  enabled?: boolean;
+  mode?: 'auto' | 'manual';
+  endpoint?: string;
+  headers?: Record<string, string>;
+  auth?: string;
+  serviceName?: string;
+}
+
+export interface ResolvedOTLPConnectorConfig {
+  name: string;
+  enabled: boolean;
+  mode: 'auto' | 'manual';
+  endpoint?: string;
+  headers: Record<string, string>;
+  auth?: string;
+  serviceName: string;
+  ready: boolean;
+  status: 'enabled' | 'missing';
+}
+
 export interface BlypConnectorsConfig {
   posthog?: PostHogConnectorConfig;
+  otlp?: OTLPConnectorConfig[];
 }
 
 export interface BlypConfig {
@@ -70,7 +93,8 @@ const CONFIG_FILE_NAMES = [
 ] as const;
 const CONFIG_FILE_NAME = 'blyp.config.json';
 const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
-const DEFAULT_POSTHOG_SERVICE_NAME = 'blyp-app';
+const DEFAULT_CONNECTOR_SERVICE_NAME = 'blyp-app';
+const DEFAULT_POSTHOG_SERVICE_NAME = DEFAULT_CONNECTOR_SERVICE_NAME;
 const warnedKeys = new Set<string>();
 
 export const DEFAULT_ROTATION_CONFIG: Required<LogRotationConfig> = {
@@ -142,8 +166,21 @@ function findNearestPackageName(startDir: string): string | undefined {
   }
 }
 
-function resolveDefaultPostHogServiceName(cwd: string = process.cwd()): string {
+function resolveDefaultConnectorServiceName(cwd: string = process.cwd()): string {
   return findNearestPackageName(cwd) ?? DEFAULT_POSTHOG_SERVICE_NAME;
+}
+
+function isAbsoluteHttpUrl(value: string | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function getBootstrapConfig(): BlypConfig {
@@ -365,8 +402,61 @@ function mergePostHogConnectorConfig(
     serviceName:
       override?.serviceName ??
       base?.serviceName ??
-      resolveDefaultPostHogServiceName(),
+      resolveDefaultConnectorServiceName(),
   };
+}
+
+function mergeOTLPConnectorConfig(
+  base: OTLPConnectorConfig | undefined,
+  override: OTLPConnectorConfig | undefined
+): ResolvedOTLPConnectorConfig {
+  const endpoint = override?.endpoint ?? base?.endpoint;
+  const enabled = override?.enabled ?? base?.enabled ?? false;
+  const resolvedHeaders = {
+    ...(base?.headers ?? {}),
+    ...(override?.headers ?? {}),
+  };
+  const ready = enabled && isAbsoluteHttpUrl(endpoint);
+
+  return {
+    name: override?.name ?? base?.name ?? '',
+    enabled,
+    mode: override?.mode ?? base?.mode ?? 'auto',
+    endpoint,
+    headers: resolvedHeaders,
+    auth: override?.auth ?? base?.auth,
+    serviceName:
+      override?.serviceName ??
+      base?.serviceName ??
+      resolveDefaultConnectorServiceName(),
+    ready,
+    status: ready ? 'enabled' : 'missing',
+  };
+}
+
+function mergeOTLPConnectorsConfig(
+  base: OTLPConnectorConfig[] | undefined,
+  override: OTLPConnectorConfig[] | undefined
+): ResolvedOTLPConnectorConfig[] {
+  const source = override ?? base ?? [];
+  const deduped = new Map<string, ResolvedOTLPConnectorConfig>();
+
+  for (const connector of source) {
+    if (!connector || typeof connector.name !== 'string' || connector.name.length === 0) {
+      continue;
+    }
+
+    if (deduped.has(connector.name)) {
+      warnOnce(
+        `otlp-duplicate:${connector.name}`,
+        `[Blyp] Warning: Duplicate OTLP connector name "${connector.name}" found. Using the last definition.`
+      );
+    }
+
+    deduped.set(connector.name, mergeOTLPConnectorConfig(undefined, connector));
+  }
+
+  return Array.from(deduped.values());
 }
 
 function mergeConnectorsConfig(
@@ -375,6 +465,7 @@ function mergeConnectorsConfig(
 ): Required<BlypConnectorsConfig> {
   return {
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
+    otlp: mergeOTLPConnectorsConfig(base?.otlp, override?.otlp),
   };
 }
 
