@@ -49,6 +49,25 @@ export interface ResolvedPostHogConnector {
   ) => void;
 }
 
+export interface ResolvedSentryConnector {
+  enabled: boolean;
+  ready: boolean;
+  mode: 'auto' | 'manual';
+  status: 'enabled' | 'missing';
+  send: (
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+}
+
 export interface ResolvedOTLPConnector {
   name: string;
   enabled: boolean;
@@ -93,6 +112,7 @@ export interface ResolvedOTLPRegistry {
 export interface ResolvedServerLogger<Ctx> {
   logger: BlypLogger;
   posthog: ResolvedPostHogConnector;
+  sentry: ResolvedSentryConnector;
   otlp: ResolvedOTLPRegistry;
   resolvedConfig: BlypConfig;
   level: string;

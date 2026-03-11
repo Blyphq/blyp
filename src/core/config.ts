@@ -39,6 +39,24 @@ export interface ResolvedPostHogConnectorConfig {
   serviceName: string;
 }
 
+export interface SentryConnectorConfig {
+  enabled?: boolean;
+  mode?: 'auto' | 'manual';
+  dsn?: string;
+  environment?: string;
+  release?: string;
+}
+
+export interface ResolvedSentryConnectorConfig {
+  enabled: boolean;
+  mode: 'auto' | 'manual';
+  dsn?: string;
+  environment?: string;
+  release?: string;
+  ready: boolean;
+  status: 'enabled' | 'missing';
+}
+
 export interface OTLPConnectorConfig {
   name: string;
   enabled?: boolean;
@@ -63,6 +81,7 @@ export interface ResolvedOTLPConnectorConfig {
 
 export interface BlypConnectorsConfig {
   posthog?: PostHogConnectorConfig;
+  sentry?: SentryConnectorConfig;
   otlp?: OTLPConnectorConfig[];
 }
 
@@ -406,6 +425,25 @@ function mergePostHogConnectorConfig(
   };
 }
 
+function mergeSentryConnectorConfig(
+  base: SentryConnectorConfig | undefined,
+  override: SentryConnectorConfig | undefined
+): ResolvedSentryConnectorConfig {
+  const dsn = override?.dsn ?? base?.dsn;
+  const enabled = override?.enabled ?? base?.enabled ?? false;
+  const ready = enabled && typeof dsn === 'string' && dsn.trim().length > 0;
+
+  return {
+    enabled,
+    mode: override?.mode ?? base?.mode ?? 'auto',
+    dsn,
+    environment: override?.environment ?? base?.environment,
+    release: override?.release ?? base?.release,
+    ready,
+    status: ready ? 'enabled' : 'missing',
+  };
+}
+
 function mergeOTLPConnectorConfig(
   base: OTLPConnectorConfig | undefined,
   override: OTLPConnectorConfig | undefined
@@ -465,6 +503,7 @@ function mergeConnectorsConfig(
 ): Required<BlypConnectorsConfig> {
   return {
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
+    sentry: mergeSentryConnectorConfig(base?.sentry, override?.sentry),
     otlp: mergeOTLPConnectorsConfig(base?.otlp, override?.otlp),
   };
 }

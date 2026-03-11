@@ -189,6 +189,13 @@ async function sendRemoteLog(
         );
       }
 
+      if (config.connector === 'sentry' && response.headers.get('x-blyp-sentry-status') === 'missing') {
+        errorOnce(
+          'missing-sentry-server-config',
+          '[blyp/expo] Sentry not setup. Continuing without Sentry forwarding.'
+        );
+      }
+
       if (
         config.connector &&
         typeof config.connector === 'object' &&

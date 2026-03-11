@@ -18,6 +18,10 @@ import {
   type PostHogSender,
 } from './posthog';
 import {
+  createSentrySender,
+  type SentrySender,
+} from './sentry';
+import {
   createOTLPRegistry,
   type OTLPRegistry,
 } from './otlp';
@@ -56,6 +60,7 @@ interface StructuredLogFactoryOptions {
 interface LoggerFactoryHandle {
   bindings: Record<string, unknown>;
   posthog: PostHogSender;
+  sentry: SentrySender;
   otlp: OTLPRegistry;
   create: (source: InternalLoggerSource, bindings?: Record<string, unknown>) => BlypLogger;
   writeStructured: (
@@ -209,6 +214,10 @@ export function getPostHogSender(logger: BlypLogger): PostHogSender {
   return getLoggerFactory(logger).posthog;
 }
 
+export function getSentrySender(logger: BlypLogger): SentrySender {
+  return getLoggerFactory(logger).sentry;
+}
+
 export function getOtlpRegistry(logger: BlypLogger): OTLPRegistry {
   return getLoggerFactory(logger).otlp;
 }
@@ -271,6 +280,24 @@ function maybeSendToPostHog(
   posthog.send(record, { source: 'server', warnIfUnavailable: true });
 }
 
+function maybeSendToSentry(
+  sentry: SentrySender,
+  record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
+): void {
+  if (isClientLogRecord(record)) {
+    return;
+  }
+
+  if (!sentry.shouldAutoForwardServerLogs()) {
+    if (sentry.enabled && !sentry.ready) {
+      sentry.send(record, { source: 'server', warnIfUnavailable: true });
+    }
+    return;
+  }
+
+  sentry.send(record, { source: 'server', warnIfUnavailable: true });
+}
+
 function maybeSendToOTLP(
   otlp: OTLPRegistry,
   record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
@@ -288,6 +315,7 @@ function createLoggerInstance(
   rootRawLogger: any,
   fileLogger: RotatingFileLogger,
   posthog: PostHogSender,
+  sentry: SentrySender,
   otlp: OTLPRegistry,
   bindings: Record<string, unknown> = {},
   source: InternalLoggerSource = 'root'
@@ -331,6 +359,7 @@ function createLoggerInstance(
     );
     fileLogger.write(record);
     maybeSendToPostHog(posthog, record);
+    maybeSendToSentry(sentry, record);
     maybeSendToOTLP(otlp, record);
   };
 
@@ -362,6 +391,7 @@ function createLoggerInstance(
     }
 
     maybeSendToPostHog(posthog, record);
+    maybeSendToSentry(sentry, record);
     maybeSendToOTLP(otlp, record);
   };
 
@@ -413,12 +443,21 @@ function createLoggerInstance(
 
     child: (childBindings: Record<string, unknown>) => {
       const mergedBindings = { ...bindings, ...childBindings };
-      return createLoggerInstance(rootRawLogger, fileLogger, posthog, otlp, mergedBindings, source);
+      return createLoggerInstance(
+        rootRawLogger,
+        fileLogger,
+        posthog,
+        sentry,
+        otlp,
+        mergedBindings,
+        source
+      );
     },
 
     [LOGGER_FACTORY]: {
       bindings,
       posthog,
+      sentry,
       otlp,
       create: (
         nextSource: InternalLoggerSource,
@@ -428,6 +467,7 @@ function createLoggerInstance(
           rootRawLogger,
           fileLogger,
           posthog,
+          sentry,
           otlp,
           nextBindings,
           nextSource
@@ -457,8 +497,9 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   const rawLogger = createPinoLogger(resolvedConfig);
   const fileLogger = createFileLogger(resolvedConfig);
   const posthog = createPostHogSender(resolvedConfig);
+  const sentry = createSentrySender(resolvedConfig);
   const otlp = createOTLPRegistry(resolvedConfig);
-  const instance = createLoggerInstance(rawLogger, fileLogger, posthog, otlp);
+  const instance = createLoggerInstance(rawLogger, fileLogger, posthog, sentry, otlp);
 
   if (config === undefined) {
     loggerInstance = instance;

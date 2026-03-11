@@ -3,6 +3,7 @@ import {
   createBaseLogger,
   type BlypLogger,
 } from '../../core/logger';
+import { serializeLogMessage } from '../../shared/log-value';
 import type { StandaloneLoggerConfig } from '../../types/frameworks/standalone';
 
 export interface StandaloneLogger extends BlypLogger {
@@ -22,34 +23,7 @@ function buildStructuredArgs(message: unknown, args: unknown[]): { text: string;
 }
 
 function serializeMessage(message: unknown): string {
-  if (typeof message === 'string') {
-    return message;
-  }
-  if (message !== null && typeof message === 'object') {
-    try {
-      return JSON.stringify(message, (key, value) => {
-        if (typeof value === 'function') {
-          return `[Function: ${value.name || 'anonymous'}]`;
-        }
-        if (value === undefined) {
-          return '[undefined]';
-        }
-        if (typeof value === 'symbol') {
-          return value.toString();
-        }
-        return value;
-      }, 2);
-    } catch {
-      try {
-        const keys = Object.keys(message as object);
-        if (keys.length > 0) {
-          return `[Object with keys: ${keys.join(', ')}]`;
-        }
-      } catch {}
-      return '[Object]';
-    }
-  }
-  return String(message);
+  return serializeLogMessage(message);
 }
 
 function wrapBaseLogger(baseLogger: BlypLogger, config: StandaloneLoggerConfig): StandaloneLogger {

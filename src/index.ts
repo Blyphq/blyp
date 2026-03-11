@@ -54,7 +54,9 @@ export type {
   LogRotationConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
+  ResolvedSentryConnectorConfig,
   ResolvedOTLPConnectorConfig,
+  SentryConnectorConfig,
 } from './core/config';
 export { readLogFile, formatLogRecord } from './core/log-reader';
 export type { ReadLogFileOptions } from './core/log-reader';
@@ -62,6 +64,8 @@ export type { LogRecord } from './core/file-logger';
 export * from './core/helpers';
 export * from './core/colors';
 export { normalizeOTLPRecord } from './core/otlp';
+export { createSentryLogger, createStructuredSentryLogger } from './frameworks/sentry';
+export type { SentryLogger, SentryLoggerConfig } from './frameworks/sentry';
 export { logger, createStandaloneLogger } from './frameworks/standalone';
 export type { StandaloneLogger, StandaloneLoggerConfig } from './frameworks/standalone';
 export { createElysiaLogger, createLogger } from './frameworks/elysia';

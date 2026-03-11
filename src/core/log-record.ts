@@ -1,5 +1,10 @@
 import type { LogRecord } from './file-logger';
 import type { StructuredLogPayload } from './structured-log';
+import {
+  normalizeError,
+  normalizeLogValue,
+  serializeLogMessage,
+} from '../shared/log-value';
 
 export type LogMethodName =
   | 'success'
@@ -95,46 +100,7 @@ export function getCallerLocation(): { file: string | null; line: number | null 
   return { file: null, line: null };
 }
 
-export function serializeMessage(message: unknown): string {
-  if (typeof message === 'string') {
-    return message;
-  }
-
-  if (message !== null && typeof message === 'object') {
-    try {
-      return JSON.stringify(
-        message,
-        (_key, value) => {
-          if (typeof value === 'function') {
-            return `[Function: ${value.name || 'anonymous'}]`;
-          }
-
-          if (value === undefined) {
-            return '[undefined]';
-          }
-
-          if (typeof value === 'symbol') {
-            return value.toString();
-          }
-
-          return value;
-        },
-        2
-      );
-    } catch {
-      try {
-        const keys = Object.keys(message as object);
-        if (keys.length > 0) {
-          return `[Object with keys: ${keys.join(', ')}]`;
-        }
-      } catch {}
-
-      return '[Object]';
-    }
-  }
-
-  return String(message);
-}
+export const serializeMessage = serializeLogMessage;
 
 export function stripAnsi(value: string): string {
   return value.replace(/\u001b\[[0-9;]*m/g, '');
@@ -154,18 +120,22 @@ export function buildRecord(
     message: stripAnsi(serializedMessage),
   };
 
+  if (message instanceof Error) {
+    record.error = normalizeError(message);
+  }
+
   if (file) {
     record.caller = line !== null ? `${file}:${line}` : file;
   }
 
   if (args.length === 1) {
-    record.data = args[0];
+    record.data = normalizeLogValue(args[0]);
   } else if (args.length > 1) {
-    record.data = args;
+    record.data = normalizeLogValue(args);
   }
 
   if (Object.keys(bindings).length > 0) {
-    record.bindings = bindings;
+    record.bindings = normalizeLogValue(bindings) as Record<string, unknown>;
   }
 
   return record;
@@ -178,9 +148,10 @@ export function buildStructuredRecord(
   bindings: Record<string, unknown>
 ): LogRecord {
   const { file, line } = getCallerLocation();
+  const normalizedPayload = normalizeLogValue(payload) as StructuredLogPayload;
   const record: LogRecord = {
     message: stripAnsi(message),
-    ...payload,
+    ...normalizedPayload,
   };
 
   if (file) {
@@ -188,16 +159,16 @@ export function buildStructuredRecord(
   }
 
   if (Object.keys(bindings).length > 0) {
-    record.bindings = bindings;
+    record.bindings = normalizeLogValue(bindings) as Record<string, unknown>;
   }
 
   record.level =
-    typeof payload.level === 'string' && payload.level.length > 0
-      ? payload.level
+    typeof normalizedPayload.level === 'string' && normalizedPayload.level.length > 0
+      ? normalizedPayload.level
       : RECORD_LEVELS[level];
   record.timestamp =
-    typeof payload.timestamp === 'string' && payload.timestamp.length > 0
-      ? payload.timestamp
+    typeof normalizedPayload.timestamp === 'string' && normalizedPayload.timestamp.length > 0
+      ? normalizedPayload.timestamp
       : new Date().toISOString();
 
   return record;

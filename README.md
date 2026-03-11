@@ -209,6 +209,60 @@ const logger = createClientLogger({
 
 The client and Expo connector flow still posts to Blyp first. Blyp forwards to PostHog only when the server connector is configured.
 
+### Sentry
+
+Use `connectors.sentry` when you want Blyp logs forwarded into Sentry Logs:
+
+```typescript
+export default {
+  connectors: {
+    sentry: {
+      enabled: true,
+      mode: 'auto',
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.SENTRY_ENVIRONMENT,
+      release: process.env.SENTRY_RELEASE,
+    },
+  },
+};
+```
+
+In `auto` mode, normal Blyp server loggers forward to Sentry automatically. In `manual` mode, use `blyp-js/sentry`:
+
+```typescript
+import { createSentryLogger, createStructuredSentryLogger } from 'blyp-js/sentry';
+
+createSentryLogger().info('manual sentry log');
+
+const structured = createStructuredSentryLogger('checkout', {
+  orderId: 'ord_123',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request server-side forwarding through Blyp's ingestion endpoint:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'sentry',
+});
+```
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: 'sentry',
+});
+```
+
+The browser and Expo Sentry flow still posts to Blyp first. Blyp forwards to Sentry only when the server connector is configured. If Sentry was already initialized by the app, Blyp reuses that client instead of replacing it.
+
 ### OTLP
 
 Use `connectors.otlp` when you want to send logs to named OTLP-compatible backends such as Grafana Cloud, Datadog, Honeycomb, or a self-hosted OpenTelemetry Collector:

@@ -276,6 +276,79 @@ The browser and Expo connectors do not send directly to PostHog. They continue t
 
 ---
 
+## Sentry connector
+
+Use Sentry when you want Blyp logs forwarded into Sentry Logs and, for `error` / `critical` `Error` payloads, into Sentry exceptions as well.
+
+Configure `connectors.sentry`:
+
+```typescript
+export default {
+  connectors: {
+    sentry: {
+      enabled: true,
+      mode: 'auto',
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.SENTRY_ENVIRONMENT,
+      release: process.env.SENTRY_RELEASE,
+    },
+  },
+};
+```
+
+Static JSON config works too:
+
+```json
+{
+  "connectors": {
+    "sentry": {
+      "enabled": true,
+      "mode": "manual",
+      "dsn": "https://public@example.ingest.sentry.io/1"
+    }
+  }
+}
+```
+
+`mode: "auto"` forwards normal server-side Blyp logs to Sentry automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the Sentry subpath:
+
+```typescript
+import { createSentryLogger, createStructuredSentryLogger } from 'blyp-js/sentry';
+
+const sentryLogger = createSentryLogger();
+sentryLogger.info('manual sentry log');
+
+const structured = createStructuredSentryLogger('checkout', {
+  orderId: 'ord_123',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request Sentry forwarding through the existing Blyp ingestion route:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'sentry',
+});
+```
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: 'sentry',
+});
+```
+
+The browser and Expo Sentry connector does not send directly to Sentry. It continues to send to Blyp's ingestion endpoint and Blyp forwards to Sentry when the server connector is configured and ready. If your app already initialized Sentry, Blyp reuses the existing client instead of replacing it. Workers are still out of scope for this connector.
+
+---
+
 ## OTLP connector
 
 Use OTLP when you want to forward Blyp logs to Grafana Cloud, Datadog, Honeycomb, Jaeger, Splunk, New Relic, or any OTLP-compatible backend.

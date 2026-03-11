@@ -3,7 +3,12 @@ import type { ClientLogEvent } from '../../shared/client-log';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
-import { createBaseLogger, getOtlpRegistry, getPostHogSender } from '../../core/logger';
+import {
+  createBaseLogger,
+  getOtlpRegistry,
+  getPostHogSender,
+  getSentrySender,
+} from '../../core/logger';
 import {
   buildClientDetails,
   buildInfoLogMessage,
@@ -102,6 +107,7 @@ export function resolveServerLogger<Ctx>(
   return {
     logger,
     posthog: getPostHogSender(logger),
+    sentry: getSentrySender(logger),
     otlp: getOtlpRegistry(logger),
     resolvedConfig,
     level,
@@ -322,6 +328,19 @@ export async function handleClientLogIngestion<Ctx>(options: {
 
     if (config.posthog.ready) {
       config.posthog.send({
+        timestamp: structuredPayload.receivedAt as string,
+        level: payload.level,
+        message: `[client] ${payload.message}`,
+        data: structuredPayload,
+      }, {
+        source: 'client',
+      });
+    }
+  } else if (payload.connector === 'sentry') {
+    headers['x-blyp-sentry-status'] = config.sentry.ready ? 'enabled' : 'missing';
+
+    if (config.sentry.ready) {
+      config.sentry.send({
         timestamp: structuredPayload.receivedAt as string,
         level: payload.level,
         message: `[client] ${payload.message}`,

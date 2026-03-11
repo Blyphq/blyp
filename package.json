@@ -95,6 +95,11 @@
       "import": "./exports/otlp.mjs",
       "require": "./exports/otlp.js"
     },
+    "./sentry": {
+      "types": "./types/sentry.d.ts",
+      "import": "./exports/sentry.mjs",
+      "require": "./exports/sentry.js"
+    },
     "./workers": {
       "types": "./types/workers.d.ts",
       "import": "./exports/workers.mjs",
@@ -114,6 +119,9 @@
       ],
       "otlp": [
         "./types/otlp.d.ts"
+      ],
+      "sentry": [
+        "./types/sentry.d.ts"
       ],
       "elysia": [
         "./types/frameworks/elysia.d.ts"
@@ -238,6 +246,7 @@
     }
   },
   "dependencies": {
+    "@sentry/node": "^10.14.0",
     "@opentelemetry/api-logs": "^0.206.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.206.0",
     "@opentelemetry/resources": "^2.1.0",

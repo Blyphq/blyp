@@ -296,6 +296,38 @@ describe('Client Logger', () => {
     expect(String(errorCalls[0]?.[0] ?? '')).toContain('OTLP target "grafana"');
   });
 
+  it('includes the Sentry connector and logs one local error when the server reports it missing', async () => {
+    let body = '';
+    const errorCalls: unknown[][] = [];
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return Promise.resolve(new Response(null, {
+          status: 204,
+          headers: {
+            'x-blyp-sentry-status': 'missing',
+          },
+        }));
+      }) as typeof fetch,
+    });
+    console.error = (...args: unknown[]) => {
+      errorCalls.push(args);
+    };
+
+    const logger = createClientLogger({
+      connector: 'sentry',
+    });
+    logger.info('frontend ready');
+    logger.info('frontend ready again');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    expect(payload.connector).toBe('sentry');
+    expect(errorCalls).toHaveLength(1);
+    expect(String(errorCalls[0]?.[0] ?? '')).toContain('Sentry not setup');
+  });
+
   it('serializes Error payloads into structured data', async () => {
     let body = '';
 
