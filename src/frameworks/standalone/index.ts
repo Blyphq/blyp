@@ -1,4 +1,5 @@
 export {
+  configureDefaultStandaloneLogger,
   createStandaloneLogger,
   logger,
 } from './logger';

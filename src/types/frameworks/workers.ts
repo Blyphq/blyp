@@ -1,4 +1,5 @@
 import type { HttpRequestLog } from './http';
+import type { StructuredLog } from '../../core/structured-log';
 
 export interface WorkersLoggerConfig {
   env?: Record<string, unknown>;
@@ -22,6 +23,10 @@ export interface WorkersRequestLogger {
   success(message: unknown, ...args: unknown[]): void;
   critical(message: unknown, ...args: unknown[]): void;
   table(message: string, data?: unknown): void;
+  createStructuredLog(
+    groupId: string,
+    initial?: Record<string, unknown>
+  ): StructuredLog;
 }
 
-export type { HttpRequestLog };
+export type { HttpRequestLog, StructuredLog };

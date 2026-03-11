@@ -3,7 +3,9 @@ import fp from 'fastify-plugin';
 import type { FastifyLoggerConfig } from '../../types/frameworks/fastify';
 import {
   buildAbsoluteUrl,
+  createRequestScopedLogger,
   createRequestLike,
+  enterRequestContext,
   emitHttpErrorLog,
   emitHttpRequestLog,
   extractPathname,
@@ -33,14 +35,30 @@ export function createFastifyLogger(
     });
     fastify.decorateRequest('blypStartTime', undefined);
     fastify.decorateRequest('blypError', undefined);
+    fastify.decorateRequest('blypStructuredLogEmitted', undefined);
 
     fastify.addHook('onRequest', async (request) => {
+      enterRequestContext();
       request.blypStartTime = performance.now();
       request.blypError = undefined;
+      request.blypStructuredLogEmitted = false;
     });
 
     fastify.addHook('preHandler', async (request) => {
-      request.blypLog = shared.logger;
+      request.blypLog = createRequestScopedLogger(shared.logger, {
+        resolveStructuredFields: () => ({
+          method: request.method,
+          path: extractPathname(request.url),
+          ...resolveAdditionalProps(shared, {
+            request,
+            reply: {} as unknown,
+            error: request.blypError,
+          } as any),
+        }),
+        onStructuredEmit: () => {
+          request.blypStructuredLogEmitted = true;
+        },
+      });
     });
 
     fastify.addHook('onError', async (request, _reply, error) => {
@@ -62,6 +80,10 @@ export function createFastifyLogger(
         reply,
         error: request.blypError,
       };
+
+      if (request.blypStructuredLogEmitted) {
+        return;
+      }
 
       if (request.blypError || isErrorStatus(reply.statusCode)) {
         if (!shouldSkipErrorLogging(shared, path)) {

@@ -1,5 +1,8 @@
-import { createBaseLogger, type BlypLogger } from '../../core/logger';
-import { runtime } from '../../core/runtime';
+import {
+  attachLoggerInternals,
+  createBaseLogger,
+  type BlypLogger,
+} from '../../core/logger';
 import type { StandaloneLoggerConfig } from '../../types/frameworks/standalone';
 
 export interface StandaloneLogger extends BlypLogger {
@@ -50,7 +53,7 @@ function serializeMessage(message: unknown): string {
 }
 
 function wrapBaseLogger(baseLogger: BlypLogger, config: StandaloneLoggerConfig): StandaloneLogger {
-  return {
+  return attachLoggerInternals({
     debug: (message: unknown, ...args: unknown[]) => {
       const { text, data } = buildStructuredArgs(message, args);
       baseLogger.debug(text, ...data);
@@ -98,10 +101,14 @@ function wrapBaseLogger(baseLogger: BlypLogger, config: StandaloneLoggerConfig):
       baseLogger.table(message, data);
     },
 
+    createStructuredLog: (groupId: string, initial?: Record<string, unknown>) => {
+      return baseLogger.createStructuredLog(groupId, initial);
+    },
+
     child: (bindings: Record<string, unknown>) => {
       return wrapBaseLogger(baseLogger.child(bindings), config);
     },
-  };
+  }, baseLogger);
 }
 
 export function createStandaloneLogger(config: StandaloneLoggerConfig = {}): StandaloneLogger {
@@ -116,7 +123,7 @@ function getDefaultLogger(): StandaloneLogger {
 }
 
 function createLoggerProxy(): StandaloneLogger {
-  return {
+  return attachLoggerInternals({
     debug: (message: unknown, ...args: unknown[]) => {
       getDefaultLogger().debug(message, ...args);
     },
@@ -159,10 +166,14 @@ function createLoggerProxy(): StandaloneLogger {
       getDefaultLogger().table(message, data);
     },
 
+    createStructuredLog: (groupId: string, initial?: Record<string, unknown>) => {
+      return getDefaultLogger().createStructuredLog(groupId, initial);
+    },
+
     child: (bindings: Record<string, unknown>) => {
       return getDefaultLogger().child(bindings);
     },
-  };
+  }, getDefaultLogger());
 }
 
 export function configureDefaultStandaloneLogger(

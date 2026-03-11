@@ -25,5 +25,6 @@ declare module 'fastify' {
     blypLog: BlypLogger;
     blypStartTime?: number;
     blypError?: unknown;
+    blypStructuredLogEmitted?: boolean;
   }
 }

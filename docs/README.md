@@ -7,6 +7,7 @@ This document contains detailed usage, all framework integrations, configuration
 ## Table of contents
 
 - [Basic logger usage](#basic-logger-usage)
+- [Structured request batches](#structured-request-batches)
 - [Errors](#errors)
 - [Client](#client)
 - [Framework integrations](#framework-integrations)
@@ -48,6 +49,51 @@ logger.info('User login', {
   timestamp: new Date().toISOString() 
 });
 ```
+
+## Structured request batches
+
+```typescript
+import { createStructuredLog } from 'blyp-js';
+
+const structuredLog = createStructuredLog('checkout', {
+  service: 'web-api',
+  level: 'info',
+  timestamp: new Date().toISOString(),
+});
+
+structuredLog.set({
+  user: { id: 1, plan: 'pro' },
+  cart: { items: 3, total: 9999 },
+});
+
+structuredLog.info('user logged in');
+structuredLog.info('item added to cart');
+structuredLog.emit({ status: 200 });
+```
+
+Typed usage:
+
+```typescript
+import { createStructuredLog } from 'blyp-js';
+
+const structuredLog = createStructuredLog<{
+  message: string;
+  level: string;
+  timestamp: string;
+  hostname?: string;
+  port?: number;
+}>('test', {
+  message: 'Hello Elysia',
+  level: 'info',
+  timestamp: new Date().toISOString(),
+  hostname: '127.0.0.1',
+  port: 3000,
+});
+```
+
+Inside framework handlers, the imported `createStructuredLog(...)` binds to the active request-scoped logger automatically, so request metadata and framework `customProps` are merged into the final payload at emit time.
+
+Structured logs are written only when you call `.emit()`. In framework request handlers, a structured emit suppresses the default auto `http_request` / `http_error` record for that request. If you also call the root `logger` in the same request after starting a request-scoped structured log, Blyp warns once and ignores the root logger write.
 
 ---
 

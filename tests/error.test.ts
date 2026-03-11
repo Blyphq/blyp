@@ -6,6 +6,7 @@ import {
 } from '../src';
 import { emitHttpErrorLog, toErrorLike } from '../src/frameworks/shared/logger';
 import type { BlypLogger } from '../src/core/logger';
+import type { StructuredLog } from '../src/core/structured-log';
 
 interface RecordedCall {
   level: string;
@@ -15,6 +16,24 @@ interface RecordedCall {
 
 function createFakeLogger() {
   const calls: RecordedCall[] = [];
+  const fakeStructuredLog: StructuredLog = {
+    set: <TNextFields extends Record<string, unknown>>(_fields: TNextFields) => (
+      fakeStructuredLog as StructuredLog<Record<string, unknown> & TNextFields>
+    ),
+    debug: () => fakeStructuredLog,
+    info: () => fakeStructuredLog,
+    warn: () => fakeStructuredLog,
+    warning: () => fakeStructuredLog,
+    error: () => fakeStructuredLog,
+    success: () => fakeStructuredLog,
+    critical: () => fakeStructuredLog,
+    table: () => fakeStructuredLog,
+    emit: () => ({
+      groupId: 'test',
+      timestamp: new Date().toISOString(),
+      level: 'info',
+    }),
+  };
 
   const logger: BlypLogger = {
     success: (message: unknown, ...meta: unknown[]) => {
@@ -41,6 +60,7 @@ function createFakeLogger() {
     table: (message: string, data?: unknown) => {
       calls.push({ level: 'table', message, meta: data === undefined ? [] : [data] });
     },
+    createStructuredLog: () => fakeStructuredLog,
     child: () => logger,
   };
 

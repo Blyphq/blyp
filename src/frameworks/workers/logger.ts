@@ -9,6 +9,7 @@ import {
   type HttpRequestLog,
   type RequestLike,
 } from '../shared/http';
+import { createStructuredLog } from '../../core/structured-log';
 import type {
   WorkersEmitOptions,
   WorkersLoggerConfig,
@@ -105,6 +106,14 @@ function writeConsole(method: ConsoleMethod, message: string, payload?: unknown)
   }
 
   logger.call(console, message, payload);
+}
+
+function writeStructuredConsole(
+  level: WorkersLogLevel,
+  message: string,
+  payload: Record<string, unknown>
+): void {
+  writeConsole(getConsoleMethod(level), message, payload);
 }
 
 function buildRequestMetadata(request: RequestLike, path: string): Record<string, unknown> {
@@ -261,6 +270,27 @@ export function createWorkersLogger(request: Request): WorkersRequestLogger {
       if (typeof console !== 'undefined' && typeof console.table === 'function' && data !== undefined) {
         console.table(data);
       }
+    },
+
+    createStructuredLog(groupId, initial) {
+      return createStructuredLog(groupId, {
+        initialFields: initial,
+        resolveDefaultFields: () => ({
+          method: requestLike.method,
+          path,
+          ...fields,
+        }),
+        write: (payload, message) => {
+          const writeLevel = payload.level === 'warning' ? 'warning' : payload.level;
+          writeStructuredConsole(
+            writeLevel === 'table'
+              ? 'info'
+              : (writeLevel as Exclude<WorkersLogLevel, 'warn'>),
+            message,
+            payload
+          );
+        },
+      });
     },
   };
 

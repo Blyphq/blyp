@@ -1,6 +1,9 @@
 import { Inject, Injectable, type NestMiddleware } from '@nestjs/common';
 import {
+  createRequestScopedLogger,
   handleClientLogIngestion,
+  enterRequestContext,
+  resolveAdditionalProps,
 } from '../shared';
 import { BLYP_NEST_LOGGER } from './constants';
 import {
@@ -11,6 +14,7 @@ import {
   getNestRequestPath,
   readNestRequestBody,
   sendNestStatusResponse,
+  setNestStructuredLogEmitted,
   setNestRequestStartTime,
 } from './helpers';
 import type { NestLoggerState } from './logger';
@@ -27,7 +31,28 @@ export class BlypNestMiddleware implements NestMiddleware {
     response: unknown,
     next: (error?: unknown) => void
   ): void {
-    attachNestRequestLogger(request, this.state.logger);
+    enterRequestContext();
+    setNestStructuredLogEmitted(request, false);
+    attachNestRequestLogger(
+      request,
+      createRequestScopedLogger(this.state.logger, {
+        resolveStructuredFields: () => {
+          const loggerContext = createNestLoggerContext({
+            request,
+            response,
+          });
+
+          return {
+            method: buildNestRequestLike(request).method,
+            path: getNestRequestPath(request),
+            ...resolveAdditionalProps(this.state, loggerContext),
+          };
+        },
+        onStructuredEmit: () => {
+          setNestStructuredLogEmitted(request, true);
+        },
+      })
+    );
     setNestRequestStartTime(request, performance.now());
 
     const path = getNestRequestPath(request);

@@ -10,6 +10,7 @@ export interface LogRecord {
   caller?: string;
   data?: unknown;
   bindings?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 interface StreamState {

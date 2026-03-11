@@ -5,7 +5,9 @@ import type {
   ElysiaLoggerConfig,
 } from '../../types/frameworks/elysia';
 import {
+  createRequestScopedLogger,
   createRequestLike,
+  enterRequestContext,
   emitHttpErrorLog,
   emitHttpRequestLog,
   extractPathname,
@@ -23,12 +25,34 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
 
   let app = new Elysia({ name: 'logger' })
     .decorate('log', shared.logger)
-    .derive({ as: 'scoped' }, () => ({
-      startTime: performance.now(),
-    }))
+    .derive({ as: 'scoped' }, (ctx) => {
+      enterRequestContext();
+      const requestContext = ctx as unknown as ElysiaContext & {
+        blypStructuredLogEmitted?: boolean;
+      };
+
+      requestContext.blypStructuredLogEmitted = false;
+
+      return {
+        startTime: performance.now(),
+        log: createRequestScopedLogger(shared.logger, {
+          resolveStructuredFields: () => ({
+            method: requestContext.request.method,
+            path: requestContext.path || extractPathname(requestContext.request.url),
+            ...resolveAdditionalProps(shared, requestContext),
+          }),
+          onStructuredEmit: () => {
+            requestContext.blypStructuredLogEmitted = true;
+          },
+        }),
+      };
+    })
     .onAfterResponse({ as: 'scoped' }, (ctx) => {
       const requestContext = ctx as unknown as ElysiaContext;
       const path = requestContext.path || extractPathname(requestContext.request.url);
+      if ((requestContext as ElysiaContext & { blypStructuredLogEmitted?: boolean }).blypStructuredLogEmitted) {
+        return;
+      }
       if (shouldSkipAutoLogging(shared, requestContext, path)) {
         return;
       }
@@ -65,6 +89,9 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
     .onError({ as: 'scoped' }, (ctx) => {
       const requestContext = ctx as unknown as ElysiaContext;
       const path = requestContext.path || extractPathname(requestContext.request.url);
+      if ((requestContext as ElysiaContext & { blypStructuredLogEmitted?: boolean }).blypStructuredLogEmitted) {
+        return;
+      }
       if (shouldSkipErrorLogging(shared, path)) {
         return;
       }

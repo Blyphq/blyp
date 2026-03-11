@@ -26,6 +26,7 @@ describe('Standalone Logger', () => {
     expect(typeof logger.success).toBe('function');
     expect(typeof logger.critical).toBe('function');
     expect(typeof logger.table).toBe('function');
+    expect(typeof logger.createStructuredLog).toBe('function');
   });
 
   it('should log info messages', () => {

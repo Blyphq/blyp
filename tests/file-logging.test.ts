@@ -1,11 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { createStructuredLog } from '../src';
 import { resolveConfig, resetConfigCache } from '../src/core/config';
 import { RotatingFileLogger, type LogRecord } from '../src/core/file-logger';
 import { readLogFile, formatLogRecord } from '../src/core/log-reader';
 import { createBaseLogger } from '../src/core/logger';
-import { createStandaloneLogger } from '../src/frameworks/standalone';
+import {
+  configureDefaultStandaloneLogger,
+  createStandaloneLogger,
+} from '../src/frameworks/standalone';
 import { makeTempDir, readJsonLines } from './helpers/fs';
 
 describe('Structured File Logging', () => {
@@ -62,6 +66,31 @@ describe('Structured File Logging', () => {
     expect(typeof record?.message).toBe('string');
     expect(record?.message).toContain('"user": "ada"');
     expect(record?.data).toEqual(payload);
+  });
+
+  it('writes structured batch logs as flat top-level records', () => {
+    configureDefaultStandaloneLogger({
+      pretty: false,
+      logDir: tempDir,
+    });
+
+    const structured = createStructuredLog<{
+      userId: string;
+    }>('checkout', {
+      userId: 'user-1',
+    });
+    structured.set({ cartItems: 3 });
+    structured.info('user logged in');
+    structured.emit({ status: 200 });
+
+    const [record] = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    expect(record?.groupId).toBe('checkout');
+    expect(record?.status).toBe(200);
+    expect(record?.userId).toBe('user-1');
+    expect(record?.cartItems).toBe(3);
+    expect(Array.isArray(record?.events)).toBe(true);
+    expect((record?.events as Array<Record<string, unknown>>)?.[0]?.message).toBe('user logged in');
+    expect(record?.data).toBeUndefined();
   });
 
   it('rotates combined logs by size and compresses archives', () => {

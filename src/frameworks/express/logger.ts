@@ -5,7 +5,9 @@ import type {
 } from '../../types/frameworks/express';
 import {
   buildAbsoluteUrl,
+  createRequestScopedLogger,
   createRequestLike,
+  enterRequestContext,
   emitHttpErrorLog,
   emitHttpRequestLog,
   extractPathname,
@@ -31,7 +33,19 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
   const shared = resolveServerLogger(config);
 
   return (req, res, next) => {
-    req.blypLog = shared.logger;
+    enterRequestContext();
+    let structuredLogEmitted = false;
+
+    req.blypLog = createRequestScopedLogger(shared.logger, {
+      resolveStructuredFields: () => ({
+        method: req.method,
+        path: extractPathname(req.originalUrl || req.url || '/'),
+        ...resolveAdditionalProps(shared, buildExpressContext(req, res, res.locals.blypError)),
+      }),
+      onStructuredEmit: () => {
+        structuredLogEmitted = true;
+      },
+    });
     res.locals.blypStartTime = performance.now();
 
     res.on('finish', () => {
@@ -45,6 +59,10 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
         performance.now() - (res.locals.blypStartTime ?? performance.now())
       );
       const context = buildExpressContext(req, res, res.locals.blypError);
+
+      if (structuredLogEmitted) {
+        return;
+      }
 
       if (res.locals.blypError || isErrorStatus(res.statusCode)) {
         if (!shouldSkipErrorLogging(shared, path)) {

@@ -17,6 +17,7 @@ import {
   createNestLoggerContext,
   getNestRequestPath,
   getNestRequestStartTime,
+  getNestStructuredLogEmitted,
 } from './helpers';
 import type { NestLoggerState } from './logger';
 
@@ -41,6 +42,11 @@ export class BlypNestExceptionFilter extends BaseExceptionFilter {
         error: exception,
       });
       const path = getNestRequestPath(request);
+
+      if (getNestStructuredLogEmitted(request)) {
+        super.catch(exception, host);
+        return;
+      }
 
       if (!shouldSkipErrorLogging(this.state, path)) {
         const statusCode = exception instanceof HttpException

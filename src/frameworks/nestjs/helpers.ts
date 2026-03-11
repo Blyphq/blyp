@@ -144,6 +144,22 @@ export function getNestRequestStartTime(request: unknown): number | undefined {
     : undefined;
 }
 
+export function setNestStructuredLogEmitted(request: unknown, emitted: boolean): void {
+  if (!isRecord(request)) {
+    return;
+  }
+
+  request.blypStructuredLogEmitted = emitted;
+}
+
+export function getNestStructuredLogEmitted(request: unknown): boolean {
+  if (!isRecord(request)) {
+    return false;
+  }
+
+  return request.blypStructuredLogEmitted === true;
+}
+
 export function attachNestRequestLogger(request: unknown, logger: unknown): void {
   if (!isRecord(request)) {
     return;

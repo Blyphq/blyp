@@ -21,6 +21,7 @@ import {
   attachNestRequestLogger,
   buildNestRequestLike,
   createNestLoggerContext,
+  getNestStructuredLogEmitted,
   getNestRequestPath,
   getNestRequestStartTime,
   getNestResponseStatus,
@@ -49,7 +50,9 @@ export class BlypNestInterceptor implements NestInterceptor {
       executionContext: context,
     });
 
-    attachNestRequestLogger(request, this.state.logger);
+    if (!request.blypLog) {
+      attachNestRequestLogger(request, this.state.logger);
+    }
 
     if (getNestRequestStartTime(request) === undefined) {
       setNestRequestStartTime(request, performance.now());
@@ -65,6 +68,10 @@ export class BlypNestInterceptor implements NestInterceptor {
           );
           const requestLike = buildNestRequestLike(request);
           const additionalProps = resolveAdditionalProps(this.state, loggerContext);
+
+          if (getNestStructuredLogEmitted(request)) {
+            return;
+          }
 
           if (isErrorStatus(statusCode)) {
             if (!shouldSkipErrorLogging(this.state, path)) {

@@ -8,6 +8,7 @@ import {
   createExpressLogger,
 } from '../../src/frameworks/express';
 import { resetConfigCache } from '../../src/core/config';
+import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 import { listen } from '../helpers/http';
@@ -131,6 +132,54 @@ describe('Express Integration', () => {
       expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
       expect(duplicateHttpRecord).toBeUndefined();
     } finally {
+      await server.close();
+    }
+  });
+
+  it('emits one structured request record and drops mixed root logger writes', async () => {
+    const warnings: unknown[][] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    const app = express();
+    app.use(createExpressLogger({
+      logDir: tempDir,
+      pretty: false,
+      customProps: () => ({ framework: 'express' }),
+    }));
+    app.post('/structured', (req, res) => {
+      const structured = req.blypLog.createStructuredLog('checkout', { userId: 'user-1' });
+      structured.set({ cartItems: 3 });
+      structured.info('user logged in');
+      req.blypLog.info('scoped-allowed');
+      rootLogger.info('root-ignored');
+      structured.emit({ status: 200 });
+      res.status(200).json({ ok: true });
+    });
+
+    const server = await listen(app as unknown as Parameters<typeof listen>[0]);
+    try {
+      const response = await fetch(`${server.baseUrl}/structured`, { method: 'POST' });
+      await waitForFileFlush();
+
+      expect(response.status).toBe(200);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const structuredRecord = records.find((record) => record.groupId === 'checkout');
+
+      expect(structuredRecord?.method).toBe('POST');
+      expect(structuredRecord?.path).toBe('/structured');
+      expect(structuredRecord?.framework).toBe('express');
+      expect(structuredRecord?.status).toBe(200);
+      expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
+      expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
+      expect(
+        records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')
+      ).toBe(false);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      console.warn = originalWarn;
       await server.close();
     }
   });

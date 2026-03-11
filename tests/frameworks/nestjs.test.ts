@@ -74,6 +74,17 @@ class NestTestController {
   manualError() {
     return { ok: false };
   }
+
+  @Post('/structured')
+  structured(@Req() request: { blypLog?: typeof logger }) {
+    const structured = request.blypLog?.createStructuredLog('checkout', { userId: 'user-1' });
+    structured?.set({ cartItems: 3 });
+    structured?.info('user logged in');
+    request.blypLog?.info('scoped-allowed');
+    logger.info('root-ignored');
+    structured?.emit({ status: 200 });
+    return { ok: true };
+  }
 }
 
 @Module({
@@ -313,6 +324,46 @@ describe('NestJS Integration', () => {
 
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     expect(records.some((record) => record.message === 'root-debug')).toBe(true);
+  });
+
+  it('emits one structured request record and drops mixed root logger writes for Nest', async () => {
+    const warnings: unknown[][] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    const app = await startNestApp('express', {
+      logDir: tempDir,
+      pretty: false,
+      customProps: (ctx) => ({
+        adapter: ctx.adapterType,
+      }),
+    });
+
+    try {
+      const response = await fetch(`${app.baseUrl}/structured`, {
+        method: 'POST',
+      });
+      await waitForFileFlush();
+
+      expect(response.status).toBe(201);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const structuredRecord = records.find((record) => record.groupId === 'checkout');
+
+      expect(structuredRecord?.method).toBe('POST');
+      expect(structuredRecord?.path).toBe('/structured');
+      expect(structuredRecord?.adapter).toBe('express');
+      expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
+      expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
+      expect(
+        records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')
+      ).toBe(false);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      console.warn = originalWarn;
+      await app.close();
+    }
   });
 });
 

@@ -29,6 +29,7 @@ declare module 'express-serve-static-core' {
   interface Request {
     blypLog: BlypLogger;
     blypStartTime?: number;
+    blypStructuredLogEmitted?: boolean;
   }
 }
 
@@ -36,5 +37,6 @@ declare module 'fastify' {
   interface FastifyRequest {
     blypLog: BlypLogger;
     blypStartTime?: number;
+    blypStructuredLogEmitted?: boolean;
   }
 }

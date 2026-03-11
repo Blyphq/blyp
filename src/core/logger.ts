@@ -1,7 +1,13 @@
 import pino from 'pino';
 import { createFileLogger, type LogRecord, type RotatingFileLogger } from './file-logger';
 import { resolveConfig, type BlypConfig } from './config';
+import {
+  createStructuredLog as createStructuredLogCollector,
+  type StructuredLog,
+  type StructuredLogPayload,
+} from './structured-log';
 import { runtime } from './runtime';
+import { shouldDropRootLogWrite } from '../frameworks/shared/request-context';
 
 export interface BlypLogger {
   success: (message: unknown, ...args: unknown[]) => void;
@@ -12,8 +18,47 @@ export interface BlypLogger {
   error: (message: unknown, ...args: unknown[]) => void;
   warn: (message: unknown, ...args: unknown[]) => void;
   table: (message: string, data?: unknown) => void;
+  createStructuredLog: (
+    groupId: string,
+    initial?: Record<string, unknown>
+  ) => StructuredLog;
   child: (bindings: Record<string, unknown>) => BlypLogger;
 }
+
+export type InternalLoggerSource = 'root' | 'request-scoped' | 'structured-flush';
+
+interface StructuredLogFactoryOptions {
+  initialFields?: Record<string, unknown>;
+  resolveDefaultFields?: () => Record<string, unknown>;
+  onCreate?: () => void;
+  onEmit?: (payload: StructuredLogPayload) => void;
+}
+
+type LogMethodName =
+  | 'success'
+  | 'critical'
+  | 'warning'
+  | 'info'
+  | 'debug'
+  | 'error'
+  | 'warn'
+  | 'table';
+
+interface LoggerFactoryHandle {
+  bindings: Record<string, unknown>;
+  create: (source: InternalLoggerSource, bindings?: Record<string, unknown>) => BlypLogger;
+  writeStructured: (
+    payload: StructuredLogPayload,
+    message: string,
+    source?: InternalLoggerSource
+  ) => void;
+}
+
+const LOGGER_FACTORY = Symbol('blyp.logger.factory');
+
+type InternalBlypLogger = BlypLogger & {
+  [LOGGER_FACTORY]: LoggerFactoryHandle;
+};
 
 export const CUSTOM_LEVELS: Record<string, number> = {
   success: 25,
@@ -25,7 +70,7 @@ export const CUSTOM_LEVELS: Record<string, number> = {
   critical: 60,
 };
 
-const RECORD_LEVELS: Record<keyof Omit<BlypLogger, 'child'>, string> = {
+const RECORD_LEVELS: Record<LogMethodName, string> = {
   success: 'success',
   critical: 'critical',
   warning: 'warning',
@@ -36,7 +81,7 @@ const RECORD_LEVELS: Record<keyof Omit<BlypLogger, 'child'>, string> = {
   table: 'table',
 };
 
-const CONSOLE_LEVELS: Record<keyof Omit<BlypLogger, 'child'>, string> = {
+const CONSOLE_LEVELS: Record<LogMethodName, string> = {
   success: 'success',
   critical: 'critical',
   warning: 'warning',
@@ -84,29 +129,31 @@ function getCallerLocation(): { file: string | null; line: number | null } {
     const lines = stack.split('\n');
     let fallback: { file: string; line: number | null } | null = null;
 
-    for (let i = 2; i < lines.length; i++) {
-      const line = lines[i];
+    for (let index = 2; index < lines.length; index += 1) {
+      const line = lines[index];
       if (!line) continue;
 
       const match = line.match(/\((.*):(\d+):\d+\)/) || line.match(/at\s+(.*):(\d+):(\d+)/);
-      if (match) {
-        const fileName = match[1] || '';
-        const lineNumber = parseInt(match[2] || '0', 10) || null;
+      if (!match) {
+        continue;
+      }
 
-        if (
-          fileName &&
-          !fileName.includes('node_modules') &&
-          !isInternalLoggerFrame(fileName)
-        ) {
-          const formattedPath = formatCallerPath(fileName);
-          const normalizedFormattedPath = normalizePath(formattedPath);
+      const fileName = match[1] || '';
+      const lineNumber = parseInt(match[2] || '0', 10) || null;
 
-          if (!normalizedFormattedPath.startsWith('dist/')) {
-            return { file: formattedPath, line: lineNumber };
-          }
+      if (
+        fileName &&
+        !fileName.includes('node_modules') &&
+        !isInternalLoggerFrame(fileName)
+      ) {
+        const formattedPath = formatCallerPath(fileName);
+        const normalizedFormattedPath = normalizePath(formattedPath);
 
-          fallback ??= { file: formattedPath, line: lineNumber };
+        if (!normalizedFormattedPath.startsWith('dist/')) {
+          return { file: formattedPath, line: lineNumber };
         }
+
+        fallback ??= { file: formattedPath, line: lineNumber };
       }
     }
 
@@ -127,21 +174,25 @@ function serializeMessage(message: unknown): string {
 
   if (message !== null && typeof message === 'object') {
     try {
-      return JSON.stringify(message, (_key, value) => {
-        if (typeof value === 'function') {
-          return `[Function: ${value.name || 'anonymous'}]`;
-        }
+      return JSON.stringify(
+        message,
+        (_key, value) => {
+          if (typeof value === 'function') {
+            return `[Function: ${value.name || 'anonymous'}]`;
+          }
 
-        if (value === undefined) {
-          return '[undefined]';
-        }
+          if (value === undefined) {
+            return '[undefined]';
+          }
 
-        if (typeof value === 'symbol') {
-          return value.toString();
-        }
+          if (typeof value === 'symbol') {
+            return value.toString();
+          }
 
-        return value;
-      }, 2);
+          return value;
+        },
+        2
+      );
     } catch {
       try {
         const keys = Object.keys(message as object);
@@ -229,7 +280,7 @@ function createPinoLogger(config: BlypConfig) {
       ignore: 'pid,hostname,caller',
       customColors: {
         success: 'green',
-        critical: 'red bold', 
+        critical: 'red bold',
         info: 'blue',
         warning: 'yellow',
         error: 'red',
@@ -247,10 +298,13 @@ function createPinoLogger(config: BlypConfig) {
         return `${message} ${MAGENTA}${caller}${RESET}`;
       },
     });
-    return pino({
-      level: config.level,
-      customLevels: CUSTOM_LEVELS,
-    }, pretty);
+    return pino(
+      {
+        level: config.level,
+        customLevels: CUSTOM_LEVELS,
+      },
+      pretty
+    );
   }
 
   return pino({
@@ -260,7 +314,7 @@ function createPinoLogger(config: BlypConfig) {
 }
 
 function buildRecord(
-  level: keyof Omit<BlypLogger, 'child'>,
+  level: LogMethodName,
   message: unknown,
   args: unknown[],
   bindings: Record<string, unknown>
@@ -290,16 +344,129 @@ function buildRecord(
   return record;
 }
 
-function createLoggerInstance(
-  rawLogger: any,
-  fileLogger: RotatingFileLogger,
-  bindings: Record<string, unknown> = {}
+function buildStructuredRecord(
+  level: LogMethodName,
+  message: string,
+  payload: StructuredLogPayload,
+  bindings: Record<string, unknown>
+): LogRecord {
+  const { file, line } = getCallerLocation();
+  const record: LogRecord = {
+    message: stripAnsi(message),
+    ...payload,
+  };
+
+  if (file) {
+    record.caller = line !== null ? `${file}:${line}` : file;
+  }
+
+  if (Object.keys(bindings).length > 0) {
+    record.bindings = bindings;
+  }
+
+  record.level =
+    typeof payload.level === 'string' && payload.level.length > 0
+      ? payload.level
+      : RECORD_LEVELS[level];
+  record.timestamp =
+    typeof payload.timestamp === 'string' && payload.timestamp.length > 0
+      ? payload.timestamp
+      : new Date().toISOString();
+
+  return record;
+}
+
+function resolveStructuredWriteLevel(level: StructuredLogPayload['level']): LogMethodName {
+  switch (level) {
+    case 'debug':
+      return 'debug';
+    case 'warning':
+      return 'warning';
+    case 'warn':
+      return 'warn';
+    case 'error':
+      return 'error';
+    case 'success':
+      return 'success';
+    case 'critical':
+      return 'critical';
+    case 'table':
+      return 'table';
+    case 'info':
+    default:
+      return 'info';
+  }
+}
+
+function getLoggerFactory(logger: BlypLogger): LoggerFactoryHandle {
+  const factory = (logger as InternalBlypLogger)[LOGGER_FACTORY];
+  if (!factory) {
+    throw new Error('Unsupported Blyp logger instance');
+  }
+
+  return factory;
+}
+
+export function attachLoggerInternals<T extends BlypLogger>(target: T, source: BlypLogger): T {
+  const factory = getLoggerFactory(source);
+  Object.defineProperty(target, LOGGER_FACTORY, {
+    value: factory,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return target;
+}
+
+export function createLoggerWithSource(
+  logger: BlypLogger,
+  source: InternalLoggerSource
 ): BlypLogger {
+  const factory = getLoggerFactory(logger);
+  return factory.create(source, factory.bindings);
+}
+
+export function createStructuredLogForLogger(
+  logger: BlypLogger,
+  groupId: string,
+  options: StructuredLogFactoryOptions = {}
+): StructuredLog {
+  const factory = getLoggerFactory(logger);
+
+  return createStructuredLogCollector(groupId, {
+    initialFields: options.initialFields,
+    resolveDefaultFields: () => ({
+      ...factory.bindings,
+      ...(options.resolveDefaultFields?.() ?? {}),
+    }),
+    write: (payload, message) => {
+      factory.writeStructured(payload, message, 'structured-flush');
+    },
+    onCreate: options.onCreate,
+    onEmit: options.onEmit,
+  });
+}
+
+function createLoggerInstance(
+  rootRawLogger: any,
+  fileLogger: RotatingFileLogger,
+  bindings: Record<string, unknown> = {},
+  source: InternalLoggerSource = 'root'
+): BlypLogger {
+  const rawLogger = Object.keys(bindings).length > 0
+    ? rootRawLogger.child(bindings)
+    : rootRawLogger;
+
   const writeRecord = (
-    level: keyof Omit<BlypLogger, 'child'>,
+    level: LogMethodName,
     message: unknown,
-    args: unknown[]
+    args: unknown[],
+    writeSource: InternalLoggerSource = source
   ): void => {
+    if (writeSource === 'root' && shouldDropRootLogWrite()) {
+      return;
+    }
+
     const record = buildRecord(level, message, args, bindings);
     const consoleMessage = serializeMessage(message);
     const payload: Record<string, unknown> = {
@@ -326,7 +493,35 @@ function createLoggerInstance(
     fileLogger.write(record);
   };
 
-  return {
+  const writeStructuredRecord = (
+    payload: StructuredLogPayload,
+    message: string,
+    writeSource: InternalLoggerSource = 'structured-flush'
+  ): void => {
+    const level = resolveStructuredWriteLevel(payload.level);
+    const record = buildStructuredRecord(level, message, payload, bindings);
+    const consoleMethod = CONSOLE_LEVELS[level];
+    const boundLogger = rawLogger as Record<string, (payload: unknown, message: string) => void>;
+    const logMethod =
+      boundLogger[consoleMethod] ??
+      boundLogger.info ??
+      ((_payload: unknown, _message: string) => {});
+
+    (logMethod as (this: unknown, payload: unknown, message: string) => void).call(
+      rawLogger,
+      {
+        caller: record.caller,
+        ...payload,
+      },
+      message
+    );
+
+    if (writeSource !== 'root' || !shouldDropRootLogWrite()) {
+      fileLogger.write(record);
+    }
+  };
+
+  const logger: InternalBlypLogger = {
     success: (message: unknown, ...args: unknown[]) => {
       writeRecord('success', message, args);
     },
@@ -363,11 +558,36 @@ function createLoggerInstance(
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
 
+    createStructuredLog: (
+      groupId: string,
+      initial?: Record<string, unknown>
+    ): StructuredLog => {
+      return createStructuredLogForLogger(logger, groupId, {
+        initialFields: initial,
+      });
+    },
+
     child: (childBindings: Record<string, unknown>) => {
       const mergedBindings = { ...bindings, ...childBindings };
-      return createLoggerInstance(rawLogger.child(childBindings), fileLogger, mergedBindings);
+      return createLoggerInstance(rootRawLogger, fileLogger, mergedBindings, source);
+    },
+
+    [LOGGER_FACTORY]: {
+      bindings,
+      create: (nextSource: InternalLoggerSource, nextBindings: Record<string, unknown> = bindings) => {
+        return createLoggerInstance(rootRawLogger, fileLogger, nextBindings, nextSource);
+      },
+      writeStructured: (
+        payload: StructuredLogPayload,
+        message: string,
+        nextSource: InternalLoggerSource = 'structured-flush'
+      ) => {
+        writeStructuredRecord(payload, message, nextSource);
+      },
     },
   };
+
+  return logger;
 }
 
 let loggerInstance: BlypLogger | null = null;

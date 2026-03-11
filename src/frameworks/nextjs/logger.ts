@@ -6,6 +6,7 @@ import type {
   NextJsRouteContext,
 } from '../../types/frameworks/nextjs';
 import {
+  createRequestScopedLogger,
   createRequestLike,
   emitHttpErrorLog,
   emitHttpRequestLog,
@@ -14,6 +15,7 @@ import {
   isErrorStatus,
   resolveAdditionalProps,
   resolveServerLogger,
+  runWithRequestContext,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
   toErrorLike,
@@ -39,61 +41,78 @@ export function createNextJsLogger(
       handler: NextJsHandlerWithLogger<Ctx>
     ) => {
       return async (request: Request, context: Ctx) => {
-        const startTime = performance.now();
-        const path = extractPathname(request.url);
+        return runWithRequestContext(async () => {
+          const startTime = performance.now();
+          const path = extractPathname(request.url);
+          let structuredLogEmitted = false;
+          const scopedLogger = createRequestScopedLogger(shared.logger, {
+            resolveStructuredFields: () => ({
+              method: request.method,
+              path,
+              ...resolveAdditionalProps(shared, createContext(request, context)),
+            }),
+            onStructuredEmit: () => {
+              structuredLogEmitted = true;
+            },
+          });
 
-        try {
-          const response = await handler(request, context, { log: shared.logger });
-          const statusCode = response.status;
-          const requestLike = createRequestLike(
-            request.method,
-            request.url,
-            request.headers
-          );
-          const loggerContext = createContext(request, context, response);
-          const responseTime = Math.round(performance.now() - startTime);
+          try {
+            const response = await handler(request, context, { log: scopedLogger });
+            if (structuredLogEmitted) {
+              return response;
+            }
 
-          if (isErrorStatus(statusCode)) {
-            if (!shouldSkipErrorLogging(shared, path)) {
-              emitHttpErrorLog(
+            const statusCode = response.status;
+            const requestLike = createRequestLike(
+              request.method,
+              request.url,
+              request.headers
+            );
+            const loggerContext = createContext(request, context, response);
+            const responseTime = Math.round(performance.now() - startTime);
+
+            if (isErrorStatus(statusCode)) {
+              if (!shouldSkipErrorLogging(shared, path)) {
+                emitHttpErrorLog(
+                  shared.logger,
+                  shared.level,
+                  requestLike,
+                  path,
+                  statusCode,
+                  responseTime,
+                  toErrorLike(undefined, statusCode),
+                  resolveAdditionalProps(shared, loggerContext)
+                );
+              }
+            } else if (!shouldSkipAutoLogging(shared, loggerContext, path)) {
+              emitHttpRequestLog(
                 shared.logger,
                 shared.level,
                 requestLike,
                 path,
                 statusCode,
                 responseTime,
-                toErrorLike(undefined, statusCode),
                 resolveAdditionalProps(shared, loggerContext)
               );
             }
-          } else if (!shouldSkipAutoLogging(shared, loggerContext, path)) {
-            emitHttpRequestLog(
-              shared.logger,
-              shared.level,
-              requestLike,
-              path,
-              statusCode,
-              responseTime,
-              resolveAdditionalProps(shared, loggerContext)
-            );
-          }
 
-          return response;
-        } catch (error) {
-          if (!shouldSkipErrorLogging(shared, path)) {
-            emitHttpErrorLog(
-              shared.logger,
-              shared.level,
-              createRequestLike(request.method, request.url, request.headers),
-              path,
-              500,
-              Math.round(performance.now() - startTime),
-              toErrorLike(error, 500),
-              resolveAdditionalProps(shared, createContext(request, context, undefined, error))
-            );
+            return response;
+          } catch (error) {
+            if (!structuredLogEmitted && !shouldSkipErrorLogging(shared, path)) {
+              emitHttpErrorLog(
+                shared.logger,
+                shared.level,
+                createRequestLike(request.method, request.url, request.headers),
+                path,
+                500,
+                Math.round(performance.now() - startTime),
+                toErrorLike(error, 500),
+                resolveAdditionalProps(shared, createContext(request, context, undefined, error))
+              );
+            }
+            throw error;
           }
-          throw error;
-        }
+        });
       };
     },
     clientLogHandler: async (request: Request) => {

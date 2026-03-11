@@ -197,4 +197,29 @@ describe('Workers Integration', () => {
     expect(first.statusCode).toBe(202);
     expect(calls.info).toHaveLength(1);
   });
+
+  it('creates structured worker logs with flat payload fields', () => {
+    initWorkersLogger({
+      env: { service: 'worker-app' },
+    });
+
+    const log = createWorkersLogger(
+      new Request('https://edge.example.test/checkout', { method: 'POST' })
+    );
+
+    const payload = log
+      .createStructuredLog('checkout', { userId: 'user-1' })
+      .set({ cartItems: 3 })
+      .info('worker started', { route: '/checkout' })
+      .emit({ status: 200 });
+
+    expect(payload.groupId).toBe('checkout');
+    expect(payload.method).toBe('POST');
+    expect(payload.path).toBe('/checkout');
+    expect(payload.service).toBe('worker-app');
+    expect(payload.status).toBe(200);
+    expect(payload.events?.[0]?.message).toBe('worker started');
+    expect(calls.info).toHaveLength(1);
+    expect((calls.info[0]?.[1] as Record<string, unknown>).groupId).toBe('checkout');
+  });
 });

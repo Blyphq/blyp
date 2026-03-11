@@ -6,6 +6,7 @@ import type {
   SvelteKitRequestEvent,
 } from '../../types/frameworks/sveltekit';
 import {
+  createRequestScopedLogger,
   createRequestLike,
   emitHttpErrorLog,
   emitHttpRequestLog,
@@ -13,6 +14,7 @@ import {
   isErrorStatus,
   resolveAdditionalProps,
   resolveServerLogger,
+  runWithRequestContext,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
   toErrorLike,
@@ -32,62 +34,78 @@ export function createSvelteKitLogger(
   const shared = resolveServerLogger(config);
 
   const handle: SvelteKitHandle = async ({ event, resolve }) => {
-    event.locals.blypLog = shared.logger;
-    const startTime = performance.now();
-    const path = event.url.pathname;
-    const requestLike = createRequestLike(
-      event.request.method,
-      event.request.url,
-      event.request.headers
-    );
+    return runWithRequestContext(async () => {
+      let structuredLogEmitted = false;
+      event.locals.blypLog = createRequestScopedLogger(shared.logger, {
+        resolveStructuredFields: () => ({
+          method: event.request.method,
+          path: event.url.pathname,
+          ...resolveAdditionalProps(shared, createContext(event)),
+        }),
+        onStructuredEmit: () => {
+          structuredLogEmitted = true;
+        },
+      });
+      const startTime = performance.now();
+      const path = event.url.pathname;
+      const requestLike = createRequestLike(
+        event.request.method,
+        event.request.url,
+        event.request.headers
+      );
 
-    try {
-      const response = await resolve(event);
-      const statusCode = response.status;
-      const loggerContext = createContext(event, response);
-      const responseTime = Math.round(performance.now() - startTime);
+      try {
+        const response = await resolve(event);
+        if (structuredLogEmitted) {
+          return response;
+        }
 
-      if (isErrorStatus(statusCode)) {
-        if (!shouldSkipErrorLogging(shared, path)) {
-          emitHttpErrorLog(
+        const statusCode = response.status;
+        const loggerContext = createContext(event, response);
+        const responseTime = Math.round(performance.now() - startTime);
+
+        if (isErrorStatus(statusCode)) {
+          if (!shouldSkipErrorLogging(shared, path)) {
+            emitHttpErrorLog(
+              shared.logger,
+              shared.level,
+              requestLike,
+              path,
+              statusCode,
+              responseTime,
+              toErrorLike(undefined, statusCode),
+              resolveAdditionalProps(shared, loggerContext)
+            );
+          }
+        } else if (!shouldSkipAutoLogging(shared, loggerContext, path)) {
+          emitHttpRequestLog(
             shared.logger,
             shared.level,
             requestLike,
             path,
             statusCode,
             responseTime,
-            toErrorLike(undefined, statusCode),
             resolveAdditionalProps(shared, loggerContext)
           );
         }
-      } else if (!shouldSkipAutoLogging(shared, loggerContext, path)) {
-        emitHttpRequestLog(
-          shared.logger,
-          shared.level,
-          requestLike,
-          path,
-          statusCode,
-          responseTime,
-          resolveAdditionalProps(shared, loggerContext)
-        );
-      }
 
-      return response;
-    } catch (error) {
-      if (!shouldSkipErrorLogging(shared, path)) {
-        emitHttpErrorLog(
-          shared.logger,
-          shared.level,
-          requestLike,
-          path,
-          500,
-          Math.round(performance.now() - startTime),
-          toErrorLike(error, 500),
-          resolveAdditionalProps(shared, createContext(event, undefined, error))
-        );
+        return response;
+      } catch (error) {
+        if (!structuredLogEmitted && !shouldSkipErrorLogging(shared, path)) {
+          emitHttpErrorLog(
+            shared.logger,
+            shared.level,
+            requestLike,
+            path,
+            500,
+            Math.round(performance.now() - startTime),
+            toErrorLike(error, 500),
+            resolveAdditionalProps(shared, createContext(event, undefined, error))
+          );
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
   };
 
   return {

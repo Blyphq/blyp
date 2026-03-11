@@ -69,6 +69,63 @@ logger.error('Something went wrong');
 logger.warning('Warning message');
 ```
 
+### Structured request batches
+
+Standalone usage:
+
+```typescript
+import { createStructuredLog } from 'blyp-js';
+
+const structuredLog = createStructuredLog('checkout', {
+  service: 'web-api',
+  level: 'info',
+  timestamp: new Date().toISOString(),
+});
+
+structuredLog.set({
+  user: { id: 1, plan: 'pro' },
+  cart: { items: 3, total: 9999 },
+});
+
+structuredLog.info('user logged in');
+structuredLog.info('item added to cart');
+structuredLog.emit({ status: 200 });
+```
+
+Framework usage with Elysia:
+
+```typescript
+import { createStructuredLog } from 'blyp-js';
+import { Elysia } from 'elysia';
+import { createLogger } from 'blyp-js/elysia';
+
+const app = new Elysia()
+  .use(createLogger({ level: 'info' }))
+  .post('/hello', ({ set }) => {
+    const structuredLog = createStructuredLog<{
+      message: string;
+      level: string;
+      timestamp: string;
+      hostname?: string;
+      port?: number;
+    }>('test', {
+      message: 'Hello Elysia',
+      level: 'info',
+      timestamp: new Date().toISOString(),
+      hostname: app.server?.hostname,
+      port: app.server?.port,
+    });
+
+    structuredLog.info('route started');
+    structuredLog.emit({ status: 200 });
+
+    set.status = 200;
+    return 'ok';
+  });
+```
+
+Inside framework handlers, the imported `createStructuredLog(...)` automatically binds to the active request-scoped logger. Structured logs are emitted only when you call `.emit()`. In framework request loggers, a structured emit replaces that request's normal auto request log. If you mix a request-scoped structured logger with the root `logger` in the same request, Blyp warns once and ignores the root logger call.
+
 ### Errors
 
 ```typescript

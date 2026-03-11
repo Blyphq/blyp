@@ -1,5 +1,17 @@
+import { logger } from './frameworks/standalone';
+import { getActiveRequestLogger } from './frameworks/shared/request-context';
+import type { StructuredLog } from './core/structured-log';
+
 export { createBaseLogger, CUSTOM_LEVELS } from './core/logger';
 export type { BlypLogger } from './core/logger';
+export type {
+  StructuredLog,
+  StructuredLogEmitOptions,
+  StructuredLogError,
+  StructuredLogEvent,
+  StructuredLogLevel,
+  StructuredLogPayload,
+} from './core/structured-log';
 export {
   BlypError,
   parseError,
@@ -137,3 +149,10 @@ export type {
   ExpoLogger,
   ExpoLoggerConfig,
 } from './types/frameworks/expo';
+
+export function createStructuredLog<
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+>(groupId: string, initial?: TFields): StructuredLog<TFields> {
+  const activeLogger = getActiveRequestLogger() ?? logger;
+  return activeLogger.createStructuredLog(groupId, initial) as StructuredLog<TFields>;
+}

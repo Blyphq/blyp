@@ -1,4 +1,5 @@
 import type { BlypErrorLike } from '../shared/errors';
+import type { StructuredLog } from '../core/structured-log';
 
 type LeveledLogMethod = (message: unknown, ...meta: unknown[]) => void;
 
@@ -22,6 +23,10 @@ export interface BaseLogger extends MinimalLogger {
   table: (message: string, data?: unknown) => void;
   warn: LeveledLogMethod;
   warning: LeveledLogMethod;
+  createStructuredLog: (
+    groupId: string,
+    initial?: Record<string, unknown>
+  ) => StructuredLog;
 }
 
 export interface FrameworkContext {
