@@ -3,7 +3,7 @@ import type { ClientLogEvent } from '../../shared/client-log';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
-import { createBaseLogger } from '../../core/logger';
+import { createBaseLogger, getPostHogSender } from '../../core/logger';
 import {
   buildClientDetails,
   buildInfoLogMessage,
@@ -75,6 +75,7 @@ export function resolveServerLogger<Ctx>(
     ...(config.pretty !== undefined ? { pretty: config.pretty } : {}),
     ...(config.logDir !== undefined ? { logDir: config.logDir } : {}),
     ...(config.file !== undefined ? { file: config.file } : {}),
+    ...(config.connectors !== undefined ? { connectors: config.connectors } : {}),
   });
   const {
     level = resolvedConfig.level,
@@ -86,8 +87,9 @@ export function resolveServerLogger<Ctx>(
     logErrors = true,
     ignorePaths,
     clientLogging,
+    connectors,
   } = config;
-  const logger = loggerOverride ?? createBaseLogger({ level, pretty, logDir, file });
+  const logger = loggerOverride ?? createBaseLogger({ level, pretty, logDir, file, connectors });
   const resolvedClientLogging = resolveClientLoggingConfig(
     clientLogging,
     resolvedConfig.clientLogging
@@ -99,6 +101,7 @@ export function resolveServerLogger<Ctx>(
 
   return {
     logger,
+    posthog: getPostHogSender(logger),
     resolvedConfig,
     level,
     pretty,
@@ -267,7 +270,7 @@ export async function handleClientLogIngestion<Ctx>(options: {
   request: RequestLike & { json?: () => Promise<unknown> };
   body?: unknown;
   deliveryPath?: string;
-}): Promise<{ status: number }> {
+}): Promise<{ status: number; headers?: Record<string, string> }> {
   const { config, ctx, request, body, deliveryPath } = options;
 
   if (!config.resolvedClientLogging) {
@@ -312,7 +315,25 @@ export async function handleClientLogIngestion<Ctx>(options: {
     logMethod(`[client] ${payload.message}`, structuredPayload);
   }
 
-  return { status: 204 };
+  const headers: Record<string, string> = {};
+  if (payload.connector === 'posthog') {
+    headers['x-blyp-posthog-status'] = config.posthog.ready ? 'enabled' : 'missing';
+
+    if (config.posthog.ready) {
+      config.posthog.send({
+        timestamp: structuredPayload.receivedAt as string,
+        level: payload.level,
+        message: `[client] ${payload.message}`,
+        data: structuredPayload,
+      }, {
+        source: 'client',
+      });
+    }
+  }
+
+  return Object.keys(headers).length > 0
+    ? { status: 204, headers }
+    : { status: 204 };
 }
 
 export async function readNodeRequestBody(

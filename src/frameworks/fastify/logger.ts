@@ -134,6 +134,11 @@ export function createFastifyLogger(
             deliveryPath: shared.ingestionPath,
           });
           reply.code(result.status);
+          if (result.headers) {
+            for (const [key, value] of Object.entries(result.headers)) {
+              reply.header(key, value);
+            }
+          }
           return null;
         },
       });

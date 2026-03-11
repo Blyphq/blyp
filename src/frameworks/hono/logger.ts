@@ -51,7 +51,10 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
           deliveryPath: shared.ingestionPath,
         });
 
-        return new Response(null, { status: result.status });
+        return new Response(null, {
+          status: result.status,
+          headers: result.headers,
+        });
       }
 
       let thrownError: unknown;

@@ -12,6 +12,7 @@ try {
       "./path-matching.test.ts",
       "./standalone.test.ts",
       "./client-logger.test.ts",
+      "./posthog.test.ts",
       "./file-logging.test.ts",
       "./frameworks/elysia.test.ts",
       "./frameworks/hono.test.ts",

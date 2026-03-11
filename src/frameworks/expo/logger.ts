@@ -49,6 +49,15 @@ function warnOnce(key: string, message: string): void {
   console.warn(message);
 }
 
+function errorOnce(key: string, message: string): void {
+  if (warnedMessages.has(key) || typeof console === 'undefined') {
+    return;
+  }
+
+  warnedMessages.add(key);
+  console.error(message);
+}
+
 function isAbsoluteHttpUrl(value: string | undefined): value is string {
   if (!value) {
     return false;
@@ -112,6 +121,7 @@ async function sendRemoteLog(
   config: {
     endpoint?: string;
     headers?: Record<string, string>;
+    connector?: 'posthog';
     metadata?: ExpoLoggerConfig['metadata'];
   },
   event: ClientLogEvent
@@ -172,6 +182,16 @@ async function sendRemoteLog(
     });
 
     if (response.ok) {
+      if (
+        config.connector === 'posthog' &&
+        response.headers.get('x-blyp-posthog-status') === 'missing'
+      ) {
+        errorOnce(
+          'missing-posthog-server-config',
+          '[blyp/expo] PostHog connector requested but not configured on the server. Continuing without PostHog forwarding.'
+        );
+      }
+
       return {
         outcome: 'success',
         transport: 'fetch',
@@ -210,6 +230,7 @@ function buildExpoLogger(
     headers: config?.headers,
     localConsole: config?.localConsole ?? true,
     remoteSync: config?.remoteSync ?? true,
+    connector: config?.connector,
     metadata: config?.metadata,
   };
 
@@ -248,6 +269,7 @@ function buildExpoLogger(
       id: createRandomId(),
       level: normalizeClientLogLevel(level),
       message: serializeLogMessage(message),
+      connector: resolvedConfig.connector,
       data: normalizeClientPayloadData(message, args),
       bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) as Record<string, unknown> : undefined,
       clientTimestamp: new Date().toISOString(),

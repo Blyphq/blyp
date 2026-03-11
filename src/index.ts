@@ -47,10 +47,12 @@ export {
   resetConfigCache,
 } from './core/config';
 export type {
+  BlypConnectorsConfig,
   ClientLoggingConfig,
   BlypConfig,
   LogFileConfig,
   LogRotationConfig,
+  PostHogConnectorConfig,
 } from './core/config';
 export { readLogFile, formatLogRecord } from './core/log-reader';
 export type { ReadLogFileOptions } from './core/log-reader';

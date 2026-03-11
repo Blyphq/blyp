@@ -98,6 +98,13 @@ describe('Express Integration', () => {
     app.use(createExpressLogger({
       logDir: tempDir,
       pretty: false,
+      connectors: {
+        posthog: {
+          enabled: true,
+          projectKey: 'phc_test',
+          serviceName: 'svc',
+        },
+      },
       clientLogging: {
         validate: async (_ctx, payload) => payload.id !== 'blocked',
       },
@@ -110,7 +117,7 @@ describe('Express Integration', () => {
         headers: {
           'content-type': 'application/json',
         },
-        body: JSON.stringify(createClientPayload()),
+        body: JSON.stringify(createClientPayload({ connector: 'posthog' })),
       });
       const blocked = await fetch(`${server.baseUrl}/inngest`, {
         method: 'POST',
@@ -122,6 +129,7 @@ describe('Express Integration', () => {
       await waitForFileFlush();
 
       expect(ok.status).toBe(204);
+      expect(ok.headers.get('x-blyp-posthog-status')).toBe('enabled');
       expect(blocked.status).toBe(403);
       const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
       const duplicateHttpRecord = records.find((record) => {

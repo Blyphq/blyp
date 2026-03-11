@@ -133,7 +133,10 @@ export function createSvelteKitLogger(
         request: event.request,
         deliveryPath: path,
       });
-      return new Response(null, { status: result.status });
+      return new Response(null, {
+        status: result.status,
+        headers: result.headers,
+      });
     },
   };
 }

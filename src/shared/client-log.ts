@@ -47,6 +47,7 @@ export interface ClientLogEvent {
   id: string;
   level: ClientLogLevel;
   message: string;
+  connector?: 'posthog';
   data?: unknown;
   bindings?: Record<string, unknown>;
   clientTimestamp: string;
@@ -332,6 +333,10 @@ export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
   }
 
   if (!isRecord(payload.page) || !isRecord(payload.browser) || !isRecord(payload.session)) {
+    return false;
+  }
+
+  if (payload.connector !== undefined && payload.connector !== 'posthog') {
     return false;
   }
 

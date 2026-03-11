@@ -1,13 +1,28 @@
 import pino from 'pino';
-import { createFileLogger, type LogRecord, type RotatingFileLogger } from './file-logger';
-import { resolveConfig, type BlypConfig } from './config';
+import { shouldDropRootLogWrite } from '../frameworks/shared/request-context';
+import { type BlypConfig, resolveConfig } from './config';
+import {
+  buildRecord,
+  buildStructuredRecord,
+  resolveStructuredWriteLevel,
+  serializeMessage,
+  type LogMethodName,
+} from './log-record';
+import {
+  createFileLogger,
+  type RotatingFileLogger,
+} from './file-logger';
+import {
+  createPostHogSender,
+  isClientLogRecord,
+  type PostHogSender,
+} from './posthog';
+import { runtime } from './runtime';
 import {
   createStructuredLog as createStructuredLogCollector,
   type StructuredLog,
   type StructuredLogPayload,
 } from './structured-log';
-import { runtime } from './runtime';
-import { shouldDropRootLogWrite } from '../frameworks/shared/request-context';
 
 export interface BlypLogger {
   success: (message: unknown, ...args: unknown[]) => void;
@@ -34,18 +49,9 @@ interface StructuredLogFactoryOptions {
   onEmit?: (payload: StructuredLogPayload) => void;
 }
 
-type LogMethodName =
-  | 'success'
-  | 'critical'
-  | 'warning'
-  | 'info'
-  | 'debug'
-  | 'error'
-  | 'warn'
-  | 'table';
-
 interface LoggerFactoryHandle {
   bindings: Record<string, unknown>;
+  posthog: PostHogSender;
   create: (source: InternalLoggerSource, bindings?: Record<string, unknown>) => BlypLogger;
   writeStructured: (
     payload: StructuredLogPayload,
@@ -70,17 +76,6 @@ export const CUSTOM_LEVELS: Record<string, number> = {
   critical: 60,
 };
 
-const RECORD_LEVELS: Record<LogMethodName, string> = {
-  success: 'success',
-  critical: 'critical',
-  warning: 'warning',
-  info: 'info',
-  debug: 'debug',
-  error: 'error',
-  warn: 'warning',
-  table: 'table',
-};
-
 const CONSOLE_LEVELS: Record<LogMethodName, string> = {
   success: 'success',
   critical: 'critical',
@@ -94,123 +89,6 @@ const CONSOLE_LEVELS: Record<LogMethodName, string> = {
 
 const MAGENTA = '\x1b[35m';
 const RESET = '\x1b[0m';
-
-function normalizePath(filePath: string): string {
-  return filePath.replace(/\\/g, '/');
-}
-
-function isInternalLoggerFrame(filePath: string): boolean {
-  const normalizedPath = normalizePath(filePath);
-
-  return (
-    normalizedPath.startsWith('node:') ||
-    normalizedPath.includes('/node_modules/pino') ||
-    normalizedPath.includes('/node_modules/pino-pretty') ||
-    normalizedPath.includes('/node_modules/blyp-js/') ||
-    normalizedPath.includes('/blyp/src/core/') ||
-    normalizedPath.includes('/blyp/src/frameworks/') ||
-    normalizedPath.includes('/blyp/dist/')
-  );
-}
-
-function formatCallerPath(filePath: string): string {
-  const normalizedPath = normalizePath(filePath);
-  const normalizedCwd = normalizePath(process.cwd());
-  return normalizedPath.startsWith(`${normalizedCwd}/`)
-    ? normalizedPath.slice(normalizedCwd.length + 1)
-    : normalizedPath;
-}
-
-function getCallerLocation(): { file: string | null; line: number | null } {
-  try {
-    const stack = new Error().stack;
-    if (!stack) return { file: null, line: null };
-
-    const lines = stack.split('\n');
-    let fallback: { file: string; line: number | null } | null = null;
-
-    for (let index = 2; index < lines.length; index += 1) {
-      const line = lines[index];
-      if (!line) continue;
-
-      const match = line.match(/\((.*):(\d+):\d+\)/) || line.match(/at\s+(.*):(\d+):(\d+)/);
-      if (!match) {
-        continue;
-      }
-
-      const fileName = match[1] || '';
-      const lineNumber = parseInt(match[2] || '0', 10) || null;
-
-      if (
-        fileName &&
-        !fileName.includes('node_modules') &&
-        !isInternalLoggerFrame(fileName)
-      ) {
-        const formattedPath = formatCallerPath(fileName);
-        const normalizedFormattedPath = normalizePath(formattedPath);
-
-        if (!normalizedFormattedPath.startsWith('dist/')) {
-          return { file: formattedPath, line: lineNumber };
-        }
-
-        fallback ??= { file: formattedPath, line: lineNumber };
-      }
-    }
-
-    if (fallback) {
-      return fallback;
-    }
-  } catch {
-    return { file: null, line: null };
-  }
-
-  return { file: null, line: null };
-}
-
-function serializeMessage(message: unknown): string {
-  if (typeof message === 'string') {
-    return message;
-  }
-
-  if (message !== null && typeof message === 'object') {
-    try {
-      return JSON.stringify(
-        message,
-        (_key, value) => {
-          if (typeof value === 'function') {
-            return `[Function: ${value.name || 'anonymous'}]`;
-          }
-
-          if (value === undefined) {
-            return '[undefined]';
-          }
-
-          if (typeof value === 'symbol') {
-            return value.toString();
-          }
-
-          return value;
-        },
-        2
-      );
-    } catch {
-      try {
-        const keys = Object.keys(message as object);
-        if (keys.length > 0) {
-          return `[Object with keys: ${keys.join(', ')}]`;
-        }
-      } catch {}
-
-      return '[Object]';
-    }
-  }
-
-  return String(message);
-}
-
-function stripAnsi(value: string): string {
-  return value.replace(/\u001b\[[0-9;]*m/g, '');
-}
 
 function summarizeClientConsoleData(data: unknown): Record<string, unknown> | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -313,91 +191,6 @@ function createPinoLogger(config: BlypConfig) {
   });
 }
 
-function buildRecord(
-  level: LogMethodName,
-  message: unknown,
-  args: unknown[],
-  bindings: Record<string, unknown>
-): LogRecord {
-  const { file, line } = getCallerLocation();
-  const serializedMessage = serializeMessage(message);
-  const record: LogRecord = {
-    timestamp: new Date().toISOString(),
-    level: RECORD_LEVELS[level],
-    message: stripAnsi(serializedMessage),
-  };
-
-  if (file) {
-    record.caller = line !== null ? `${file}:${line}` : file;
-  }
-
-  if (args.length === 1) {
-    record.data = args[0];
-  } else if (args.length > 1) {
-    record.data = args;
-  }
-
-  if (Object.keys(bindings).length > 0) {
-    record.bindings = bindings;
-  }
-
-  return record;
-}
-
-function buildStructuredRecord(
-  level: LogMethodName,
-  message: string,
-  payload: StructuredLogPayload,
-  bindings: Record<string, unknown>
-): LogRecord {
-  const { file, line } = getCallerLocation();
-  const record: LogRecord = {
-    message: stripAnsi(message),
-    ...payload,
-  };
-
-  if (file) {
-    record.caller = line !== null ? `${file}:${line}` : file;
-  }
-
-  if (Object.keys(bindings).length > 0) {
-    record.bindings = bindings;
-  }
-
-  record.level =
-    typeof payload.level === 'string' && payload.level.length > 0
-      ? payload.level
-      : RECORD_LEVELS[level];
-  record.timestamp =
-    typeof payload.timestamp === 'string' && payload.timestamp.length > 0
-      ? payload.timestamp
-      : new Date().toISOString();
-
-  return record;
-}
-
-function resolveStructuredWriteLevel(level: StructuredLogPayload['level']): LogMethodName {
-  switch (level) {
-    case 'debug':
-      return 'debug';
-    case 'warning':
-      return 'warning';
-    case 'warn':
-      return 'warn';
-    case 'error':
-      return 'error';
-    case 'success':
-      return 'success';
-    case 'critical':
-      return 'critical';
-    case 'table':
-      return 'table';
-    case 'info':
-    default:
-      return 'info';
-  }
-}
-
 function getLoggerFactory(logger: BlypLogger): LoggerFactoryHandle {
   const factory = (logger as InternalBlypLogger)[LOGGER_FACTORY];
   if (!factory) {
@@ -405,6 +198,10 @@ function getLoggerFactory(logger: BlypLogger): LoggerFactoryHandle {
   }
 
   return factory;
+}
+
+export function getPostHogSender(logger: BlypLogger): PostHogSender {
+  return getLoggerFactory(logger).posthog;
 }
 
 export function attachLoggerInternals<T extends BlypLogger>(target: T, source: BlypLogger): T {
@@ -447,9 +244,28 @@ export function createStructuredLogForLogger(
   });
 }
 
+function maybeSendToPostHog(
+  posthog: PostHogSender,
+  record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
+): void {
+  if (isClientLogRecord(record)) {
+    return;
+  }
+
+  if (!posthog.shouldAutoForwardServerLogs()) {
+    if (posthog.enabled && !posthog.ready) {
+      posthog.send(record, { source: 'server', warnIfUnavailable: true });
+    }
+    return;
+  }
+
+  posthog.send(record, { source: 'server', warnIfUnavailable: true });
+}
+
 function createLoggerInstance(
   rootRawLogger: any,
   fileLogger: RotatingFileLogger,
+  posthog: PostHogSender,
   bindings: Record<string, unknown> = {},
   source: InternalLoggerSource = 'root'
 ): BlypLogger {
@@ -491,6 +307,7 @@ function createLoggerInstance(
       consoleMessage
     );
     fileLogger.write(record);
+    maybeSendToPostHog(posthog, record);
   };
 
   const writeStructuredRecord = (
@@ -519,6 +336,8 @@ function createLoggerInstance(
     if (writeSource !== 'root' || !shouldDropRootLogWrite()) {
       fileLogger.write(record);
     }
+
+    maybeSendToPostHog(posthog, record);
   };
 
   const logger: InternalBlypLogger = {
@@ -569,13 +388,17 @@ function createLoggerInstance(
 
     child: (childBindings: Record<string, unknown>) => {
       const mergedBindings = { ...bindings, ...childBindings };
-      return createLoggerInstance(rootRawLogger, fileLogger, mergedBindings, source);
+      return createLoggerInstance(rootRawLogger, fileLogger, posthog, mergedBindings, source);
     },
 
     [LOGGER_FACTORY]: {
       bindings,
-      create: (nextSource: InternalLoggerSource, nextBindings: Record<string, unknown> = bindings) => {
-        return createLoggerInstance(rootRawLogger, fileLogger, nextBindings, nextSource);
+      posthog,
+      create: (
+        nextSource: InternalLoggerSource,
+        nextBindings: Record<string, unknown> = bindings
+      ) => {
+        return createLoggerInstance(rootRawLogger, fileLogger, posthog, nextBindings, nextSource);
       },
       writeStructured: (
         payload: StructuredLogPayload,
@@ -600,7 +423,8 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   const resolvedConfig = resolveConfig(config);
   const rawLogger = createPinoLogger(resolvedConfig);
   const fileLogger = createFileLogger(resolvedConfig);
-  const instance = createLoggerInstance(rawLogger, fileLogger);
+  const posthog = createPostHogSender(resolvedConfig);
+  const instance = createLoggerInstance(rawLogger, fileLogger, posthog);
 
   if (config === undefined) {
     loggerInstance = instance;

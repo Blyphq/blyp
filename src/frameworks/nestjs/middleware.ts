@@ -13,6 +13,7 @@ import {
   getNestRequestMethod,
   getNestRequestPath,
   readNestRequestBody,
+  setNestResponseHeaders,
   sendNestStatusResponse,
   setNestStructuredLogEmitted,
   setNestRequestStartTime,
@@ -88,6 +89,9 @@ export class BlypNestMiddleware implements NestMiddleware {
         deliveryPath: this.state.ingestionPath,
       });
 
+      if (result.headers) {
+        setNestResponseHeaders(response, result.headers);
+      }
       sendNestStatusResponse(response, result.status);
     } catch (error) {
       next(error);

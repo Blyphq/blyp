@@ -14,6 +14,7 @@
 - **TypeScript** — Full type safety throughout
 - **Framework integrations** — Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, TanStack Start, SvelteKit, Cloudflare Workers
 - **Expo integration** — Mobile client logging for Expo apps with structured backend sync
+- **PostHog connector** — Automatic or manual PostHog log forwarding for server, browser, and Expo flows
 - **Standalone usage** — Use without any framework
 - **Structured file logging** — NDJSON with size-based rotation and gzip archives
 - **Client log sync** — Browser logs ingested into your backend stream
@@ -165,6 +166,47 @@ logger.info('app mounted');
 ```
 
 Expo uses the runtime `fetch` implementation for delivery and `expo-network` for connectivity metadata. Install `expo-network` in your app and use an absolute ingestion URL.
+
+### PostHog
+
+Use `blyp.config.ts` when you want to read the PostHog project key from the environment:
+
+```typescript
+export default {
+  connectors: {
+    posthog: {
+      enabled: true,
+      mode: 'auto',
+      projectKey: process.env.POSTHOG_PROJECT_KEY,
+    },
+  },
+};
+```
+
+In `auto` mode, the normal Blyp server loggers forward to PostHog automatically. In `manual` mode, use `blyp-js/posthog`:
+
+```typescript
+import { createPosthogLogger, createStructuredPosthogLogger } from 'blyp-js/posthog';
+
+createPosthogLogger().info('manual posthog log');
+
+const structured = createStructuredPosthogLogger('checkout', { orderId: 'ord_123' });
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request server-side PostHog forwarding through the existing ingestion endpoint:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'posthog',
+});
+```
+
+The client and Expo connector flow still posts to Blyp first. Blyp forwards to PostHog only when the server connector is configured.
 
 Log levels, HTTP request logging, and file logging (rotation, archives, reading stored logs) are documented in [docs](docs/README.md#file-logging).
 

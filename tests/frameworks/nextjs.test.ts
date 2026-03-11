@@ -79,7 +79,7 @@ describe('Next.js Integration', () => {
         headers: {
           'content-type': 'application/json',
         },
-        body: JSON.stringify(createClientPayload()),
+        body: JSON.stringify(createClientPayload({ connector: 'posthog' })),
       })
     );
     const mismatch = await nextLogger.clientLogHandler(
@@ -94,6 +94,7 @@ describe('Next.js Integration', () => {
     await waitForFileFlush();
 
     expect(ok.status).toBe(204);
+    expect(ok.headers.get('x-blyp-posthog-status')).toBe('missing');
     expect(mismatch.status).toBe(500);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);

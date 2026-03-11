@@ -206,6 +206,76 @@ The Expo logger uses the runtime `fetch` implementation to send logs and reads c
 
 ---
 
+## PostHog connector
+
+Use `blyp.config.ts`, `blyp.config.js`, or `blyp.config.json`. When you need environment variables, prefer `blyp.config.ts`:
+
+```typescript
+export default {
+  connectors: {
+    posthog: {
+      enabled: true,
+      mode: 'auto',
+      projectKey: process.env.POSTHOG_PROJECT_KEY,
+      host: 'https://us.i.posthog.com',
+    },
+  },
+};
+```
+
+Static JSON config works too:
+
+```json
+{
+  "connectors": {
+    "posthog": {
+      "enabled": true,
+      "mode": "manual",
+      "projectKey": "phc_xxx"
+    }
+  }
+}
+```
+
+`mode: "auto"` forwards normal server-side Blyp logs to PostHog automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the PostHog subpath:
+
+```typescript
+import { createPosthogLogger, createStructuredPosthogLogger } from 'blyp-js/posthog';
+
+const posthogLogger = createPosthogLogger();
+posthogLogger.info('manual posthog log');
+
+const structured = createStructuredPosthogLogger('checkout', {
+  orderId: 'ord_123',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request PostHog forwarding through the existing Blyp ingestion route:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'posthog',
+});
+```
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: 'posthog',
+});
+```
+
+The browser and Expo connectors do not send directly to PostHog. They continue to send to Blyp's ingestion endpoint and Blyp forwards to PostHog when the server connector is configured. Workers are still out of scope for this connector.
+
+---
+
 ## Framework integrations
 
 ### Elysia

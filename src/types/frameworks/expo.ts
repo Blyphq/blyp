@@ -17,6 +17,7 @@ export interface ExpoLoggerConfig {
   headers?: Record<string, string>;
   localConsole?: boolean;
   remoteSync?: boolean;
+  connector?: 'posthog';
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
   delivery?: RemoteDeliveryConfig;
 }

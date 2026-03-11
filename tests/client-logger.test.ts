@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createClientLogger } from '../src/frameworks/client';
+import { resetClientWarningsForTests } from '../src/frameworks/client/logger';
 import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../src/shared/client-log';
 
 type GlobalKey =
@@ -139,6 +140,7 @@ describe('Client Logger', () => {
 
   beforeEach(() => {
     restoreGlobals();
+    resetClientWarningsForTests();
     console.info = originalInfo;
     console.warn = originalWarn;
     console.error = originalError;
@@ -149,6 +151,7 @@ describe('Client Logger', () => {
 
   afterEach(() => {
     restoreGlobals();
+    resetClientWarningsForTests();
     console.info = originalInfo;
     console.warn = originalWarn;
     console.error = originalError;
@@ -227,6 +230,38 @@ describe('Client Logger', () => {
     expect(payload.level).toBe('warning');
     expect(payload.bindings).toEqual({ feature: 'checkout' });
     expect(payload.metadata).toEqual({ app: 'web' });
+  });
+
+  it('includes the PostHog connector and logs one local error when the server reports it missing', async () => {
+    let body = '';
+    const errorCalls: unknown[][] = [];
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return Promise.resolve(new Response(null, {
+          status: 204,
+          headers: {
+            'x-blyp-posthog-status': 'missing',
+          },
+        }));
+      }) as typeof fetch,
+    });
+    console.error = (...args: unknown[]) => {
+      errorCalls.push(args);
+    };
+
+    const logger = createClientLogger({
+      connector: 'posthog',
+    });
+    logger.info('frontend ready');
+    logger.info('frontend ready again');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    expect(payload.connector).toBe('posthog');
+    expect(errorCalls).toHaveLength(1);
+    expect(String(errorCalls[0]?.[0] ?? '')).toContain('PostHog connector requested');
   });
 
   it('serializes Error payloads into structured data', async () => {

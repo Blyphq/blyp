@@ -29,6 +29,7 @@ export interface ClientLoggerConfig {
   credentials?: RequestCredentials;
   localConsole?: boolean;
   remoteSync?: boolean;
+  connector?: 'posthog';
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
   delivery?: RemoteDeliveryConfig;
 }

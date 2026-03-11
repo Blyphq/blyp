@@ -38,6 +38,7 @@ function toStandaloneLoggerConfig(
     ...(config.logDir !== undefined ? { logDir: config.logDir } : {}),
     ...(config.file !== undefined ? { file: config.file } : {}),
     ...(clientLogging !== undefined ? { clientLogging } : {}),
+    ...(config.connectors !== undefined ? { connectors: config.connectors } : {}),
   };
 }
 

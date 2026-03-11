@@ -85,6 +85,11 @@
       "import": "./exports/expo.mjs",
       "require": "./exports/expo.js"
     },
+    "./posthog": {
+      "types": "./types/posthog.d.ts",
+      "import": "./exports/posthog.mjs",
+      "require": "./exports/posthog.js"
+    },
     "./workers": {
       "types": "./types/workers.d.ts",
       "import": "./exports/workers.mjs",
@@ -98,6 +103,9 @@
       ],
       "expo": [
         "./types/expo.d.ts"
+      ],
+      "posthog": [
+        "./types/posthog.d.ts"
       ],
       "elysia": [
         "./types/frameworks/elysia.d.ts"
@@ -222,6 +230,11 @@
     }
   },
   "dependencies": {
+    "@opentelemetry/api-logs": "^0.206.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.206.0",
+    "@opentelemetry/resources": "^2.1.0",
+    "@opentelemetry/sdk-logs": "^0.206.0",
+    "jiti": "^2.4.2",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0"
   }

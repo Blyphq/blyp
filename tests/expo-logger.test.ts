@@ -197,6 +197,45 @@ describe('Expo Logger', () => {
     expect((errorPayload.data as Record<string, unknown>)?.stack).toEqual(expect.any(String));
   });
 
+  it('includes the PostHog connector and reports missing server configuration once', async () => {
+    const errorCalls: unknown[][] = [];
+    let requestBody = '';
+
+    setExpoNetworkLoaderForTests(async () => ({
+      getNetworkStateAsync: async () => ({
+        type: 'WIFI',
+        isConnected: true,
+        isInternetReachable: true,
+      }),
+    }));
+    setGlobal('fetch', ((_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = String(init?.body ?? '');
+      return Promise.resolve(new Response(null, {
+        status: 204,
+        headers: {
+          'x-blyp-posthog-status': 'missing',
+        },
+      }));
+    }) as typeof fetch);
+    console.error = (...args: unknown[]) => {
+      errorCalls.push(args);
+    };
+
+    const logger = createExpoLogger({
+      endpoint: 'https://api.example.test/inngest',
+      connector: 'posthog',
+    });
+
+    logger.info('first');
+    logger.info('second');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(requestBody) as Record<string, unknown>;
+    expect(payload.connector).toBe('posthog');
+    expect(errorCalls).toHaveLength(1);
+    expect(String(errorCalls[0]?.[0] ?? '')).toContain('PostHog connector requested');
+  });
+
   it('skips remote sync safely when remoteSync is false', async () => {
     let fetchCount = 0;
 

@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { dirname, resolve } from 'path';
+import { createJiti } from 'jiti';
 import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../shared/client-log';
 
 export interface LogRotationConfig {
@@ -22,13 +23,55 @@ export interface ClientLoggingConfig {
   path?: string;
 }
 
+export interface PostHogConnectorConfig {
+  enabled?: boolean;
+  mode?: 'auto' | 'manual';
+  projectKey?: string;
+  host?: string;
+  serviceName?: string;
+}
+
+export interface ResolvedPostHogConnectorConfig {
+  enabled: boolean;
+  mode: 'auto' | 'manual';
+  projectKey?: string;
+  host: string;
+  serviceName: string;
+}
+
+export interface BlypConnectorsConfig {
+  posthog?: PostHogConnectorConfig;
+}
+
 export interface BlypConfig {
   pretty: boolean;
   level: string;
   logDir?: string;
   file?: LogFileConfig;
   clientLogging?: ClientLoggingConfig;
+  connectors?: BlypConnectorsConfig;
 }
+
+interface ConfigFileMatch {
+  path: string;
+  type: 'json' | 'jiti';
+}
+
+const PACKAGE_NAME = 'blyp-js';
+const GITIGNORE_FILE_NAME = '.gitignore';
+const CONFIG_FILE_NAMES = [
+  'blyp.config.ts',
+  'blyp.config.mts',
+  'blyp.config.cts',
+  'blyp.config.js',
+  'blyp.config.mjs',
+  'blyp.config.cjs',
+  'blyp.config.json',
+] as const;
+const CONFIG_FILE_NAME = 'blyp.config.json';
+const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
+const DEFAULT_POSTHOG_SERVICE_NAME = 'blyp-app';
+const warnedKeys = new Set<string>();
 
 export const DEFAULT_ROTATION_CONFIG: Required<LogRotationConfig> = {
   enabled: true,
@@ -55,12 +98,53 @@ export const DEFAULT_CONFIG: BlypConfig = {
   level: 'info',
   file: DEFAULT_FILE_CONFIG,
   clientLogging: DEFAULT_CLIENT_LOGGING_CONFIG,
+  connectors: {},
 };
 
 let cachedConfig: BlypConfig | null = null;
-const PACKAGE_NAME = 'blyp-js';
-const CONFIG_FILE_NAME = 'blyp.config.json';
-const GITIGNORE_FILE_NAME = '.gitignore';
+
+function warnOnce(key: string, message: string, error?: unknown): void {
+  if (warnedKeys.has(key)) {
+    return;
+  }
+
+  warnedKeys.add(key);
+  if (error === undefined) {
+    console.warn(message);
+    return;
+  }
+
+  console.warn(message, error);
+}
+
+function findNearestPackageName(startDir: string): string | undefined {
+  let currentDir = startDir;
+
+  while (true) {
+    const packageJsonPath = resolve(currentDir, 'package.json');
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
+          name?: unknown;
+        };
+        if (typeof packageJson.name === 'string' && packageJson.name.length > 0) {
+          return packageJson.name;
+        }
+      } catch {}
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      return undefined;
+    }
+
+    currentDir = parentDir;
+  }
+}
+
+function resolveDefaultPostHogServiceName(cwd: string = process.cwd()): string {
+  return findNearestPackageName(cwd) ?? DEFAULT_POSTHOG_SERVICE_NAME;
+}
 
 function getBootstrapConfig(): BlypConfig {
   return {
@@ -80,6 +164,7 @@ function getBootstrapConfig(): BlypConfig {
       enabled: true,
       path: DEFAULT_CLIENT_LOG_ENDPOINT,
     },
+    connectors: {},
   };
 }
 
@@ -99,6 +184,10 @@ function shouldBootstrapProjectFiles(cwd: string): boolean {
 }
 
 function ensureConfigFile(cwd: string): void {
+  if (CONFIG_FILE_NAMES.some((fileName) => existsSync(resolve(cwd, fileName)))) {
+    return;
+  }
+
   const configPath = resolve(cwd, CONFIG_FILE_NAME);
 
   if (existsSync(configPath)) {
@@ -148,25 +237,83 @@ function bootstrapProjectFiles(): void {
   ensureLogsIgnored(cwd);
 }
 
-function findConfigFile(): string | null {
+function findConfigFile(): ConfigFileMatch | null {
   const cwd = process.cwd();
-  const configPath = resolve(cwd, CONFIG_FILE_NAME);
-  
-  if (existsSync(configPath)) {
-    return configPath;
+  const matches = CONFIG_FILE_NAMES
+    .map((fileName) => resolve(cwd, fileName))
+    .filter((filePath) => existsSync(filePath));
+
+  if (matches.length === 0) {
+    return null;
   }
-  
-  return null;
+
+  if (matches.length > 1) {
+    const preferred = matches[0]!;
+    warnOnce(
+      `config-multiple:${preferred}`,
+      `[Blyp] Warning: Multiple config files found. Using ${preferred} and ignoring ${matches.slice(1).join(', ')}.`
+    );
+  }
+
+  const selectedPath = matches[0]!;
+  return {
+    path: selectedPath,
+    type: selectedPath.endsWith('.json') ? 'json' : 'jiti',
+  };
 }
 
-function parseConfigFile(configPath: string): Partial<BlypConfig> {
+function normalizeLoadedConfig(
+  value: unknown,
+  configPath: string
+): Partial<BlypConfig> {
+  const normalized = (
+    value &&
+    typeof value === 'object' &&
+    'default' in value &&
+    (value as { default?: unknown }).default !== undefined
+  )
+    ? (value as { default: unknown }).default
+    : value;
+
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) {
+    warnOnce(
+      `config-invalid:${configPath}`,
+      `[Blyp] Warning: Config file ${configPath} did not export an object. Falling back to defaults.`
+    );
+    return {};
+  }
+
+  return normalized as Partial<BlypConfig>;
+}
+
+function parseJsonConfigFile(configPath: string): Partial<BlypConfig> {
   try {
     const content = readFileSync(configPath, 'utf-8');
-    return JSON.parse(content);
+    return normalizeLoadedConfig(JSON.parse(content), configPath);
   } catch (error) {
     console.error('[Blyp] Warning: Failed to parse blyp.config.json:', error);
     return {};
   }
+}
+
+function parseExecutableConfigFile(configPath: string): Partial<BlypConfig> {
+  try {
+    const jiti = createJiti(process.cwd(), {
+      interopDefault: true,
+      moduleCache: false,
+      fsCache: false,
+    });
+    return normalizeLoadedConfig(jiti(configPath), configPath);
+  } catch (error) {
+    console.error(`[Blyp] Warning: Failed to load ${configPath}:`, error);
+    return {};
+  }
+}
+
+function parseConfigFile(config: ConfigFileMatch): Partial<BlypConfig> {
+  return config.type === 'json'
+    ? parseJsonConfigFile(config.path)
+    : parseExecutableConfigFile(config.path);
 }
 
 function mergeRotationConfig(
@@ -204,6 +351,33 @@ function mergeClientLoggingConfig(
   };
 }
 
+function mergePostHogConnectorConfig(
+  base: PostHogConnectorConfig | undefined,
+  override: PostHogConnectorConfig | undefined
+): ResolvedPostHogConnectorConfig {
+  return {
+    enabled: false,
+    mode: 'auto',
+    ...base,
+    ...override,
+    projectKey: override?.projectKey ?? base?.projectKey,
+    host: override?.host ?? base?.host ?? DEFAULT_POSTHOG_HOST,
+    serviceName:
+      override?.serviceName ??
+      base?.serviceName ??
+      resolveDefaultPostHogServiceName(),
+  };
+}
+
+function mergeConnectorsConfig(
+  base: BlypConnectorsConfig | undefined,
+  override: BlypConnectorsConfig | undefined
+): Required<BlypConnectorsConfig> {
+  return {
+    posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
+  };
+}
+
 export function mergeBlypConfig(
   base: BlypConfig,
   override: Partial<BlypConfig> = {}
@@ -213,6 +387,7 @@ export function mergeBlypConfig(
     ...override,
     file: mergeFileConfig(base.file, override.file),
     clientLogging: mergeClientLoggingConfig(base.clientLogging, override.clientLogging),
+    connectors: mergeConnectorsConfig(base.connectors, override.connectors),
   };
 }
 
@@ -222,10 +397,10 @@ export function loadConfig(): BlypConfig {
   }
 
   bootstrapProjectFiles();
-  const configPath = findConfigFile();
-  
-  if (configPath) {
-    const userConfig = parseConfigFile(configPath);
+  const configFile = findConfigFile();
+
+  if (configFile) {
+    const userConfig = parseConfigFile(configFile);
     cachedConfig = mergeBlypConfig(DEFAULT_CONFIG, userConfig);
   } else {
     cachedConfig = mergeBlypConfig(DEFAULT_CONFIG);
@@ -244,4 +419,5 @@ export function getConfig(): BlypConfig {
 
 export function resetConfigCache(): void {
   cachedConfig = null;
+  warnedKeys.clear();
 }

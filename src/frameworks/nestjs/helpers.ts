@@ -195,6 +195,35 @@ function setRawStatus(target: Record<string, unknown>, statusCode: number): void
   target.statusCode = statusCode;
 }
 
+export function setNestResponseHeaders(
+  response: unknown,
+  headers: Record<string, string>
+): void {
+  if (!isRecord(response)) {
+    return;
+  }
+
+  if (typeof response.setHeader === 'function') {
+    for (const [key, value] of Object.entries(headers)) {
+      response.setHeader(key, value);
+    }
+    return;
+  }
+
+  if (typeof response.header === 'function') {
+    for (const [key, value] of Object.entries(headers)) {
+      response.header(key, value);
+    }
+    return;
+  }
+
+  if (isRecord(response.raw) && typeof response.raw.setHeader === 'function') {
+    for (const [key, value] of Object.entries(headers)) {
+      response.raw.setHeader(key, value);
+    }
+  }
+}
+
 export function sendNestStatusResponse(response: unknown, statusCode: number): void {
   if (!isRecord(response)) {
     return;

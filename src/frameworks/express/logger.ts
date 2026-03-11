@@ -112,6 +112,11 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
           body,
           deliveryPath: shared.ingestionPath,
         });
+        if (result.headers) {
+          for (const [key, value] of Object.entries(result.headers)) {
+            res.setHeader(key, value);
+          }
+        }
         res.status(result.status).end();
       })().catch(next);
       return;

@@ -1,4 +1,4 @@
-import type { LogFileConfig, BlypConfig } from '../../core/config';
+import type { BlypConfig, BlypConnectorsConfig, LogFileConfig } from '../../core/config';
 import type { BlypLogger } from '../../core/logger';
 import type { ClientLogEvent } from '../../shared/client-log';
 import type { HttpRequestLog } from './http';
@@ -25,10 +25,33 @@ export interface ServerLoggerConfig<Ctx> {
   logErrors?: boolean;
   ignorePaths?: string[];
   clientLogging?: boolean | ClientLogIngestionConfig<Ctx>;
+  connectors?: BlypConnectorsConfig;
+}
+
+export interface ResolvedPostHogConnector {
+  enabled: boolean;
+  ready: boolean;
+  mode: 'auto' | 'manual';
+  serviceName: string;
+  host: string;
+  status: 'enabled' | 'missing';
+  send: (
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
 }
 
 export interface ResolvedServerLogger<Ctx> {
   logger: BlypLogger;
+  posthog: ResolvedPostHogConnector;
   resolvedConfig: BlypConfig;
   level: string;
   pretty: boolean;

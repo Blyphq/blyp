@@ -31,6 +31,17 @@ interface ClientLoggerState {
   };
 }
 
+const warnedMessages = new Set<string>();
+
+function errorOnce(key: string, message: string): void {
+  if (warnedMessages.has(key) || typeof console === 'undefined') {
+    return;
+  }
+
+  warnedMessages.add(key);
+  console.error(message);
+}
+
 function resolveHeaders(headers: Record<string, string> | undefined): Record<string, string> {
   return {
     'content-type': 'application/json',
@@ -53,6 +64,7 @@ function isBrowserRuntime(): boolean {
 async function sendRemoteLog(
   config: Required<Pick<ClientLoggerConfig, 'endpoint' | 'credentials'>> & {
     headers?: Record<string, string>;
+    connector?: 'posthog';
   },
   payload: ClientLogEvent
 ): Promise<DeliveryAttemptResult> {
@@ -88,6 +100,16 @@ async function sendRemoteLog(
     });
 
     if (response.ok) {
+      if (
+        config.connector === 'posthog' &&
+        response.headers.get('x-blyp-posthog-status') === 'missing'
+      ) {
+        errorOnce(
+          'posthog-missing',
+          '[blyp/client] PostHog connector requested but not configured on the server. Continuing without PostHog forwarding.'
+        );
+      }
+
       return {
         outcome: 'success',
         transport: 'fetch',
@@ -179,6 +201,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
     credentials: config.credentials ?? 'same-origin',
     localConsole: config.localConsole ?? true,
     remoteSync: config.remoteSync ?? true,
+    connector: config.connector,
     metadata: config.metadata,
   };
 
@@ -235,6 +258,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
       id: createRandomId(),
       level: normalizedLevel,
       message: normalizedMessage,
+      connector: resolvedConfig.connector,
       data: normalizedData,
       bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) as Record<string, unknown> : undefined,
       clientTimestamp: new Date().toISOString(),
@@ -297,3 +321,7 @@ export function createClientLogger(config: ClientLoggerConfig = {}): ClientLogge
 }
 
 export const logger = createClientLogger();
+
+export function resetClientWarningsForTests(): void {
+  warnedMessages.clear();
+}

@@ -1,4 +1,9 @@
-import type { ClientLoggingConfig, LogFileConfig, LogRotationConfig } from '../../core/config';
+import type {
+  BlypConnectorsConfig,
+  ClientLoggingConfig,
+  LogFileConfig,
+  LogRotationConfig,
+} from '../../core/config';
 
 export type LogLevel = 'error' | 'critical' | 'warning' | 'info' | 'success' | 'debug' | 'table';
 
@@ -8,9 +13,10 @@ export interface StandaloneLoggerConfig {
   logDir?: string;
   file?: LogFileConfig;
   clientLogging?: ClientLoggingConfig;
+  connectors?: BlypConnectorsConfig;
 }
 
-export type { ClientLoggingConfig, LogFileConfig, LogRotationConfig };
+export type { BlypConnectorsConfig, ClientLoggingConfig, LogFileConfig, LogRotationConfig };
 
 export type RuntimeType = 'bun' | 'node';
 
