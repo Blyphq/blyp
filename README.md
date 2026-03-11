@@ -179,6 +179,10 @@ export default {
       enabled: true,
       mode: 'auto',
       projectKey: process.env.POSTHOG_PROJECT_KEY,
+      errorTracking: {
+        enabled: true,
+        mode: 'auto',
+      },
     },
   },
 };
@@ -187,14 +191,23 @@ export default {
 In `auto` mode, the normal Blyp server loggers forward to PostHog automatically. In `manual` mode, use `blyp-js/posthog`:
 
 ```typescript
-import { createPosthogLogger, createStructuredPosthogLogger } from 'blyp-js/posthog';
+import {
+  capturePosthogException,
+  createPosthogErrorTracker,
+  createPosthogLogger,
+  createStructuredPosthogLogger,
+} from 'blyp-js/posthog';
 
 createPosthogLogger().info('manual posthog log');
+createPosthogErrorTracker().capture(new Error('manual posthog exception'));
+capturePosthogException(new Error('wrapped posthog exception'));
 
 const structured = createStructuredPosthogLogger('checkout', { orderId: 'ord_123' });
 structured.info('manual start');
 structured.emit({ status: 200 });
 ```
+
+`connectors.posthog.errorTracking.mode: 'auto'` also captures Blyp handled server errors and can enable uncaught exception / unhandled rejection autocapture through `enableExceptionAutocapture`.
 
 Browser and Expo loggers can request server-side PostHog forwarding through the existing ingestion endpoint:
 
@@ -207,7 +220,9 @@ const logger = createClientLogger({
 });
 ```
 
-The client and Expo connector flow still posts to Blyp first. Blyp forwards to PostHog only when the server connector is configured.
+Client `error` and `critical` logs requested through the PostHog connector are promoted to PostHog exceptions only when server-side PostHog error tracking is enabled in `auto` mode.
+
+The client and Expo connector flow still posts to Blyp first. Blyp forwards to PostHog only when the server connector is configured, and browser or Expo apps do not use `posthog-node` directly. Workers remain out of scope for this connector.
 
 ### Sentry
 

@@ -218,6 +218,11 @@ export default {
       mode: 'auto',
       projectKey: process.env.POSTHOG_PROJECT_KEY,
       host: 'https://us.i.posthog.com',
+      errorTracking: {
+        enabled: true,
+        mode: 'auto',
+        enableExceptionAutocapture: true,
+      },
     },
   },
 };
@@ -240,10 +245,17 @@ Static JSON config works too:
 `mode: "auto"` forwards normal server-side Blyp logs to PostHog automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the PostHog subpath:
 
 ```typescript
-import { createPosthogLogger, createStructuredPosthogLogger } from 'blyp-js/posthog';
+import {
+  capturePosthogException,
+  createPosthogErrorTracker,
+  createPosthogLogger,
+  createStructuredPosthogLogger,
+} from 'blyp-js/posthog';
 
 const posthogLogger = createPosthogLogger();
 posthogLogger.info('manual posthog log');
+createPosthogErrorTracker().capture(new Error('manual posthog exception'));
+capturePosthogException(new Error('wrapped posthog exception'));
 
 const structured = createStructuredPosthogLogger('checkout', {
   orderId: 'ord_123',
@@ -251,6 +263,26 @@ const structured = createStructuredPosthogLogger('checkout', {
 structured.info('manual start');
 structured.emit({ status: 200 });
 ```
+
+`connectors.posthog.errorTracking` controls PostHog exception capture:
+
+```typescript
+export default {
+  connectors: {
+    posthog: {
+      enabled: true,
+      projectKey: process.env.POSTHOG_PROJECT_KEY,
+      errorTracking: {
+        enabled: true,
+        mode: 'auto',
+        enableExceptionAutocapture: true,
+      },
+    },
+  },
+};
+```
+
+With `errorTracking.mode: "auto"`, Blyp captures handled server errors, promotes client `error` and `critical` connector logs into PostHog exceptions, and can enable uncaught exception / unhandled rejection autocapture. With `errorTracking.mode: "manual"`, only the explicit `blyp-js/posthog` exception APIs run automatically.
 
 Browser and Expo loggers can request PostHog forwarding through the existing Blyp ingestion route:
 
@@ -272,7 +304,7 @@ const logger = createExpoLogger({
 });
 ```
 
-The browser and Expo connectors do not send directly to PostHog. They continue to send to Blyp's ingestion endpoint and Blyp forwards to PostHog when the server connector is configured. Workers are still out of scope for this connector.
+The browser and Expo connectors do not send directly to PostHog. They continue to send to Blyp's ingestion endpoint and Blyp forwards to PostHog when the server connector is configured. Browser and Expo apps do not use `posthog-node` directly. Workers are still out of scope for this connector.
 
 ---
 

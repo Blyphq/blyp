@@ -3,11 +3,13 @@ import type { ClientLogEvent } from '../../shared/client-log';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
+import { buildPostHogExceptionProperties } from '../../core/posthog';
 import {
   createBaseLogger,
   getOtlpRegistry,
   getPostHogSender,
   getSentrySender,
+  tryGetPostHogSender,
 } from '../../core/logger';
 import {
   buildClientDetails,
@@ -26,6 +28,11 @@ import type {
   ResolvedServerLogger,
   ServerLoggerConfig,
 } from '../../types/frameworks/shared';
+
+interface HttpErrorCaptureContext {
+  error?: unknown;
+  distinctId?: string;
+}
 
 function buildVerboseLogMessage(
   method: string,
@@ -204,7 +211,8 @@ export function emitHttpErrorLog(
   statusCode: number,
   responseTime: number,
   error: ErrorLike | undefined,
-  additionalProps: Record<string, unknown> = {}
+  additionalProps: Record<string, unknown> = {},
+  captureContext: HttpErrorCaptureContext = {}
 ): HttpRequestLog {
   const errorLogData = buildRequestLogData(
     request,
@@ -228,6 +236,36 @@ export function emitHttpErrorLog(
     ? buildInfoLogMessage(request.method, statusCode, path, responseTime)
     : buildVerboseLogMessage(request.method, statusCode, path, responseTime);
   logger.error(message, errorLogData);
+
+  const posthog = tryGetPostHogSender(logger);
+  if (posthog?.shouldAutoCaptureExceptions()) {
+    posthog.captureException(captureContext.error ?? error ?? message, {
+      source: 'server',
+      warnIfUnavailable: true,
+      distinctId:
+        captureContext.distinctId ??
+        getHeaderValue(request.headers, 'x-posthog-distinct-id'),
+      properties: buildPostHogExceptionProperties(
+        {
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          message,
+          data: errorLogData,
+        },
+        'server',
+        {
+          $request_method: request.method,
+          $request_path: path,
+          $current_url: request.url,
+          $response_status_code: statusCode,
+          ...(getHeaderValue(request.headers, 'user-agent')
+            ? { $user_agent: getHeaderValue(request.headers, 'user-agent') }
+            : {}),
+          ...(errorLogData.ip ? { $ip: errorLogData.ip } : {}),
+        }
+      ),
+    });
+  }
 
   return errorLogData;
 }
@@ -327,14 +365,52 @@ export async function handleClientLogIngestion<Ctx>(options: {
     headers['x-blyp-posthog-status'] = config.posthog.ready ? 'enabled' : 'missing';
 
     if (config.posthog.ready) {
-      config.posthog.send({
+      const forwardedRecord = {
         timestamp: structuredPayload.receivedAt as string,
         level: payload.level,
         message: `[client] ${payload.message}`,
         data: structuredPayload,
-      }, {
+      };
+
+      config.posthog.send(forwardedRecord, {
         source: 'client',
       });
+
+      if (
+        (payload.level === 'error' || payload.level === 'critical') &&
+        config.posthog.shouldAutoCaptureExceptions()
+      ) {
+        const metadata = structuredPayload.metadata;
+        const posthogDistinctId =
+          metadata &&
+          typeof metadata === 'object' &&
+          !Array.isArray(metadata) &&
+          typeof (metadata as Record<string, unknown>).posthogDistinctId === 'string' &&
+          (metadata as Record<string, unknown>).posthogDistinctId
+            ? String((metadata as Record<string, unknown>).posthogDistinctId)
+            : undefined;
+
+        const clientErrorCandidate =
+          payload.data &&
+          typeof payload.data === 'object' &&
+          !Array.isArray(payload.data) &&
+          typeof (payload.data as Record<string, unknown>).message === 'string'
+            ? payload.data
+            : payload.message;
+
+        config.posthog.captureException(clientErrorCandidate, {
+          source: 'client',
+          warnIfUnavailable: true,
+          distinctId: posthogDistinctId,
+          properties: buildPostHogExceptionProperties(forwardedRecord, 'client', {
+            $session_id: payload.session.sessionId,
+            $current_url: payload.page.url,
+            $request_path: payload.page.pathname,
+            'client.runtime': payload.device?.runtime,
+            'client.metadata': payload.metadata,
+          }),
+        });
+      }
     }
   } else if (payload.connector === 'sentry') {
     headers['x-blyp-sentry-status'] = config.sentry.ready ? 'enabled' : 'missing';

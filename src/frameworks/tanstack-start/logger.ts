@@ -102,7 +102,10 @@ export function createTanStackStartLogger(
               500,
               Math.round(performance.now() - startTime),
               toErrorLike(error, 500),
-              resolveAdditionalProps(shared, createContext(request, nextContext, undefined, error))
+              resolveAdditionalProps(shared, createContext(request, nextContext, undefined, error)),
+              {
+                error,
+              }
             );
           }
           throw error;

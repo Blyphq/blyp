@@ -74,7 +74,10 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
             res.statusCode,
             responseTime,
             toErrorLike(res.locals.blypError, res.statusCode),
-            resolveAdditionalProps(shared, context)
+            resolveAdditionalProps(shared, context),
+            {
+              error: res.locals.blypError,
+            }
           );
         }
         return;

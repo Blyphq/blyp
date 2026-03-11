@@ -53,7 +53,10 @@ export type {
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
+  PostHogErrorTrackingConfig,
   PostHogConnectorConfig,
+  ResolvedPostHogErrorTrackingConfig,
+  ResolvedPostHogConnectorConfig,
   ResolvedSentryConnectorConfig,
   ResolvedOTLPConnectorConfig,
   SentryConnectorConfig,
@@ -64,6 +67,18 @@ export type { LogRecord } from './core/file-logger';
 export * from './core/helpers';
 export * from './core/colors';
 export { normalizeOTLPRecord } from './core/otlp';
+export {
+  capturePosthogException,
+  createPosthogErrorTracker,
+  createPosthogLogger,
+  createStructuredPosthogLogger,
+} from './frameworks/posthog';
+export type {
+  PostHogErrorTracker,
+  PostHogExceptionCaptureOptions,
+  PostHogLogger,
+  PostHogLoggerConfig,
+} from './frameworks/posthog';
 export { createSentryLogger, createStructuredSentryLogger } from './frameworks/sentry';
 export type { SentryLogger, SentryLoggerConfig } from './frameworks/sentry';
 export { logger, createStandaloneLogger } from './frameworks/standalone';

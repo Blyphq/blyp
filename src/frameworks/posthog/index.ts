@@ -20,6 +20,16 @@ export interface PostHogLoggerConfig {
 
 export interface PostHogLogger extends BlypLogger {}
 
+export interface PostHogExceptionCaptureOptions {
+  distinctId?: string;
+  properties?: Record<string, unknown>;
+}
+
+export interface PostHogErrorTracker {
+  capture: (error: unknown, options?: PostHogExceptionCaptureOptions) => void;
+  child: (bindings: Record<string, unknown>) => PostHogErrorTracker;
+}
+
 function resolveSender(config: PostHogLoggerConfig = {}): PostHogSender {
   return createPostHogSender(resolveConfig({
     ...(config.connectors ? { connectors: config.connectors } : {}),
@@ -102,6 +112,33 @@ function createPostHogLoggerInstance(
   };
 }
 
+function createPostHogErrorTrackerInstance(
+  sender: PostHogSender,
+  bindings: Record<string, unknown> = {}
+): PostHogErrorTracker {
+  return {
+    capture: (error: unknown, options: PostHogExceptionCaptureOptions = {}) => {
+      sender.captureException(error, {
+        source: 'server',
+        warnIfUnavailable: true,
+        distinctId: options.distinctId,
+        properties: {
+          ...bindings,
+          ...(options.properties ?? {}),
+          'blyp.source': 'server',
+          'blyp.manual': true,
+        },
+      });
+    },
+    child: (childBindings: Record<string, unknown>) => {
+      return createPostHogErrorTrackerInstance(sender, {
+        ...bindings,
+        ...childBindings,
+      });
+    },
+  };
+}
+
 export function createPosthogLogger(config: PostHogLoggerConfig = {}): PostHogLogger {
   return createPostHogLoggerInstance(resolveSender(config));
 }
@@ -134,3 +171,16 @@ export function createStructuredPosthogLogger<
   }) as StructuredLog<TFields>;
 }
 
+export function createPosthogErrorTracker(
+  config: PostHogLoggerConfig = {}
+): PostHogErrorTracker {
+  return createPostHogErrorTrackerInstance(resolveSender(config));
+}
+
+export function capturePosthogException(
+  error: unknown,
+  options: PostHogExceptionCaptureOptions = {},
+  config: PostHogLoggerConfig = {}
+): void {
+  createPosthogErrorTracker(config).capture(error, options);
+}

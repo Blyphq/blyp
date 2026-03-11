@@ -95,7 +95,10 @@ export function createFastifyLogger(
             reply.statusCode,
             responseTime,
             toErrorLike(request.blypError, reply.statusCode),
-            resolveAdditionalProps(shared, context)
+            resolveAdditionalProps(shared, context),
+            {
+              error: request.blypError,
+            }
           );
         }
         return;

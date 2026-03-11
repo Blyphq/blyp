@@ -86,7 +86,10 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
               statusCode,
               responseTime,
               toErrorLike(thrownError, statusCode),
-              resolveAdditionalProps(shared, context)
+              resolveAdditionalProps(shared, context),
+              {
+                error: thrownError,
+              }
             );
           }
           return;

@@ -35,6 +35,14 @@ export interface ResolvedPostHogConnector {
   serviceName: string;
   host: string;
   status: 'enabled' | 'missing';
+  errorTracking: {
+    enabled: boolean;
+    ready: boolean;
+    mode: 'auto' | 'manual';
+    status: 'enabled' | 'missing';
+    enableExceptionAutocapture: boolean;
+  };
+  shouldAutoCaptureExceptions: () => boolean;
   send: (
     record: {
       timestamp: string;
@@ -45,6 +53,15 @@ export interface ResolvedPostHogConnector {
     options?: {
       source?: 'server' | 'client';
       warnIfUnavailable?: boolean;
+    }
+  ) => void;
+  captureException: (
+    error: unknown,
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+      distinctId?: string;
+      properties?: Record<string, unknown>;
     }
   ) => void;
 }

@@ -29,6 +29,21 @@ export interface PostHogConnectorConfig {
   projectKey?: string;
   host?: string;
   serviceName?: string;
+  errorTracking?: PostHogErrorTrackingConfig;
+}
+
+export interface PostHogErrorTrackingConfig {
+  enabled?: boolean;
+  mode?: 'auto' | 'manual';
+  enableExceptionAutocapture?: boolean;
+}
+
+export interface ResolvedPostHogErrorTrackingConfig {
+  enabled: boolean;
+  mode: 'auto' | 'manual';
+  enableExceptionAutocapture: boolean;
+  ready: boolean;
+  status: 'enabled' | 'missing';
 }
 
 export interface ResolvedPostHogConnectorConfig {
@@ -37,6 +52,7 @@ export interface ResolvedPostHogConnectorConfig {
   projectKey?: string;
   host: string;
   serviceName: string;
+  errorTracking: ResolvedPostHogErrorTrackingConfig;
 }
 
 export interface SentryConnectorConfig {
@@ -411,17 +427,42 @@ function mergePostHogConnectorConfig(
   base: PostHogConnectorConfig | undefined,
   override: PostHogConnectorConfig | undefined
 ): ResolvedPostHogConnectorConfig {
+  const enabled = override?.enabled ?? base?.enabled ?? false;
+  const projectKey = override?.projectKey ?? base?.projectKey;
+  const baseErrorTracking = base?.enabled === true ? base?.errorTracking : undefined;
+  const errorTrackingMode =
+    override?.errorTracking?.mode ??
+    baseErrorTracking?.mode ??
+    'auto';
+  const errorTrackingEnabled =
+    override?.errorTracking?.enabled ??
+    baseErrorTracking?.enabled ??
+    enabled;
+  const errorTrackingReady =
+    enabled &&
+    errorTrackingEnabled &&
+    typeof projectKey === 'string' &&
+    projectKey.trim().length > 0;
+
   return {
-    enabled: false,
-    mode: 'auto',
-    ...base,
-    ...override,
-    projectKey: override?.projectKey ?? base?.projectKey,
+    enabled,
+    mode: override?.mode ?? base?.mode ?? 'auto',
+    projectKey,
     host: override?.host ?? base?.host ?? DEFAULT_POSTHOG_HOST,
     serviceName:
       override?.serviceName ??
       base?.serviceName ??
       resolveDefaultConnectorServiceName(),
+    errorTracking: {
+      enabled: errorTrackingEnabled,
+      mode: errorTrackingMode,
+      enableExceptionAutocapture:
+        override?.errorTracking?.enableExceptionAutocapture ??
+        baseErrorTracking?.enableExceptionAutocapture ??
+        (errorTrackingMode === 'auto'),
+      ready: errorTrackingReady,
+      status: errorTrackingReady ? 'enabled' : 'missing',
+    },
   };
 }
 

@@ -252,6 +252,7 @@
     "@opentelemetry/resources": "^2.1.0",
     "@opentelemetry/sdk-logs": "^0.206.0",
     "jiti": "^2.4.2",
+    "posthog-node": "^5.28.1",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0"
   }

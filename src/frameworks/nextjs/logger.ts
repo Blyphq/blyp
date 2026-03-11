@@ -107,7 +107,10 @@ export function createNextJsLogger(
                 500,
                 Math.round(performance.now() - startTime),
                 toErrorLike(error, 500),
-                resolveAdditionalProps(shared, createContext(request, context, undefined, error))
+                resolveAdditionalProps(shared, createContext(request, context, undefined, error)),
+                {
+                  error,
+                }
               );
             }
             throw error;

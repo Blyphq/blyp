@@ -71,7 +71,10 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
           statusCode,
           responseTime,
           requestContext.error,
-          resolveAdditionalProps(shared, requestContext)
+          resolveAdditionalProps(shared, requestContext),
+          {
+            error: requestContext.error,
+          }
         );
         return;
       }
@@ -110,7 +113,10 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
         statusCode,
         responseTime,
         requestContext.error,
-        resolveAdditionalProps(shared, requestContext)
+        resolveAdditionalProps(shared, requestContext),
+        {
+          error: requestContext.error,
+        }
       );
     });
 

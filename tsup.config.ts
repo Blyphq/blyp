@@ -49,6 +49,7 @@ export default defineConfig([
       'winston',
       'chalk',
       '@sentry/node',
+      'posthog-node',
       '@opentelemetry/api-logs',
       '@opentelemetry/exporter-logs-otlp-http',
       '@opentelemetry/resources',

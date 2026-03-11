@@ -64,7 +64,10 @@ export class BlypNestExceptionFilter extends BaseExceptionFilter {
           statusCode,
           responseTime,
           toErrorLike(exception, statusCode),
-          resolveAdditionalProps(this.state, loggerContext)
+          resolveAdditionalProps(this.state, loggerContext),
+          {
+            error: exception,
+          }
         );
       }
     }

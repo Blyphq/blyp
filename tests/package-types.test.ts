@@ -48,6 +48,8 @@ describe('Package type shims', () => {
     expect(expoTypes).toContain('createExpoLogger');
     expect(expoTypes).toContain("from './frameworks/expo'");
     expect(posthogTypes).toContain('createPosthogLogger');
+    expect(posthogTypes).toContain('createPosthogErrorTracker');
+    expect(posthogTypes).toContain('capturePosthogException');
     expect(posthogTypes).toContain("from './frameworks/posthog'");
     expect(otlpTypes).toContain('createOtlpLogger');
     expect(otlpTypes).toContain("from './frameworks/otlp'");

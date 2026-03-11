@@ -11,6 +11,7 @@ import {
   type BlypErrorLike,
 } from '../shared/errors';
 import { logger as defaultLogger } from './logger';
+import { tryGetPostHogSender } from './logger';
 
 export type {
   ErrorLogLevel,
@@ -40,6 +41,24 @@ export function createError(input: CreateErrorInput): BlypError {
 
   if (input.skipLogging !== true) {
     emitErrorLog(input.logger ?? defaultLogger, error, input.logLevel);
+
+    const posthog = tryGetPostHogSender(input.logger ?? defaultLogger);
+    if (posthog?.shouldAutoCaptureExceptions()) {
+      posthog.captureException(error, {
+        source: 'server',
+        warnIfUnavailable: true,
+        properties: {
+          'blyp.type': 'application_error',
+          status: error.status,
+          statusCode: error.statusCode,
+          ...(error.code !== undefined ? { code: error.code } : {}),
+          ...(error.why !== undefined ? { why: error.why } : {}),
+          ...(error.fix !== undefined ? { fix: error.fix } : {}),
+          ...(error.link !== undefined ? { link: error.link } : {}),
+          ...(error.details !== undefined ? { details: error.details } : {}),
+        },
+      });
+    }
   }
 
   return error;

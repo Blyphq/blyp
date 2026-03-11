@@ -100,7 +100,10 @@ export function createSvelteKitLogger(
             500,
             Math.round(performance.now() - startTime),
             toErrorLike(error, 500),
-            resolveAdditionalProps(shared, createContext(event, undefined, error))
+            resolveAdditionalProps(shared, createContext(event, undefined, error)),
+            {
+              error,
+            }
           );
         }
         throw error;

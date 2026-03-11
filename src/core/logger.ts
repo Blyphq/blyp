@@ -214,6 +214,14 @@ export function getPostHogSender(logger: BlypLogger): PostHogSender {
   return getLoggerFactory(logger).posthog;
 }
 
+export function tryGetPostHogSender(logger: unknown): PostHogSender | null {
+  try {
+    return getPostHogSender(logger as BlypLogger);
+  } catch {
+    return null;
+  }
+}
+
 export function getSentrySender(logger: BlypLogger): SentrySender {
   return getLoggerFactory(logger).sentry;
 }
