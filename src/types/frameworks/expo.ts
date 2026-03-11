@@ -11,7 +11,45 @@ import type {
   RemoteDeliveryFailureReason,
   RemoteDeliveryRetryContext,
   RemoteDeliverySuccessContext,
-} from '../../shared/client-log';
+} from '../shared/client-log';
+
+export interface ExpoLoggerState {
+  readonly pageId: string;
+  readonly sessionId: string;
+  readonly bindings: Record<string, unknown>;
+  readonly delivery?: {
+    enqueue: (event: ClientLogEvent) => void;
+  };
+}
+
+export type ExpoLogLevel =
+  | 'warn'
+  | 'debug'
+  | 'info'
+  | 'warning'
+  | 'error'
+  | 'critical'
+  | 'success'
+  | 'table';
+
+export interface ExpoNetworkSubscription {
+  remove: () => void;
+}
+
+export interface ExpoNetworkState {
+  type?: unknown;
+  isConnected?: unknown;
+  isInternetReachable?: unknown;
+}
+
+export interface ExpoNetworkModule {
+  getNetworkStateAsync: () => Promise<ExpoNetworkState>;
+  addNetworkStateListener?: (
+    listener: (event: ExpoNetworkState) => void
+  ) => ExpoNetworkSubscription;
+}
+
+export type ExpoNetworkLoader = () => Promise<ExpoNetworkModule | null>;
 
 export interface ExpoLoggerConfig {
   endpoint: string;

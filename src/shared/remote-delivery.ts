@@ -1,59 +1,28 @@
 import type {
   ClientLogEvent,
   RemoteDeliveryConfig,
-  RemoteDeliveryDropContext,
-  RemoteDeliveryFailureContext,
   RemoteDeliveryFailureReason,
-  RemoteDeliveryRetryContext,
   RemoteDeliveryRuntime,
-  RemoteDeliverySuccessContext,
   RemoteDeliveryTransport,
-} from './client-log';
+} from '../types/shared/client-log';
+import type {
+  DeliveryAttemptFailure,
+  DeliveryAttemptResult,
+  DeliveryAttemptRetry,
+  DeliveryAttemptSuccess,
+  RemoteDeliveryManagerOptions,
+} from '../types/shared/remote-delivery';
+
+export type {
+  DeliveryAttemptFailure,
+  DeliveryAttemptResult,
+  DeliveryAttemptRetry,
+  DeliveryAttemptSuccess,
+} from '../types/shared/remote-delivery';
 
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_MS = 5_000;
 const DEFAULT_MAX_QUEUE_SIZE = 100;
-
-type RetryReason = 'offline' | 'network_error' | 'response_status';
-
-interface QueueItem {
-  event: ClientLogEvent;
-  attempt: number;
-  nextAttemptAt: number;
-}
-
-export interface DeliveryAttemptSuccess {
-  outcome: 'success';
-  transport: RemoteDeliveryTransport;
-  status?: number;
-}
-
-export interface DeliveryAttemptRetry {
-  outcome: 'retry';
-  reason: RetryReason;
-  status?: number;
-  error?: string;
-}
-
-export interface DeliveryAttemptFailure {
-  outcome: 'failure';
-  reason: Exclude<RemoteDeliveryFailureReason, 'queue_overflow'>;
-  status?: number;
-  error?: string;
-  suppressWarning?: boolean;
-}
-
-export type DeliveryAttemptResult =
-  | DeliveryAttemptSuccess
-  | DeliveryAttemptRetry
-  | DeliveryAttemptFailure;
-
-interface RemoteDeliveryManagerOptions {
-  runtime: RemoteDeliveryRuntime;
-  delivery?: RemoteDeliveryConfig;
-  send: (event: ClientLogEvent) => Promise<DeliveryAttemptResult>;
-  subscribeToResume?: (resume: () => void) => (() => void) | void;
-}
 
 function clampInteger(value: number | undefined, fallback: number, minimum: number): number {
   if (!Number.isFinite(value)) {

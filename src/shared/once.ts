@@ -1,6 +1,6 @@
-export type ConsoleOnceLogger = (key: string, message: string, error?: unknown) => void;
+import type { ConsoleMethod, ConsoleOnceLogger } from '../types/shared/once';
 
-type ConsoleMethod = 'warn' | 'error';
+export type { ConsoleOnceLogger } from '../types/shared/once';
 
 function createConsoleOnceLogger(
   method: ConsoleMethod,

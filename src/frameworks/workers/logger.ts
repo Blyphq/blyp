@@ -11,25 +11,13 @@ import {
 } from '../shared/http';
 import { createStructuredLog } from '../../core/structured-log';
 import type {
+  WorkersConsoleMethod,
   WorkersEmitOptions,
   WorkersLoggerConfig,
+  WorkersLogLevel,
   WorkersRequestLogger,
+  WorkersLoggerState,
 } from '../../types/frameworks/workers';
-
-interface WorkersLoggerState {
-  env?: Record<string, unknown>;
-  customProps?: (request: Request) => Record<string, unknown>;
-}
-
-type ConsoleMethod = 'debug' | 'info' | 'warn' | 'error' | 'log';
-type WorkersLogLevel =
-  | 'debug'
-  | 'info'
-  | 'warn'
-  | 'warning'
-  | 'error'
-  | 'success'
-  | 'critical';
 
 let workersLoggerState: WorkersLoggerState = {};
 
@@ -76,7 +64,7 @@ function normalizeStructuredData(message: unknown, args: unknown[]): unknown {
   return values.length === 1 ? values[0] : values;
 }
 
-function getConsoleMethod(level: WorkersLogLevel): ConsoleMethod {
+function getConsoleMethod(level: WorkersLogLevel): WorkersConsoleMethod {
   switch (level) {
     case 'debug':
       return 'debug';
@@ -94,7 +82,7 @@ function getConsoleMethod(level: WorkersLogLevel): ConsoleMethod {
   }
 }
 
-function writeConsole(method: ConsoleMethod, message: string, payload?: unknown): void {
+function writeConsole(method: WorkersConsoleMethod, message: string, payload?: unknown): void {
   if (typeof console === 'undefined') {
     return;
   }

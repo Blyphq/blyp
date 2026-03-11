@@ -4,33 +4,18 @@ import {
   emitErrorLog,
   getHttpCode as getSharedHttpCode,
   resolveErrorConfig,
-  type BlypErrorCode,
-  type ErrorLoggerLike,
-  type ErrorLogLevel
+  type BlypErrorCode
 } from '../shared/errors';
+import type { CreateErrorInput } from '../types/core/errors';
 import { logger as defaultLogger, tryGetPostHogSender } from './logger';
 
 export type {
   BlypErrorCode,
   BlypErrorCodeDefinition,
-  BlypErrorLike, ErrorLogLevel
+  BlypErrorLike,
+  ErrorLogLevel
 } from '../shared/errors';
-
-export interface CreateErrorInput {
-  status?: number;
-  message?: string;
-  code?: string | number;
-  why?: string;
-  fix?: string;
-  link?: string;
-  details?: Record<string, unknown>;
-  cause?: unknown;
-  logger?: ErrorLoggerLike;
-  logLevel?: ErrorLogLevel;
-  skipLogging?: boolean;
-}
-
-export interface CreateErrorOverrides extends Omit<CreateErrorInput, 'status'> {}
+export type { CreateErrorInput, CreateErrorOverrides } from '../types/core/errors';
 
 export function createError(input: CreateErrorInput): BlypError {
   const error = new BlypError(resolveErrorConfig(input));

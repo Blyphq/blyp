@@ -4,15 +4,9 @@ import {
   type BlypLogger,
 } from '../../core/logger';
 import { serializeLogMessage } from '../../shared/log-value';
-import type { StandaloneLoggerConfig } from '../../types/frameworks/standalone';
+import type { StandaloneLogger, StandaloneLoggerConfig } from '../../types/frameworks/standalone';
 
-export interface StandaloneLogger extends BlypLogger {
-  success: (message: string | unknown, meta?: unknown) => void;
-  critical: (message: string | unknown, meta?: unknown) => void;
-  table: (message: string, data?: unknown) => void;
-  warn: (message: unknown, ...args: unknown[]) => void;
-  warning: (message: unknown, ...args: unknown[]) => void;
-}
+export type { StandaloneLogger } from '../../types/frameworks/standalone';
 
 function buildStructuredArgs(message: unknown, args: unknown[]): { text: string; data: unknown[] } {
   const text = serializeMessage(message);

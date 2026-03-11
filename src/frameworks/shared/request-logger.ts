@@ -10,11 +10,9 @@ import {
   markStructuredLogEmitted,
   setActiveRequestLogger,
 } from './request-context';
+import type { RequestScopedLoggerOptions } from '../../types/frameworks/request-logger';
 
-export interface RequestScopedLoggerOptions {
-  resolveStructuredFields?: () => Record<string, unknown>;
-  onStructuredEmit?: () => void;
-}
+export type { RequestScopedLoggerOptions } from '../../types/frameworks/request-logger';
 
 export function createRequestScopedLogger(
   logger: BlypLogger,

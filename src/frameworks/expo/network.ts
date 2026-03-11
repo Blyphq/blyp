@@ -1,23 +1,10 @@
 import type { ClientLogDeviceContext } from '../../shared/client-log';
-
-interface ExpoNetworkSubscription {
-  remove: () => void;
-}
-
-interface ExpoNetworkState {
-  type?: unknown;
-  isConnected?: unknown;
-  isInternetReachable?: unknown;
-}
-
-interface ExpoNetworkModule {
-  getNetworkStateAsync: () => Promise<ExpoNetworkState>;
-  addNetworkStateListener?: (
-    listener: (event: ExpoNetworkState) => void
-  ) => ExpoNetworkSubscription;
-}
-
-type ExpoNetworkLoader = () => Promise<ExpoNetworkModule | null>;
+import type {
+  ExpoNetworkLoader,
+  ExpoNetworkModule,
+  ExpoNetworkState,
+  ExpoNetworkSubscription,
+} from '../../types/frameworks/expo';
 
 let expoNetworkLoader: ExpoNetworkLoader = async () => {
   try {

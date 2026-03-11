@@ -6,8 +6,8 @@ import {
   buildStructuredRecord,
   resolveStructuredWriteLevel,
   serializeMessage,
-  type LogMethodName,
 } from './log-record';
+import type { LogMethodName } from '../types/core/log-record';
 import {
   createFileLogger,
   type RotatingFileLogger,
@@ -28,53 +28,19 @@ import type { OTLPRegistry } from '../types/connectors/otlp';
 import { runtime } from './runtime';
 import {
   createStructuredLog as createStructuredLogCollector,
-  type StructuredLog,
-  type StructuredLogPayload,
 } from './structured-log';
+import type { StructuredLog, StructuredLogPayload } from '../types/core/structured-log';
+import type {
+  BlypLogger,
+  InternalBlypLogger,
+  InternalLoggerSource,
+  LoggerFactoryHandle,
+  StructuredLogFactoryOptions,
+} from '../types/core/logger';
 
-export interface BlypLogger {
-  success: (message: unknown, ...args: unknown[]) => void;
-  critical: (message: unknown, ...args: unknown[]) => void;
-  warning: (message: unknown, ...args: unknown[]) => void;
-  info: (message: unknown, ...args: unknown[]) => void;
-  debug: (message: unknown, ...args: unknown[]) => void;
-  error: (message: unknown, ...args: unknown[]) => void;
-  warn: (message: unknown, ...args: unknown[]) => void;
-  table: (message: string, data?: unknown) => void;
-  createStructuredLog: (
-    groupId: string,
-    initial?: Record<string, unknown>
-  ) => StructuredLog;
-  child: (bindings: Record<string, unknown>) => BlypLogger;
-}
-
-export type InternalLoggerSource = 'root' | 'request-scoped' | 'structured-flush';
-
-interface StructuredLogFactoryOptions {
-  initialFields?: Record<string, unknown>;
-  resolveDefaultFields?: () => Record<string, unknown>;
-  onCreate?: () => void;
-  onEmit?: (payload: StructuredLogPayload) => void;
-}
-
-interface LoggerFactoryHandle {
-  bindings: Record<string, unknown>;
-  posthog: PostHogSender;
-  sentry: SentrySender;
-  otlp: OTLPRegistry;
-  create: (source: InternalLoggerSource, bindings?: Record<string, unknown>) => BlypLogger;
-  writeStructured: (
-    payload: StructuredLogPayload,
-    message: string,
-    source?: InternalLoggerSource
-  ) => void;
-}
+export type { BlypLogger } from '../types/core/logger';
 
 const LOGGER_FACTORY = Symbol('blyp.logger.factory');
-
-type InternalBlypLogger = BlypLogger & {
-  [LOGGER_FACTORY]: LoggerFactoryHandle;
-};
 
 export const CUSTOM_LEVELS: Record<string, number> = {
   success: 25,

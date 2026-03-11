@@ -18,21 +18,14 @@ import {
   getHeaderValue,
   extractPathname,
   isErrorStatus,
-  type ErrorLike,
-  type HttpRequestLog,
-  type RequestLike,
-  type ResolveLike,
 } from './http';
+import type { ErrorLike, HttpRequestLog, RequestLike, ResolveLike } from '../../types/frameworks/http';
 import type {
   ClientLogIngestionConfig,
   ResolvedServerLogger,
   ServerLoggerConfig,
 } from '../../types/frameworks/shared';
-
-interface HttpErrorCaptureContext {
-  error?: unknown;
-  distinctId?: string;
-}
+import type { HttpErrorCaptureContext } from '../../types/frameworks/request-logger';
 
 function buildVerboseLogMessage(
   method: string,

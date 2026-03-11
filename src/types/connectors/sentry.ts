@@ -4,9 +4,9 @@ import type {
   BlypConnectorsConfig,
   ResolvedSentryConnectorConfig,
   SentryConnectorConfig,
-} from '../../core/config';
-import type { LogRecord } from '../../core/file-logger';
-import type { BlypLogger } from '../../core/logger';
+} from '../core/config';
+import type { LogRecord } from '../core/file-logger';
+import type { BlypLogger } from '../core/logger';
 import type { ConnectorMode } from './mode';
 
 export interface SentryLoggerConfig {

@@ -21,16 +21,8 @@ import { createErrorOnceLogger } from '../../shared/once';
 import type {
   ClientLogger,
   ClientLoggerConfig,
+  ClientLoggerState,
 } from '../../types/frameworks/client';
-
-interface ClientLoggerState {
-  readonly pageId: string;
-  readonly sessionId: string;
-  readonly bindings: Record<string, unknown>;
-  readonly delivery?: {
-    enqueue: (event: ClientLogEvent) => void;
-  };
-}
 
 const warnedMessages = new Set<string>();
 const errorOnce = createErrorOnceLogger(warnedMessages);

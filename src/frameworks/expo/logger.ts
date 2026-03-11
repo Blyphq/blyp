@@ -16,31 +16,17 @@ import {
   createWarnOnceLogger,
 } from '../../shared/once';
 import { isAbsoluteHttpUrl } from '../../shared/validation';
-import type { ExpoLogger, ExpoLoggerConfig } from '../../types/frameworks/expo';
+import type {
+  ExpoLogLevel,
+  ExpoLogger,
+  ExpoLoggerConfig,
+  ExpoLoggerState,
+} from '../../types/frameworks/expo';
 import {
   getExpoNetworkSnapshot,
   loadExpoNetworkModule,
   subscribeToExpoNetworkState,
 } from './network';
-
-interface ExpoLoggerState {
-  readonly pageId: string;
-  readonly sessionId: string;
-  readonly bindings: Record<string, unknown>;
-  readonly delivery?: {
-    enqueue: (event: ClientLogEvent) => void;
-  };
-}
-
-type ExpoLogLevel =
-  | 'warn'
-  | 'debug'
-  | 'info'
-  | 'warning'
-  | 'error'
-  | 'critical'
-  | 'success'
-  | 'table';
 
 const expoSessionId = createRandomId();
 const warnedMessages = new Set<string>();

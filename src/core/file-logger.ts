@@ -2,42 +2,17 @@ import fs from 'fs';
 import path from 'path';
 import { gzipSync } from 'fflate';
 import type { BlypConfig } from './config';
+import type {
+  FileLoggerDependencies,
+  LogRecord,
+  ResolvedFileLoggerConfig,
+  StreamState,
+} from '../types/core/file-logger';
+
+export type { LogRecord } from '../types/core/file-logger';
 
 function gzipBuffer(buf: Buffer): Buffer {
   return Buffer.from(gzipSync(buf));
-}
-
-export interface LogRecord {
-  timestamp: string;
-  level: string;
-  message: string;
-  caller?: string;
-  data?: unknown;
-  bindings?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-interface StreamState {
-  activePath: string;
-  archivePrefix: string;
-  bytes: number;
-  queue: string[];
-  processing: boolean;
-}
-
-interface FileLoggerDependencies {
-  gzip?: (input: Buffer) => Buffer;
-  warn?: (message: string, error?: unknown) => void;
-}
-
-interface ResolvedFileLoggerConfig {
-  enabled: boolean;
-  dir: string;
-  archiveDir: string;
-  rotationEnabled: boolean;
-  maxSizeBytes: number;
-  maxArchives: number;
-  compress: boolean;
 }
 
 function warnWithConsole(message: string, error?: unknown): void {

@@ -2,9 +2,9 @@ import type { SeverityNumber } from '@opentelemetry/api-logs';
 import type {
   BlypConnectorsConfig,
   ResolvedOTLPConnectorConfig,
-} from '../../core/config';
-import type { LogRecord } from '../../core/file-logger';
-import type { BlypLogger } from '../../core/logger';
+} from '../core/config';
+import type { LogRecord } from '../core/file-logger';
+import type { BlypLogger } from '../core/logger';
 import type { ConnectorMode } from './mode';
 
 export interface OTLPLoggerConfig {

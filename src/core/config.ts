@@ -1,124 +1,40 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, resolve } from 'path';
 import { createJiti } from 'jiti';
+import { dirname, resolve } from 'path';
 import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../shared/client-log';
 import { createWarnOnceLogger } from '../shared/once';
 import { hasNonEmptyString, isAbsoluteHttpUrl } from '../shared/validation';
-import type { ConnectorMode } from '../types/connectors/mode';
+import type {
+  BlypConfig,
+  BlypConnectorsConfig,
+  ClientLoggingConfig,
+  ConfigFileMatch,
+  LogFileConfig,
+  LogRotationConfig,
+  OTLPConnectorConfig,
+  PostHogConnectorConfig,
+  ResolvedOTLPConnectorConfig,
+  ResolvedPostHogConnectorConfig,
+  ResolvedSentryConnectorConfig,
+  SentryConnectorConfig
+} from '../types/core/config';
 
 export type { ConnectorMode } from '../types/connectors/mode';
-
-export interface LogRotationConfig {
-  enabled?: boolean;
-  maxSizeBytes?: number;
-  maxArchives?: number;
-  compress?: boolean;
-}
-
-export interface LogFileConfig {
-  enabled?: boolean;
-  dir?: string;
-  archiveDir?: string;
-  format?: 'ndjson';
-  rotation?: LogRotationConfig;
-}
-
-export interface ClientLoggingConfig {
-  enabled?: boolean;
-  path?: string;
-}
-
-export interface PostHogConnectorConfig {
-  enabled?: boolean;
-  mode?: ConnectorMode;
-  projectKey?: string;
-  host?: string;
-  serviceName?: string;
-  errorTracking?: PostHogErrorTrackingConfig;
-}
-
-export interface PostHogErrorTrackingConfig {
-  enabled?: boolean;
-  mode?: ConnectorMode;
-  enableExceptionAutocapture?: boolean;
-}
-
-export interface ResolvedPostHogErrorTrackingConfig {
-  enabled: boolean;
-  mode: ConnectorMode;
-  enableExceptionAutocapture: boolean;
-  ready: boolean;
-  status: 'enabled' | 'missing';
-}
-
-export interface ResolvedPostHogConnectorConfig {
-  enabled: boolean;
-  mode: ConnectorMode;
-  projectKey?: string;
-  host: string;
-  serviceName: string;
-  errorTracking: ResolvedPostHogErrorTrackingConfig;
-}
-
-export interface SentryConnectorConfig {
-  enabled?: boolean;
-  mode?: ConnectorMode;
-  dsn?: string;
-  environment?: string;
-  release?: string;
-}
-
-export interface ResolvedSentryConnectorConfig {
-  enabled: boolean;
-  mode: ConnectorMode;
-  dsn?: string;
-  environment?: string;
-  release?: string;
-  ready: boolean;
-  status: 'enabled' | 'missing';
-}
-
-export interface OTLPConnectorConfig {
-  name: string;
-  enabled?: boolean;
-  mode?: ConnectorMode;
-  endpoint?: string;
-  headers?: Record<string, string>;
-  auth?: string;
-  serviceName?: string;
-}
-
-export interface ResolvedOTLPConnectorConfig {
-  name: string;
-  enabled: boolean;
-  mode: ConnectorMode;
-  endpoint?: string;
-  headers: Record<string, string>;
-  auth?: string;
-  serviceName: string;
-  ready: boolean;
-  status: 'enabled' | 'missing';
-}
-
-export interface BlypConnectorsConfig {
-  posthog?: PostHogConnectorConfig;
-  sentry?: SentryConnectorConfig;
-  otlp?: OTLPConnectorConfig[];
-}
-
-export interface BlypConfig {
-  pretty: boolean;
-  level: string;
-  logDir?: string;
-  file?: LogFileConfig;
-  clientLogging?: ClientLoggingConfig;
-  connectors?: BlypConnectorsConfig;
-}
-
-interface ConfigFileMatch {
-  path: string;
-  type: 'json' | 'jiti';
-}
+export type {
+  BlypConfig,
+  BlypConnectorsConfig,
+  ClientLoggingConfig,
+  LogFileConfig,
+  LogRotationConfig,
+  OTLPConnectorConfig,
+  PostHogConnectorConfig,
+  PostHogErrorTrackingConfig,
+  ResolvedOTLPConnectorConfig,
+  ResolvedPostHogConnectorConfig,
+  ResolvedPostHogErrorTrackingConfig,
+  ResolvedSentryConnectorConfig,
+  SentryConnectorConfig
+} from '../types/core/config';
 
 const PACKAGE_NAME = 'blyp-js';
 const GITIGNORE_FILE_NAME = '.gitignore';

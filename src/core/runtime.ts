@@ -1,4 +1,4 @@
-import type { RuntimeAdapter, RuntimeType } from '../types';
+import type { RuntimeAdapter, RuntimeType } from '../types/frameworks/standalone';
 import fs from 'fs';
 import path from 'path';
 

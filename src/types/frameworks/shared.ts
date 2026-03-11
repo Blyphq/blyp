@@ -1,6 +1,6 @@
-import type { BlypConfig, BlypConnectorsConfig, LogFileConfig } from '../../core/config';
-import type { BlypLogger } from '../../core/logger';
-import type { ClientLogEvent } from '../../shared/client-log';
+import type { BlypConfig, BlypConnectorsConfig, LogFileConfig } from '../core/config';
+import type { BlypLogger } from '../core/logger';
+import type { ClientLogEvent } from '../shared/client-log';
 import type { ConnectorMode } from '../connectors/mode';
 import type { HttpRequestLog } from './http';
 

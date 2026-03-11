@@ -8,10 +8,9 @@ import {
 import { isPlainObject } from '../../shared/validation';
 import type {
   NestAdapterType,
+  NestHeaderRecord,
   NestLoggerContext,
 } from '../../types/frameworks/nestjs';
-
-type NestHeaderRecord = Record<string, string | string[] | undefined>;
 
 export function resolveNestAdapterType(
   request: unknown,

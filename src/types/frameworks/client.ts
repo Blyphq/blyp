@@ -13,7 +13,7 @@ import type {
   RemoteDeliveryFailureReason,
   RemoteDeliveryRetryContext,
   RemoteDeliverySuccessContext,
-} from '../../shared/client-log';
+} from '../shared/client-log';
 import type {
   ErrorLogLevel,
   ErrorLoggerLike,
@@ -22,7 +22,16 @@ import type {
   BlypErrorCode,
   BlypErrorCodeDefinition,
   BlypErrorLike,
-} from '../../shared/errors';
+} from '../shared/errors';
+
+export interface ClientLoggerState {
+  readonly pageId: string;
+  readonly sessionId: string;
+  readonly bindings: Record<string, unknown>;
+  readonly delivery?: {
+    enqueue: (event: ClientLogEvent) => void;
+  };
+}
 
 export interface ClientLoggerConfig {
   endpoint?: string;

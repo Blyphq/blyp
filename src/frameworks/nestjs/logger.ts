@@ -9,12 +9,8 @@ import { BLYP_NEST_LOGGER_INIT_ERROR } from './constants';
 import type {
   NestLoggerConfig,
   NestLoggerContext,
+  NestLoggerState,
 } from '../../types/frameworks/nestjs';
-
-export interface NestLoggerState
-  extends Omit<ResolvedServerLogger<NestLoggerContext>, 'logger'> {
-  logger: StandaloneLogger;
-}
 
 let nestLoggerState: NestLoggerState | null = null;
 

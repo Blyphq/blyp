@@ -1,11 +1,9 @@
 import fs from 'fs';
 import { gunzipSync } from 'fflate';
 import type { LogRecord } from './file-logger';
+import type { ReadLogFileOptions } from '../types/core/log-reader';
 
-export interface ReadLogFileOptions {
-  format?: 'pretty' | 'json';
-  limit?: number;
-}
+export type { ReadLogFileOptions } from '../types/core/log-reader';
 
 function createFallbackRecord(line: string): LogRecord {
   return {
