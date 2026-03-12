@@ -215,7 +215,6 @@ export function normalizePostHogRecord(
 ): PostHogNormalizedRecord {
   const severity = resolveSeverity(record.level);
   const body = typeof record.message === 'string' ? record.message : String(record.message);
-  const recordType = getRecordType(record);
   return {
     body,
     severityText: severity.text,
@@ -226,7 +225,6 @@ export function normalizePostHogRecord(
     },
   };
 }
-
 function resolveSeverity(level: string): { text: string; number: SeverityNumber } {
   switch (level) {
     case 'debug':

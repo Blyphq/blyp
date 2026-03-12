@@ -1,23 +1,21 @@
 import type {
   ClientLogEvent,
   RemoteDeliveryConfig,
-  RemoteDeliveryFailureReason,
-  RemoteDeliveryRuntime,
-  RemoteDeliveryTransport,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext
 } from '../types/shared/client-log';
 import type {
-  DeliveryAttemptFailure,
-  DeliveryAttemptResult,
-  DeliveryAttemptRetry,
-  DeliveryAttemptSuccess,
-  RemoteDeliveryManagerOptions,
+  QueueItem,
+  RemoteDeliveryManagerOptions
 } from '../types/shared/remote-delivery';
 
 export type {
   DeliveryAttemptFailure,
   DeliveryAttemptResult,
   DeliveryAttemptRetry,
-  DeliveryAttemptSuccess,
+  DeliveryAttemptSuccess
 } from '../types/shared/remote-delivery';
 
 const DEFAULT_MAX_RETRIES = 3;

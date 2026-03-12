@@ -111,14 +111,19 @@ function registerShutdownHooks(key: string, shutdown: () => Promise<void>): void
   const handlers: Array<NodeJS.Signals | 'beforeExit'> = ['beforeExit', 'SIGINT', 'SIGTERM'];
 
   for (const event of handlers) {
-    process.once(event, () => {
-      void shutdown().catch((error) => {
+    process.once(event, async () => {
+      try {
+        await shutdown();
+      } catch (error) {
         warnOnce(
           `${key}:shutdown`,
           '[Blyp] Failed to flush OTLP logs during shutdown.',
           error
         );
-      });
+      }
+      if (event !== 'beforeExit') {
+        process.exit(0);
+      }
     });
   }
 }
@@ -250,12 +255,6 @@ function createSender(connector: ResolvedOTLPConnectorConfig): OTLPSender {
     testHooks.createTransport?.(transportConnector) ??
     createDefaultTransport(transportConnector);
 
-  if (transport.shutdown) {
-    registerShutdownHooks(key, transport.shutdown);
-  } else if (transport.flush) {
-    registerShutdownHooks(key, transport.flush);
-  }
-
   return {
     name: connector.name,
     enabled: connector.enabled,
@@ -312,7 +311,7 @@ export function createOTLPRegistry(
     senders.set(connector.name, createSender(connector));
   }
 
-  return {
+  const registry: OTLPRegistry = {
     get(name: string) {
       return senders.get(name) ?? createUnavailableSender(name);
     },
@@ -327,6 +326,10 @@ export function createOTLPRegistry(
       await Promise.all(Array.from(senders.values()).map((sender) => sender.flush()));
     },
   };
+
+  registerShutdownHooks('otlp-registry', () => registry.flush());
+
+  return registry;
 }
 
 export function setOTLPTestHooks(hooks: OTLPTestHooks): void {
