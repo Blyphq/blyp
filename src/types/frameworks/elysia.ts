@@ -1,4 +1,5 @@
-import type { BlypErrorLike } from '../../shared/errors';
+import type { BlypErrorLike } from '../shared/errors';
+import type { ResolveCtx } from '../core/helpers';
 import type {
   ClientLogIngestionConfig as SharedClientLogIngestionConfig,
   HttpRequestLog,
@@ -25,13 +26,7 @@ export interface ElysiaContext {
   [key: string]: unknown;
 }
 
-export interface ResolveCtx {
-  set?: { status?: number | string };
-  error?: Pick<BlypErrorLike, 'status' | 'statusCode' | 'code'>;
-  code?: string;
-}
-
-export type { HttpRequestLog };
+export type { ResolveCtx, HttpRequestLog };
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

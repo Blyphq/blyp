@@ -17,30 +17,15 @@ import {
   createRemoteDeliveryManager,
   type DeliveryAttemptResult,
 } from '../../shared/remote-delivery';
+import { createErrorOnceLogger } from '../../shared/once';
 import type {
   ClientLogger,
   ClientLoggerConfig,
+  ClientLoggerState,
 } from '../../types/frameworks/client';
 
-interface ClientLoggerState {
-  readonly pageId: string;
-  readonly sessionId: string;
-  readonly bindings: Record<string, unknown>;
-  readonly delivery?: {
-    enqueue: (event: ClientLogEvent) => void;
-  };
-}
-
 const warnedMessages = new Set<string>();
-
-function errorOnce(key: string, message: string): void {
-  if (warnedMessages.has(key) || typeof console === 'undefined') {
-    return;
-  }
-
-  warnedMessages.add(key);
-  console.error(message);
-}
+const errorOnce = createErrorOnceLogger(warnedMessages);
 
 function resolveHeaders(headers: Record<string, string> | undefined): Record<string, string> {
   return {

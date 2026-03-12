@@ -1,119 +1,40 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, resolve } from 'path';
 import { createJiti } from 'jiti';
+import { dirname, resolve } from 'path';
 import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../shared/client-log';
+import { createWarnOnceLogger } from '../shared/once';
+import { hasNonEmptyString, isAbsoluteHttpUrl } from '../shared/validation';
+import type {
+  BlypConfig,
+  BlypConnectorsConfig,
+  ClientLoggingConfig,
+  ConfigFileMatch,
+  LogFileConfig,
+  LogRotationConfig,
+  OTLPConnectorConfig,
+  PostHogConnectorConfig,
+  ResolvedOTLPConnectorConfig,
+  ResolvedPostHogConnectorConfig,
+  ResolvedSentryConnectorConfig,
+  SentryConnectorConfig
+} from '../types/core/config';
 
-export interface LogRotationConfig {
-  enabled?: boolean;
-  maxSizeBytes?: number;
-  maxArchives?: number;
-  compress?: boolean;
-}
-
-export interface LogFileConfig {
-  enabled?: boolean;
-  dir?: string;
-  archiveDir?: string;
-  format?: 'ndjson';
-  rotation?: LogRotationConfig;
-}
-
-export interface ClientLoggingConfig {
-  enabled?: boolean;
-  path?: string;
-}
-
-export interface PostHogConnectorConfig {
-  enabled?: boolean;
-  mode?: 'auto' | 'manual';
-  projectKey?: string;
-  host?: string;
-  serviceName?: string;
-  errorTracking?: PostHogErrorTrackingConfig;
-}
-
-export interface PostHogErrorTrackingConfig {
-  enabled?: boolean;
-  mode?: 'auto' | 'manual';
-  enableExceptionAutocapture?: boolean;
-}
-
-export interface ResolvedPostHogErrorTrackingConfig {
-  enabled: boolean;
-  mode: 'auto' | 'manual';
-  enableExceptionAutocapture: boolean;
-  ready: boolean;
-  status: 'enabled' | 'missing';
-}
-
-export interface ResolvedPostHogConnectorConfig {
-  enabled: boolean;
-  mode: 'auto' | 'manual';
-  projectKey?: string;
-  host: string;
-  serviceName: string;
-  errorTracking: ResolvedPostHogErrorTrackingConfig;
-}
-
-export interface SentryConnectorConfig {
-  enabled?: boolean;
-  mode?: 'auto' | 'manual';
-  dsn?: string;
-  environment?: string;
-  release?: string;
-}
-
-export interface ResolvedSentryConnectorConfig {
-  enabled: boolean;
-  mode: 'auto' | 'manual';
-  dsn?: string;
-  environment?: string;
-  release?: string;
-  ready: boolean;
-  status: 'enabled' | 'missing';
-}
-
-export interface OTLPConnectorConfig {
-  name: string;
-  enabled?: boolean;
-  mode?: 'auto' | 'manual';
-  endpoint?: string;
-  headers?: Record<string, string>;
-  auth?: string;
-  serviceName?: string;
-}
-
-export interface ResolvedOTLPConnectorConfig {
-  name: string;
-  enabled: boolean;
-  mode: 'auto' | 'manual';
-  endpoint?: string;
-  headers: Record<string, string>;
-  auth?: string;
-  serviceName: string;
-  ready: boolean;
-  status: 'enabled' | 'missing';
-}
-
-export interface BlypConnectorsConfig {
-  posthog?: PostHogConnectorConfig;
-  sentry?: SentryConnectorConfig;
-  otlp?: OTLPConnectorConfig[];
-}
-
-export interface BlypConfig {
-  pretty: boolean;
-  level: string;
-  logDir?: string;
-  file?: LogFileConfig;
-  clientLogging?: ClientLoggingConfig;
-  connectors?: BlypConnectorsConfig;
-}
-
-interface ConfigFileMatch {
-  path: string;
-  type: 'json' | 'jiti';
-}
+export type { ConnectorMode } from '../types/connectors/mode';
+export type {
+  BlypConfig,
+  BlypConnectorsConfig,
+  ClientLoggingConfig,
+  LogFileConfig,
+  LogRotationConfig,
+  OTLPConnectorConfig,
+  PostHogConnectorConfig,
+  PostHogErrorTrackingConfig,
+  ResolvedOTLPConnectorConfig,
+  ResolvedPostHogConnectorConfig,
+  ResolvedPostHogErrorTrackingConfig,
+  ResolvedSentryConnectorConfig,
+  SentryConnectorConfig
+} from '../types/core/config';
 
 const PACKAGE_NAME = 'blyp-js';
 const GITIGNORE_FILE_NAME = '.gitignore';
@@ -131,6 +52,7 @@ const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const DEFAULT_CONNECTOR_SERVICE_NAME = 'blyp-app';
 const DEFAULT_POSTHOG_SERVICE_NAME = DEFAULT_CONNECTOR_SERVICE_NAME;
 const warnedKeys = new Set<string>();
+const warnOnce = createWarnOnceLogger(warnedKeys);
 
 export const DEFAULT_ROTATION_CONFIG: Required<LogRotationConfig> = {
   enabled: true,
@@ -162,20 +84,6 @@ export const DEFAULT_CONFIG: BlypConfig = {
 
 let cachedConfig: BlypConfig | null = null;
 
-function warnOnce(key: string, message: string, error?: unknown): void {
-  if (warnedKeys.has(key)) {
-    return;
-  }
-
-  warnedKeys.add(key);
-  if (error === undefined) {
-    console.warn(message);
-    return;
-  }
-
-  console.warn(message, error);
-}
-
 function findNearestPackageName(startDir: string): string | undefined {
   let currentDir = startDir;
 
@@ -186,7 +94,7 @@ function findNearestPackageName(startDir: string): string | undefined {
         const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
           name?: unknown;
         };
-        if (typeof packageJson.name === 'string' && packageJson.name.length > 0) {
+        if (hasNonEmptyString(packageJson.name)) {
           return packageJson.name;
         }
       } catch {}
@@ -203,19 +111,6 @@ function findNearestPackageName(startDir: string): string | undefined {
 
 function resolveDefaultConnectorServiceName(cwd: string = process.cwd()): string {
   return findNearestPackageName(cwd) ?? DEFAULT_POSTHOG_SERVICE_NAME;
-}
-
-function isAbsoluteHttpUrl(value: string | undefined): value is string {
-  if (!value) {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 function getBootstrapConfig(): BlypConfig {

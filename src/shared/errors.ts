@@ -1,92 +1,30 @@
-export type ErrorLogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical';
+import type {
+  BlypErrorCode,
+  BlypErrorCodeCreateOptions,
+  BlypErrorCodeDefinition,
+  BlypErrorLike,
+  CreateCodeFunction,
+  ErrorConstructionInput,
+  ErrorLogLevel,
+  ErrorLoggerLike,
+  HttpCodeRegistry,
+  ParseErrorOptions,
+  ParseableErrorPayload as BaseParseableErrorPayload,
+  ResolvedErrorConfig,
+} from '../types/shared/errors';
 
-export interface ErrorLoggerLike {
-  debug: (message: unknown, ...args: unknown[]) => void;
-  info: (message: unknown, ...args: unknown[]) => void;
-  warning: (message: unknown, ...args: unknown[]) => void;
-  error: (message: unknown, ...args: unknown[]) => void;
-  critical: (message: unknown, ...args: unknown[]) => void;
-}
+export type {
+  BlypErrorCode,
+  BlypErrorCodeDefinition,
+  BlypErrorLike,
+  ErrorConstructionInput,
+  ErrorLogLevel,
+  ErrorLoggerLike,
+  ParseErrorOptions,
+  ResolvedErrorConfig,
+} from '../types/shared/errors';
 
-export interface BlypErrorLike {
-  status?: number;
-  statusCode?: number;
-  code?: string | number;
-  message?: string;
-  stack?: string;
-  why?: string;
-  fix?: string;
-  link?: string;
-  details?: Record<string, unknown>;
-  cause?: unknown;
-  logLevel?: ErrorLogLevel;
-}
-
-export interface BlypErrorCodeDefinition {
-  key: string;
-  status: number;
-  message: string;
-  code?: string;
-  why?: string;
-  fix?: string;
-  link?: string;
-  details?: Record<string, unknown>;
-  logLevel?: ErrorLogLevel;
-}
-
-export interface BlypErrorCodeCreateOptions extends Omit<BlypErrorLike, 'statusCode'> {
-  logger?: ErrorLoggerLike;
-  skipLogging?: boolean;
-}
-
-export interface BlypErrorCode extends Readonly<BlypErrorCodeDefinition> {
-  readonly statusCode: number;
-  create(overrides?: BlypErrorCodeCreateOptions): BlypError;
-  extend(definition: {
-    code: string;
-    message?: string;
-    why?: string;
-    fix?: string;
-    link?: string;
-    details?: Record<string, unknown>;
-    logLevel?: ErrorLogLevel;
-  }): BlypErrorCode;
-}
-
-export type ParseableErrorPayload =
-  | BlypError
-  | BlypErrorLike
-  | Error
-  | string
-  | Record<string, unknown>
-  | null
-  | undefined;
-
-export interface ParseErrorOptions {
-  logger?: ErrorLoggerLike;
-  logLevel?: ErrorLogLevel;
-  fallbackStatus?: number;
-}
-
-export interface ResolvedErrorConfig {
-  status: number;
-  statusCode: number;
-  message: string;
-  code?: string | number;
-  why?: string;
-  fix?: string;
-  link?: string;
-  details?: Record<string, unknown>;
-  cause?: unknown;
-  stack?: string;
-  logLevel: ErrorLogLevel;
-}
-
-export interface ErrorConstructionInput extends BlypErrorLike {
-  status?: number;
-  logger?: ErrorLoggerLike;
-  skipLogging?: boolean;
-}
+export type ParseableErrorPayload = BaseParseableErrorPayload | BlypError;
 
 export const HTTP_STATUS_DEFINITIONS = {
   CONTINUE: { status: 100, message: 'Continue' },
@@ -154,9 +92,7 @@ export const HTTP_STATUS_DEFINITIONS = {
   NETWORK_AUTHENTICATION_REQUIRED: { status: 511, message: 'Network Authentication Required' },
 } as const;
 
-type HttpCodeRegistry = {
-  readonly [K in keyof typeof HTTP_STATUS_DEFINITIONS]: BlypErrorCode;
-};
+import { isPlainObject } from './validation';
 
 const ERROR_KEYS = [
   'status',
@@ -175,10 +111,6 @@ const ERROR_KEYS = [
   'error',
   'data',
 ] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function isErrorLogLevel(value: unknown): value is ErrorLogLevel {
   return (
@@ -203,7 +135,7 @@ function parseStatus(value: unknown): number | undefined {
 }
 
 function normalizeDetails(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined;
+  return isPlainObject(value) ? value : undefined;
 }
 
 function hasMeaningfulErrorData(candidate: BlypErrorLike): boolean {
@@ -292,7 +224,7 @@ function isResponseLike(input: unknown): input is Response {
     return true;
   }
 
-  return isRecord(input) &&
+  return isPlainObject(input) &&
     typeof input.status === 'number' &&
     typeof input.statusText === 'string' &&
     typeof input.clone === 'function' &&
@@ -467,11 +399,6 @@ export function createBlypError(
   return error;
 }
 
-type CreateCodeFunction = (
-  definition: BlypErrorCodeDefinition,
-  overrides?: BlypErrorCodeCreateOptions
-) => BlypError;
-
 function createErrorCode(
   definition: BlypErrorCodeDefinition,
   createErrorFromCode?: CreateCodeFunction
@@ -481,7 +408,7 @@ function createErrorCode(
     statusCode: definition.status,
     create(overrides: BlypErrorCodeCreateOptions = {}): BlypError {
       if (createErrorFromCode) {
-        return createErrorFromCode(definition, overrides);
+        return createErrorFromCode(definition, overrides) as BlypError;
       }
 
       return createBlypError({
@@ -553,7 +480,7 @@ export function extractErrorCandidate(payload: unknown): BlypErrorLike | string 
     return payload;
   }
 
-  if (!isRecord(payload)) {
+  if (!isPlainObject(payload)) {
     return undefined;
   }
 
@@ -563,12 +490,12 @@ export function extractErrorCandidate(payload: unknown): BlypErrorLike | string 
       return mergeCandidates(payload, nested);
     }
 
-    if (isRecord(nested)) {
+    if (isPlainObject(nested)) {
       return mergeCandidates(payload, extractErrorCandidate(nested));
     }
   }
 
-  if (isRecord(payload.data)) {
+  if (isPlainObject(payload.data)) {
     const nested = payload.data;
     if (nested.error !== undefined || hasErrorShape(nested)) {
       return mergeCandidates(payload, extractErrorCandidate(nested));

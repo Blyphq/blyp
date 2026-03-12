@@ -1,10 +1,6 @@
-import type { BlypErrorLike } from '../shared/errors';
+import type { ResolveCtx } from '../types/core/helpers';
 
-export interface ResolveCtx {
-  set?: { status?: number | string };
-  error?: Pick<BlypErrorLike, 'status' | 'statusCode' | 'code'>;
-  code?: string;
-}
+export type { ResolveCtx } from '../types/core/helpers';
 
 export function resolveStatusCode(
   ctx: ResolveCtx,

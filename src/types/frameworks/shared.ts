@@ -1,6 +1,7 @@
-import type { BlypConfig, BlypConnectorsConfig, LogFileConfig } from '../../core/config';
-import type { BlypLogger } from '../../core/logger';
-import type { ClientLogEvent } from '../../shared/client-log';
+import type { BlypConfig, BlypConnectorsConfig, LogFileConfig } from '../core/config';
+import type { BlypLogger } from '../core/logger';
+import type { ClientLogEvent } from '../shared/client-log';
+import type { ConnectorMode } from '../connectors/mode';
 import type { HttpRequestLog } from './http';
 
 export interface ClientLogIngestionConfig<Ctx> {
@@ -31,14 +32,14 @@ export interface ServerLoggerConfig<Ctx> {
 export interface ResolvedPostHogConnector {
   enabled: boolean;
   ready: boolean;
-  mode: 'auto' | 'manual';
+  mode: ConnectorMode;
   serviceName: string;
   host: string;
   status: 'enabled' | 'missing';
   errorTracking: {
     enabled: boolean;
     ready: boolean;
-    mode: 'auto' | 'manual';
+    mode: ConnectorMode;
     status: 'enabled' | 'missing';
     enableExceptionAutocapture: boolean;
   };
@@ -69,7 +70,7 @@ export interface ResolvedPostHogConnector {
 export interface ResolvedSentryConnector {
   enabled: boolean;
   ready: boolean;
-  mode: 'auto' | 'manual';
+  mode: ConnectorMode;
   status: 'enabled' | 'missing';
   send: (
     record: {
@@ -89,7 +90,7 @@ export interface ResolvedOTLPConnector {
   name: string;
   enabled: boolean;
   ready: boolean;
-  mode: 'auto' | 'manual';
+  mode: ConnectorMode;
   serviceName: string;
   endpoint?: string;
   status: 'enabled' | 'missing';

@@ -1,132 +1,53 @@
 /// <reference lib="dom" />
 
+import { z } from 'zod';
 import {
   normalizeError,
   normalizeLogValue,
   serializeLogMessage,
 } from './log-value';
+import {
+  isPlainObject,
+  nonEmptyStringSchema,
+  plainObjectSchema,
+} from './validation';
+import type {
+  ClientConnectorRequest,
+  ClientLogBrowserContext,
+  ClientLogDeviceContext,
+  ClientLogEvent,
+  ClientLogLevel,
+  ClientLogPageContext,
+  ClientLogSessionContext,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliveryRuntime,
+  RemoteDeliverySuccessContext,
+  RemoteDeliveryTransport,
+} from '../types/shared/client-log';
+
+export type {
+  ClientConnectorRequest,
+  ClientLogBrowserContext,
+  ClientLogDeviceContext,
+  ClientLogEvent,
+  ClientLogLevel,
+  ClientLogPageContext,
+  ClientLogSessionContext,
+  RemoteDeliveryConfig,
+  RemoteDeliveryDropContext,
+  RemoteDeliveryFailureContext,
+  RemoteDeliveryFailureReason,
+  RemoteDeliveryRetryContext,
+  RemoteDeliverySuccessContext,
+  RemoteDeliveryTransport,
+} from '../types/shared/client-log';
 
 export const DEFAULT_CLIENT_LOG_ENDPOINT = '/inngest';
 const SESSION_STORAGE_KEY = 'blyp:session-id';
-
-export type ClientLogLevel =
-  | 'debug'
-  | 'info'
-  | 'warning'
-  | 'error'
-  | 'critical'
-  | 'success'
-  | 'table';
-
-export interface ClientLogPageContext {
-  url?: string;
-  pathname?: string;
-  search?: string;
-  hash?: string;
-  title?: string;
-  referrer?: string;
-}
-
-export interface ClientLogBrowserContext {
-  userAgent?: string;
-  language?: string;
-  platform?: string;
-}
-
-export interface ClientLogDeviceContext {
-  runtime?: 'expo' | 'browser';
-  network?: {
-    type?: string;
-    isConnected?: boolean;
-    isInternetReachable?: boolean;
-  };
-}
-
-export interface ClientLogSessionContext {
-  pageId: string;
-  sessionId: string;
-}
-
-export type ClientConnectorRequest =
-  | 'posthog'
-  | 'sentry'
-  | { type: 'otlp'; name: string };
-
-export interface ClientLogEvent {
-  type: 'client_log';
-  source: 'client';
-  id: string;
-  level: ClientLogLevel;
-  message: string;
-  connector?: ClientConnectorRequest;
-  data?: unknown;
-  bindings?: Record<string, unknown>;
-  clientTimestamp: string;
-  page: ClientLogPageContext;
-  browser: ClientLogBrowserContext;
-  device?: ClientLogDeviceContext;
-  session: ClientLogSessionContext;
-  metadata?: Record<string, unknown>;
-}
-
-export type RemoteDeliveryRuntime = 'browser' | 'expo';
-
-export type RemoteDeliveryTransport = 'fetch' | 'beacon';
-
-export type RemoteDeliveryFailureReason =
-  | 'offline'
-  | 'network_error'
-  | 'response_status'
-  | 'invalid_endpoint'
-  | 'missing_transport'
-  | 'queue_overflow';
-
-export interface RemoteDeliverySuccessContext {
-  runtime: RemoteDeliveryRuntime;
-  event: ClientLogEvent;
-  attempt: number;
-  status?: number;
-  transport: RemoteDeliveryTransport;
-}
-
-export interface RemoteDeliveryRetryContext {
-  runtime: RemoteDeliveryRuntime;
-  event: ClientLogEvent;
-  attempt: number;
-  retriesRemaining: number;
-  nextRetryAt: string;
-  reason: 'offline' | 'network_error' | 'response_status';
-  status?: number;
-  error?: string;
-}
-
-export interface RemoteDeliveryFailureContext {
-  runtime: RemoteDeliveryRuntime;
-  event: ClientLogEvent;
-  attempt: number;
-  reason: RemoteDeliveryFailureReason;
-  status?: number;
-  error?: string;
-}
-
-export interface RemoteDeliveryDropContext {
-  runtime: RemoteDeliveryRuntime;
-  droppedEvent: ClientLogEvent;
-  replacementEvent: ClientLogEvent;
-  maxQueueSize: number;
-  reason: 'queue_overflow';
-}
-
-export interface RemoteDeliveryConfig {
-  maxRetries?: number;
-  retryDelayMs?: number;
-  maxQueueSize?: number;
-  warnOnFailure?: boolean;
-  onSuccess?: (ctx: RemoteDeliverySuccessContext) => void;
-  onRetry?: (ctx: RemoteDeliveryRetryContext) => void;
-  onFailure?: (ctx: RemoteDeliveryFailureContext) => void;
-  onDrop?: (ctx: RemoteDeliveryDropContext) => void;
-}
 
 const CLIENT_LOG_LEVELS: ClientLogLevel[] = [
   'debug',
@@ -137,25 +58,22 @@ const CLIENT_LOG_LEVELS: ClientLogLevel[] = [
   'success',
   'table',
 ];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
+const clientConnectorRequestSchema = z.union([
+  z.literal('posthog'),
+  z.literal('sentry'),
+  z.undefined(),
+  z.object({
+    type: z.literal('otlp'),
+    name: nonEmptyStringSchema,
+  }),
+]);
 
 function isClientLogLevel(value: unknown): value is ClientLogLevel {
   return typeof value === 'string' && CLIENT_LOG_LEVELS.includes(value as ClientLogLevel);
 }
 
 function isClientConnectorRequest(value: unknown): value is ClientConnectorRequest {
-  if (value === 'posthog' || value === 'sentry' || value === undefined) {
-    return true;
-  }
-
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return value.type === 'otlp' && typeof value.name === 'string' && value.name.length > 0;
+  return clientConnectorRequestSchema.safeParse(value).success;
 }
 
 function safeGet<T>(getter: () => T): T | undefined {
@@ -255,7 +173,7 @@ export function normalizeMetadata(
   }
 
   const resolved = typeof metadata === 'function' ? safeGet(metadata) : metadata;
-  if (!isRecord(resolved)) {
+  if (!isPlainObject(resolved)) {
     return undefined;
   }
 
@@ -263,7 +181,7 @@ export function normalizeMetadata(
 }
 
 export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
-  if (!isRecord(payload)) {
+  if (!isPlainObject(payload)) {
     return false;
   }
 
@@ -278,7 +196,11 @@ export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
     return false;
   }
 
-  if (!isRecord(payload.page) || !isRecord(payload.browser) || !isRecord(payload.session)) {
+  const pageResult = plainObjectSchema.safeParse(payload.page);
+  const browserResult = plainObjectSchema.safeParse(payload.browser);
+  const sessionResult = plainObjectSchema.safeParse(payload.session);
+
+  if (!pageResult.success || !browserResult.success || !sessionResult.success) {
     return false;
   }
 
@@ -287,8 +209,8 @@ export function isClientLogEvent(payload: unknown): payload is ClientLogEvent {
   }
 
   return (
-    typeof payload.session.pageId === 'string' &&
-    typeof payload.session.sessionId === 'string'
+    typeof sessionResult.data.pageId === 'string' &&
+    typeof sessionResult.data.sessionId === 'string'
   );
 }
 

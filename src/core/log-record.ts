@@ -5,16 +5,9 @@ import {
   normalizeLogValue,
   serializeLogMessage,
 } from '../shared/log-value';
+import type { LogMethodName } from '../types/core/log-record';
 
-export type LogMethodName =
-  | 'success'
-  | 'critical'
-  | 'warning'
-  | 'info'
-  | 'debug'
-  | 'error'
-  | 'warn'
-  | 'table';
+export type { LogMethodName } from '../types/core/log-record';
 
 const RECORD_LEVELS: Record<LogMethodName, string> = {
   success: 'success',

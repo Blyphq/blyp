@@ -1,9 +1,10 @@
+import type { BlypLogger } from '../core/logger';
 import type {
   BlypConnectorsConfig,
   ClientLoggingConfig,
   LogFileConfig,
   LogRotationConfig,
-} from '../../core/config';
+} from '../core/config';
 
 export type LogLevel = 'error' | 'critical' | 'warning' | 'info' | 'success' | 'debug' | 'table';
 
@@ -14,6 +15,14 @@ export interface StandaloneLoggerConfig {
   file?: LogFileConfig;
   clientLogging?: ClientLoggingConfig;
   connectors?: BlypConnectorsConfig;
+}
+
+export interface StandaloneLogger extends BlypLogger {
+  success: (message: string | unknown, meta?: unknown) => void;
+  critical: (message: string | unknown, meta?: unknown) => void;
+  table: (message: string, data?: unknown) => void;
+  warn: (message: unknown, ...args: unknown[]) => void;
+  warning: (message: unknown, ...args: unknown[]) => void;
 }
 
 export type { BlypConnectorsConfig, ClientLoggingConfig, LogFileConfig, LogRotationConfig };

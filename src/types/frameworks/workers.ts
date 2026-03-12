@@ -1,10 +1,26 @@
 import type { HttpRequestLog } from './http';
-import type { StructuredLog } from '../../core/structured-log';
+import type { StructuredLog } from '../core/structured-log';
 
 export interface WorkersLoggerConfig {
   env?: Record<string, unknown>;
   customProps?: (request: Request) => Record<string, unknown>;
 }
+
+export interface WorkersLoggerState {
+  env?: Record<string, unknown>;
+  customProps?: (request: Request) => Record<string, unknown>;
+}
+
+export type WorkersConsoleMethod = 'debug' | 'info' | 'warn' | 'error' | 'log';
+
+export type WorkersLogLevel =
+  | 'debug'
+  | 'info'
+  | 'warn'
+  | 'warning'
+  | 'error'
+  | 'success'
+  | 'critical';
 
 export interface WorkersEmitOptions {
   response?: Response | { status: number };

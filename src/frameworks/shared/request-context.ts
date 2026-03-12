@@ -1,13 +1,8 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import type { BlypLogger } from '../../core/logger';
+import type { BlypRequestContextStore } from '../../types/frameworks/request-context';
 
-export interface BlypRequestContextStore {
-  requestScopedLoggerActive: boolean;
-  structuredCollectorActive: boolean;
-  structuredLogEmitted: boolean;
-  mixedLoggerWarningShown: boolean;
-  activeLogger?: BlypLogger;
-}
+export type { BlypRequestContextStore } from '../../types/frameworks/request-context';
 
 const requestContextStorage = new AsyncLocalStorage<BlypRequestContextStore>();
 

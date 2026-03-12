@@ -1,39 +1,18 @@
 import fs from 'fs';
 import path from 'path';
-import { gzipSync } from 'zlib';
+import { gzipSync } from 'fflate';
 import type { BlypConfig } from './config';
+import type {
+  FileLoggerDependencies,
+  LogRecord,
+  ResolvedFileLoggerConfig,
+  StreamState,
+} from '../types/core/file-logger';
 
-export interface LogRecord {
-  timestamp: string;
-  level: string;
-  message: string;
-  caller?: string;
-  data?: unknown;
-  bindings?: Record<string, unknown>;
-  [key: string]: unknown;
-}
+export type { LogRecord } from '../types/core/file-logger';
 
-interface StreamState {
-  activePath: string;
-  archivePrefix: string;
-  bytes: number;
-  queue: string[];
-  processing: boolean;
-}
-
-interface FileLoggerDependencies {
-  gzip?: (input: Buffer) => Buffer;
-  warn?: (message: string, error?: unknown) => void;
-}
-
-interface ResolvedFileLoggerConfig {
-  enabled: boolean;
-  dir: string;
-  archiveDir: string;
-  rotationEnabled: boolean;
-  maxSizeBytes: number;
-  maxArchives: number;
-  compress: boolean;
+function gzipBuffer(buf: Buffer): Buffer {
+  return Buffer.from(gzipSync(buf));
 }
 
 function warnWithConsole(message: string, error?: unknown): void {
@@ -162,7 +141,7 @@ export class RotatingFileLogger {
 
   constructor(config: BlypConfig, dependencies: FileLoggerDependencies = {}) {
     this.config = resolveFileLoggerConfig(config);
-    this.gzip = dependencies.gzip ?? gzipSync;
+    this.gzip = dependencies.gzip ?? gzipBuffer;
     this.warn = dependencies.warn ?? warnWithConsole;
     this.combined = {
       activePath: path.join(this.config.dir, 'log.ndjson'),

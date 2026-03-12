@@ -86,19 +86,19 @@
       "require": "./exports/expo.js"
     },
     "./posthog": {
-      "types": "./types/posthog.d.ts",
-      "import": "./exports/posthog.mjs",
-      "require": "./exports/posthog.js"
+      "types": "./types/connectors/posthog.d.ts",
+      "import": "./exports/connectors/posthog.mjs",
+      "require": "./exports/connectors/posthog.js"
     },
     "./otlp": {
-      "types": "./types/otlp.d.ts",
-      "import": "./exports/otlp.mjs",
-      "require": "./exports/otlp.js"
+      "types": "./types/connectors/otlp.d.ts",
+      "import": "./exports/connectors/otlp.mjs",
+      "require": "./exports/connectors/otlp.js"
     },
     "./sentry": {
-      "types": "./types/sentry.d.ts",
-      "import": "./exports/sentry.mjs",
-      "require": "./exports/sentry.js"
+      "types": "./types/connectors/sentry.d.ts",
+      "import": "./exports/connectors/sentry.mjs",
+      "require": "./exports/connectors/sentry.js"
     },
     "./workers": {
       "types": "./types/workers.d.ts",
@@ -115,13 +115,13 @@
         "./types/expo.d.ts"
       ],
       "posthog": [
-        "./types/posthog.d.ts"
+        "./types/connectors/posthog.d.ts"
       ],
       "otlp": [
-        "./types/otlp.d.ts"
+        "./types/connectors/otlp.d.ts"
       ],
       "sentry": [
-        "./types/sentry.d.ts"
+        "./types/connectors/sentry.d.ts"
       ],
       "elysia": [
         "./types/frameworks/elysia.d.ts"
@@ -247,6 +247,7 @@
   },
   "dependencies": {
     "@sentry/node": "^10.14.0",
+    "fflate": "^0.8.2",
     "@opentelemetry/api-logs": "^0.206.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.206.0",
     "@opentelemetry/resources": "^2.1.0",
@@ -254,6 +255,7 @@
     "jiti": "^2.4.2",
     "posthog-node": "^5.28.1",
     "pino": "^9.0.0",
-    "pino-pretty": "^11.0.0"
+    "pino-pretty": "^11.0.0",
+    "zod": "^3.25.76"
   }
 }
