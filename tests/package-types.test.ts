@@ -16,19 +16,23 @@ describe('Package type shims', () => {
 
     expect(packageJson.exports['./client']?.types).toBe('./types/client.d.ts');
     expect(packageJson.exports['./expo']?.types).toBe('./types/expo.d.ts');
+    expect(packageJson.exports['./betterstack']?.types).toBe('./types/connectors/betterstack.d.ts');
     expect(packageJson.exports['./posthog']?.types).toBe('./types/connectors/posthog.d.ts');
     expect(packageJson.exports['./otlp']?.types).toBe('./types/connectors/otlp.d.ts');
     expect(packageJson.exports['./sentry']?.types).toBe('./types/connectors/sentry.d.ts');
     expect(packageJson.exports['./workers']?.types).toBe('./types/workers.d.ts');
+    expect(packageJson.exports['./betterstack']?.import).toBe('./exports/connectors/betterstack.mjs');
     expect(packageJson.exports['./posthog']?.import).toBe('./exports/connectors/posthog.mjs');
     expect(packageJson.exports['./otlp']?.import).toBe('./exports/connectors/otlp.mjs');
     expect(packageJson.exports['./sentry']?.import).toBe('./exports/connectors/sentry.mjs');
+    expect(packageJson.exports['./betterstack']?.require).toBe('./exports/connectors/betterstack.js');
     expect(packageJson.exports['./posthog']?.require).toBe('./exports/connectors/posthog.js');
     expect(packageJson.exports['./otlp']?.require).toBe('./exports/connectors/otlp.js');
     expect(packageJson.exports['./sentry']?.require).toBe('./exports/connectors/sentry.js');
 
     expect(fs.existsSync(path.join(repoRoot, 'types/client.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/expo.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/connectors/betterstack.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/connectors/posthog.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/connectors/otlp.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/connectors/sentry.d.ts'))).toBe(true);
@@ -44,6 +48,7 @@ describe('Package type shims', () => {
   it('keeps public client and expo declarations as direct shims and moves connector declarations under types/connectors', () => {
     const clientTypes = readRepoFile('types/client.d.ts');
     const expoTypes = readRepoFile('types/expo.d.ts');
+    const betterStackTypes = readRepoFile('types/connectors/betterstack.d.ts');
     const posthogTypes = readRepoFile('types/connectors/posthog.d.ts');
     const otlpTypes = readRepoFile('types/connectors/otlp.d.ts');
     const sentryTypes = readRepoFile('types/connectors/sentry.d.ts');
@@ -53,6 +58,7 @@ describe('Package type shims', () => {
     expect(clientTypes).toContain("from './frameworks/client'");
     expect(expoTypes).toContain('createExpoLogger');
     expect(expoTypes).toContain("from './frameworks/expo'");
+    expect(betterStackTypes).toContain('../../dist/connectors/betterstack');
     expect(posthogTypes).toContain('../../dist/connectors/posthog');
     expect(otlpTypes).toContain('../../dist/connectors/otlp');
     expect(sentryTypes).toContain('../../dist/connectors/sentry');
@@ -60,6 +66,7 @@ describe('Package type shims', () => {
     expect(workersTypes).toContain("from './frameworks/workers'");
     expect(clientTypes).not.toContain("../dist/client");
     expect(expoTypes).not.toContain("../dist/expo");
+    expect(betterStackTypes).not.toContain('../../dist/betterstack');
     expect(posthogTypes).not.toContain('../../dist/posthog');
     expect(otlpTypes).not.toContain('../../dist/otlp');
     expect(sentryTypes).not.toContain('../../dist/sentry');

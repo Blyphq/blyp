@@ -6,6 +6,7 @@ import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
 import { buildPostHogExceptionProperties } from '../../connectors/posthog/sender';
 import {
   createBaseLogger,
+  getBetterStackSender,
   getOtlpRegistry,
   getPostHogSender,
   getSentrySender,
@@ -106,6 +107,7 @@ export function resolveServerLogger<Ctx>(
 
   return {
     logger,
+    betterstack: getBetterStackSender(logger),
     posthog: getPostHogSender(logger),
     sentry: getSentrySender(logger),
     otlp: getOtlpRegistry(logger),
@@ -354,7 +356,20 @@ export async function handleClientLogIngestion<Ctx>(options: {
   }
 
   const headers: Record<string, string> = {};
-  if (payload.connector === 'posthog') {
+  if (payload.connector === 'betterstack') {
+    headers['x-blyp-betterstack-status'] = config.betterstack.ready ? 'enabled' : 'missing';
+
+    if (config.betterstack.ready) {
+      config.betterstack.send({
+        timestamp: structuredPayload.receivedAt as string,
+        level: payload.level,
+        message: `[client] ${payload.message}`,
+        data: structuredPayload,
+      }, {
+        source: 'client',
+      });
+    }
+  } else if (payload.connector === 'posthog') {
     headers['x-blyp-posthog-status'] = config.posthog.ready ? 'enabled' : 'missing';
 
     if (config.posthog.ready) {

@@ -236,6 +236,45 @@ describe('Expo Logger', () => {
     expect(String(errorCalls[0]?.[0] ?? '')).toContain('PostHog connector requested');
   });
 
+  it('includes the Better Stack connector and reports missing server configuration once', async () => {
+    const errorCalls: unknown[][] = [];
+    let requestBody = '';
+
+    setExpoNetworkLoaderForTests(async () => ({
+      getNetworkStateAsync: async () => ({
+        type: 'WIFI',
+        isConnected: true,
+        isInternetReachable: true,
+      }),
+    }));
+    setGlobal('fetch', ((_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = String(init?.body ?? '');
+      return Promise.resolve(new Response(null, {
+        status: 204,
+        headers: {
+          'x-blyp-betterstack-status': 'missing',
+        },
+      }));
+    }) as typeof fetch);
+    console.error = (...args: unknown[]) => {
+      errorCalls.push(args);
+    };
+
+    const logger = createExpoLogger({
+      endpoint: 'https://api.example.test/inngest',
+      connector: 'betterstack',
+    });
+
+    logger.info('first');
+    logger.info('second');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(requestBody) as Record<string, unknown>;
+    expect(payload.connector).toBe('betterstack');
+    expect(errorCalls).toHaveLength(1);
+    expect(String(errorCalls[0]?.[0] ?? '')).toContain('Better Stack connector requested');
+  });
+
   it('includes the named OTLP connector and reports missing server configuration once', async () => {
     const errorCalls: unknown[][] = [];
     let requestBody = '';

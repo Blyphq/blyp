@@ -67,6 +67,27 @@ export interface ResolvedPostHogConnector {
   ) => void;
 }
 
+export interface ResolvedBetterStackConnector {
+  enabled: boolean;
+  ready: boolean;
+  mode: ConnectorMode;
+  serviceName: string;
+  ingestingHost?: string;
+  status: 'enabled' | 'missing';
+  send: (
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+}
+
 export interface ResolvedSentryConnector {
   enabled: boolean;
   ready: boolean;
@@ -129,6 +150,7 @@ export interface ResolvedOTLPRegistry {
 
 export interface ResolvedServerLogger<Ctx> {
   logger: BlypLogger;
+  betterstack: ResolvedBetterStackConnector;
   posthog: ResolvedPostHogConnector;
   sentry: ResolvedSentryConnector;
   otlp: ResolvedOTLPRegistry;

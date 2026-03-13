@@ -144,6 +144,13 @@ async function sendRemoteLog(
     });
 
     if (response.ok) {
+      if (config.connector === 'betterstack' && response.headers.get('x-blyp-betterstack-status') === 'missing') {
+        errorOnce(
+          'missing-betterstack-server-config',
+          '[blyp/expo] Better Stack connector requested but not configured on the server. Continuing without Better Stack forwarding.'
+        );
+      }
+
       if (config.connector === 'posthog' && response.headers.get('x-blyp-posthog-status') === 'missing') {
         errorOnce(
           'missing-posthog-server-config',

@@ -5,6 +5,7 @@ import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../shared/client-log';
 import { createWarnOnceLogger } from '../shared/once';
 import { hasNonEmptyString, isAbsoluteHttpUrl } from '../shared/validation';
 import type {
+  BetterStackConnectorConfig,
   BlypConfig,
   BlypConnectorsConfig,
   ClientLoggingConfig,
@@ -13,6 +14,7 @@ import type {
   LogRotationConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
+  ResolvedBetterStackConnectorConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
   ResolvedSentryConnectorConfig,
@@ -22,12 +24,14 @@ import type {
 export type { ConnectorMode } from '../types/connectors/mode';
 export type {
   BlypConfig,
+  BetterStackConnectorConfig,
   BlypConnectorsConfig,
   ClientLoggingConfig,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
+  ResolvedBetterStackConnectorConfig,
   PostHogErrorTrackingConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
@@ -361,6 +365,32 @@ function mergePostHogConnectorConfig(
   };
 }
 
+function mergeBetterStackConnectorConfig(
+  base: BetterStackConnectorConfig | undefined,
+  override: BetterStackConnectorConfig | undefined
+): ResolvedBetterStackConnectorConfig {
+  const sourceToken = override?.sourceToken ?? base?.sourceToken;
+  const ingestingHost = override?.ingestingHost ?? base?.ingestingHost;
+  const enabled = override?.enabled ?? base?.enabled ?? false;
+  const ready =
+    enabled &&
+    hasNonEmptyString(sourceToken) &&
+    isAbsoluteHttpUrl(ingestingHost);
+
+  return {
+    enabled,
+    mode: override?.mode ?? base?.mode ?? 'auto',
+    sourceToken,
+    ingestingHost,
+    serviceName:
+      override?.serviceName ??
+      base?.serviceName ??
+      resolveDefaultConnectorServiceName(),
+    ready,
+    status: ready ? 'enabled' : 'missing',
+  };
+}
+
 function mergeSentryConnectorConfig(
   base: SentryConnectorConfig | undefined,
   override: SentryConnectorConfig | undefined
@@ -438,6 +468,7 @@ function mergeConnectorsConfig(
   override: BlypConnectorsConfig | undefined
 ): Required<BlypConnectorsConfig> {
   return {
+    betterstack: mergeBetterStackConnectorConfig(base?.betterstack, override?.betterstack),
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
     sentry: mergeSentryConnectorConfig(base?.sentry, override?.sentry),
     otlp: mergeOTLPConnectorsConfig(base?.otlp, override?.otlp),

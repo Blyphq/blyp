@@ -1,3 +1,4 @@
+import type { BetterStackSender } from '../connectors/betterstack';
 import type { PostHogSender } from '../connectors/posthog';
 import type { SentrySender } from '../connectors/sentry';
 import type { OTLPRegistry } from '../connectors/otlp';
@@ -30,6 +31,7 @@ export interface StructuredLogFactoryOptions {
 
 export interface LoggerFactoryHandle {
   bindings: Record<string, unknown>;
+  betterstack: BetterStackSender;
   posthog: PostHogSender;
   sentry: SentrySender;
   otlp: OTLPRegistry;

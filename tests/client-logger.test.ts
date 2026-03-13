@@ -264,6 +264,38 @@ describe('Client Logger', () => {
     expect(String(errorCalls[0]?.[0] ?? '')).toContain('PostHog connector requested');
   });
 
+  it('includes the Better Stack connector and logs one local error when the server reports it missing', async () => {
+    let body = '';
+    const errorCalls: unknown[][] = [];
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return Promise.resolve(new Response(null, {
+          status: 204,
+          headers: {
+            'x-blyp-betterstack-status': 'missing',
+          },
+        }));
+      }) as typeof fetch,
+    });
+    console.error = (...args: unknown[]) => {
+      errorCalls.push(args);
+    };
+
+    const logger = createClientLogger({
+      connector: 'betterstack',
+    });
+    logger.info('frontend ready');
+    logger.info('frontend ready again');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    expect(payload.connector).toBe('betterstack');
+    expect(errorCalls).toHaveLength(1);
+    expect(String(errorCalls[0]?.[0] ?? '')).toContain('Better Stack connector requested');
+  });
+
   it('includes the named OTLP connector and logs one local error when the server reports it missing', async () => {
     let body = '';
     const errorCalls: unknown[][] = [];

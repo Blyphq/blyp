@@ -308,6 +308,69 @@ The browser and Expo connectors do not send directly to PostHog. They continue t
 
 ---
 
+## Better Stack connector
+
+Use Better Stack when you want Blyp logs forwarded into Better Stack Logs through `@logtail/node`.
+
+Configure `connectors.betterstack`:
+
+```typescript
+export default {
+  connectors: {
+    betterstack: {
+      enabled: true,
+      mode: 'auto',
+      sourceToken: process.env.SOURCE_TOKEN,
+      ingestingHost: process.env.INGESTING_HOST,
+    },
+  },
+};
+```
+
+`INGESTING_HOST` must be a full absolute `http://` or `https://` URL. Blyp does not auto-read `SOURCE_TOKEN` or `INGESTING_HOST`; wire them through your config explicitly.
+
+`mode: "auto"` forwards normal server-side Blyp logs to Better Stack automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the Better Stack subpath:
+
+```typescript
+import {
+  createBetterStackLogger,
+  createStructuredBetterStackLogger,
+} from 'blyp-js/betterstack';
+
+const betterStackLogger = createBetterStackLogger();
+betterStackLogger.info('manual better stack log');
+
+const structured = createStructuredBetterStackLogger('checkout', {
+  orderId: 'ord_123',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request Better Stack forwarding through the existing Blyp ingestion route:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'betterstack',
+});
+```
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: 'betterstack',
+});
+```
+
+The browser and Expo connector does not send directly to Better Stack. It continues to send to Blyp's ingestion endpoint and Blyp forwards to Better Stack when the server connector is configured and ready. Browser and Expo apps do not use `@logtail/browser` directly. Workers are still out of scope for this connector.
+
+---
+
 ## Sentry connector
 
 Use Sentry when you want Blyp logs forwarded into Sentry Logs and, for `error` / `critical` `Error` payloads, into Sentry exceptions as well.

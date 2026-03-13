@@ -50,12 +50,14 @@ export type {
   BlypConnectorsConfig,
   ClientLoggingConfig,
   BlypConfig,
+  BetterStackConnectorConfig,
   ConnectorMode,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
   PostHogErrorTrackingConfig,
   PostHogConnectorConfig,
+  ResolvedBetterStackConnectorConfig,
   ResolvedPostHogErrorTrackingConfig,
   ResolvedPostHogConnectorConfig,
   ResolvedSentryConnectorConfig,
@@ -68,6 +70,14 @@ export type { LogRecord } from './core/file-logger';
 export * from './core/helpers';
 export * from './core/colors';
 export { normalizeOTLPRecord } from './connectors/otlp/sender';
+export {
+  createBetterStackLogger,
+  createStructuredBetterStackLogger,
+} from './connectors/betterstack';
+export type {
+  BetterStackLogger,
+  BetterStackLoggerConfig,
+} from './connectors/betterstack';
 export {
   capturePosthogException,
   createPosthogErrorTracker,

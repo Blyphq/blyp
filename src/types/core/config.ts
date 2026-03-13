@@ -31,6 +31,14 @@ export interface PostHogConnectorConfig {
   errorTracking?: PostHogErrorTrackingConfig;
 }
 
+export interface BetterStackConnectorConfig {
+  enabled?: boolean;
+  mode?: ConnectorMode;
+  sourceToken?: string;
+  ingestingHost?: string;
+  serviceName?: string;
+}
+
 export interface PostHogErrorTrackingConfig {
   enabled?: boolean;
   mode?: ConnectorMode;
@@ -52,6 +60,16 @@ export interface ResolvedPostHogConnectorConfig {
   host: string;
   serviceName: string;
   errorTracking: ResolvedPostHogErrorTrackingConfig;
+}
+
+export interface ResolvedBetterStackConnectorConfig {
+  enabled: boolean;
+  mode: ConnectorMode;
+  sourceToken?: string;
+  ingestingHost?: string;
+  serviceName: string;
+  ready: boolean;
+  status: 'enabled' | 'missing';
 }
 
 export interface SentryConnectorConfig {
@@ -95,6 +113,7 @@ export interface ResolvedOTLPConnectorConfig {
 }
 
 export interface BlypConnectorsConfig {
+  betterstack?: BetterStackConnectorConfig;
   posthog?: PostHogConnectorConfig;
   sentry?: SentryConnectorConfig;
   otlp?: OTLPConnectorConfig[];

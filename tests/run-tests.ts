@@ -12,6 +12,7 @@ try {
       "./path-matching.test.ts",
       "./standalone.test.ts",
       "./client-logger.test.ts",
+      "./betterstack.test.ts",
       "./posthog.test.ts",
       "./otlp.test.ts",
       "./file-logging.test.ts",

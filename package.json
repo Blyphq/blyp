@@ -85,6 +85,11 @@
       "import": "./exports/expo.mjs",
       "require": "./exports/expo.js"
     },
+    "./betterstack": {
+      "types": "./types/connectors/betterstack.d.ts",
+      "import": "./exports/connectors/betterstack.mjs",
+      "require": "./exports/connectors/betterstack.js"
+    },
     "./posthog": {
       "types": "./types/connectors/posthog.d.ts",
       "import": "./exports/connectors/posthog.mjs",
@@ -113,6 +118,9 @@
       ],
       "expo": [
         "./types/expo.d.ts"
+      ],
+      "betterstack": [
+        "./types/connectors/betterstack.d.ts"
       ],
       "posthog": [
         "./types/connectors/posthog.d.ts"
@@ -246,16 +254,17 @@
     }
   },
   "dependencies": {
-    "@sentry/node": "^10.14.0",
-    "fflate": "^0.8.2",
+    "@logtail/node": "^0.5.8",
     "@opentelemetry/api-logs": "^0.206.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.206.0",
     "@opentelemetry/resources": "^2.1.0",
     "@opentelemetry/sdk-logs": "^0.206.0",
+    "@sentry/node": "^10.14.0",
+    "fflate": "^0.8.2",
     "jiti": "^2.4.2",
-    "posthog-node": "^5.28.1",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
+    "posthog-node": "^5.28.1",
     "zod": "^3.25.76"
   }
 }

@@ -37,6 +37,7 @@ export interface ClientLogSessionContext {
 }
 
 export type ClientConnectorRequest =
+  | 'betterstack'
   | 'posthog'
   | 'sentry'
   | { type: 'otlp'; name: string };

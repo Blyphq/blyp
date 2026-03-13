@@ -175,6 +175,64 @@ logger.info('app mounted');
 
 Expo uses the runtime `fetch` implementation for delivery and `expo-network` for connectivity metadata. Install `expo-network` in your app and use an absolute ingestion URL.
 
+### Better Stack
+
+Use `connectors.betterstack` when you want Blyp logs forwarded into Better Stack through `@logtail/node`:
+
+```typescript
+export default {
+  connectors: {
+    betterstack: {
+      enabled: true,
+      mode: 'auto',
+      sourceToken: process.env.SOURCE_TOKEN,
+      ingestingHost: process.env.INGESTING_HOST,
+    },
+  },
+};
+```
+
+`INGESTING_HOST` must be a full absolute `http://` or `https://` URL. Blyp does not auto-read `SOURCE_TOKEN` or `INGESTING_HOST`; wire them through your config explicitly.
+
+In `auto` mode, the normal Blyp server loggers forward to Better Stack automatically. In `manual` mode, use `blyp-js/betterstack`:
+
+```typescript
+import {
+  createBetterStackLogger,
+  createStructuredBetterStackLogger,
+} from 'blyp-js/betterstack';
+
+createBetterStackLogger().info('manual better stack log');
+
+const structured = createStructuredBetterStackLogger('checkout', {
+  orderId: 'ord_123',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request server-side Better Stack forwarding through the existing ingestion endpoint:
+
+```typescript
+import { createClientLogger } from 'blyp-js/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'betterstack',
+});
+```
+
+```typescript
+import { createExpoLogger } from 'blyp-js/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: 'betterstack',
+});
+```
+
+The browser and Expo connector flow still posts to Blyp first. Blyp forwards to Better Stack only when the server connector is configured. Browser and Expo apps do not use `@logtail/browser` directly. Workers remain out of scope for this connector.
+
 ### PostHog
 
 Use `blyp.config.ts` when you want to read the PostHog project key from the environment:

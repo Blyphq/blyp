@@ -13,6 +13,9 @@ import {
   type RotatingFileLogger,
 } from './file-logger';
 import {
+  createBetterStackSender,
+} from '../connectors/betterstack/sender';
+import {
   createPostHogSender,
   isClientLogRecord,
 } from '../connectors/posthog/sender';
@@ -22,6 +25,7 @@ import {
 import {
   createOTLPRegistry,
 } from '../connectors/otlp/sender';
+import type { BetterStackSender } from '../types/connectors/betterstack';
 import type { PostHogSender } from '../types/connectors/posthog';
 import type { SentrySender } from '../types/connectors/sentry';
 import type { OTLPRegistry } from '../types/connectors/otlp';
@@ -180,6 +184,10 @@ export function getPostHogSender(logger: BlypLogger): PostHogSender {
   return getLoggerFactory(logger).posthog;
 }
 
+export function getBetterStackSender(logger: BlypLogger): BetterStackSender {
+  return getLoggerFactory(logger).betterstack;
+}
+
 export function tryGetPostHogSender(logger: unknown): PostHogSender | null {
   try {
     return getPostHogSender(logger as BlypLogger);
@@ -254,6 +262,24 @@ function maybeSendToPostHog(
   posthog.send(record, { source: 'server', warnIfUnavailable: true });
 }
 
+function maybeSendToBetterStack(
+  betterstack: BetterStackSender,
+  record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
+): void {
+  if (isClientLogRecord(record)) {
+    return;
+  }
+
+  if (!betterstack.shouldAutoForwardServerLogs()) {
+    if (betterstack.enabled && !betterstack.ready) {
+      betterstack.send(record, { source: 'server', warnIfUnavailable: true });
+    }
+    return;
+  }
+
+  betterstack.send(record, { source: 'server', warnIfUnavailable: true });
+}
+
 function maybeSendToSentry(
   sentry: SentrySender,
   record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
@@ -288,6 +314,7 @@ function maybeSendToOTLP(
 function createLoggerInstance(
   rootRawLogger: any,
   fileLogger: RotatingFileLogger,
+  betterstack: BetterStackSender,
   posthog: PostHogSender,
   sentry: SentrySender,
   otlp: OTLPRegistry,
@@ -332,6 +359,7 @@ function createLoggerInstance(
       consoleMessage
     );
     fileLogger.write(record);
+    maybeSendToBetterStack(betterstack, record);
     maybeSendToPostHog(posthog, record);
     maybeSendToSentry(sentry, record);
     maybeSendToOTLP(otlp, record);
@@ -364,6 +392,7 @@ function createLoggerInstance(
       fileLogger.write(record);
     }
 
+    maybeSendToBetterStack(betterstack, record);
     maybeSendToPostHog(posthog, record);
     maybeSendToSentry(sentry, record);
     maybeSendToOTLP(otlp, record);
@@ -420,6 +449,7 @@ function createLoggerInstance(
       return createLoggerInstance(
         rootRawLogger,
         fileLogger,
+        betterstack,
         posthog,
         sentry,
         otlp,
@@ -430,6 +460,7 @@ function createLoggerInstance(
 
     [LOGGER_FACTORY]: {
       bindings,
+      betterstack,
       posthog,
       sentry,
       otlp,
@@ -440,6 +471,7 @@ function createLoggerInstance(
         return createLoggerInstance(
           rootRawLogger,
           fileLogger,
+          betterstack,
           posthog,
           sentry,
           otlp,
@@ -470,10 +502,18 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   const resolvedConfig = resolveConfig(config);
   const rawLogger = createPinoLogger(resolvedConfig);
   const fileLogger = createFileLogger(resolvedConfig);
+  const betterstack = createBetterStackSender(resolvedConfig);
   const posthog = createPostHogSender(resolvedConfig);
   const sentry = createSentrySender(resolvedConfig);
   const otlp = createOTLPRegistry(resolvedConfig);
-  const instance = createLoggerInstance(rawLogger, fileLogger, posthog, sentry, otlp);
+  const instance = createLoggerInstance(
+    rawLogger,
+    fileLogger,
+    betterstack,
+    posthog,
+    sentry,
+    otlp
+  );
 
   if (config === undefined) {
     loggerInstance = instance;
