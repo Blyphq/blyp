@@ -37,6 +37,15 @@ export interface BetterStackConnectorConfig {
   sourceToken?: string;
   ingestingHost?: string;
   serviceName?: string;
+  errorTracking?: BetterStackErrorTrackingConfig;
+}
+
+export interface BetterStackErrorTrackingConfig {
+  enabled?: boolean;
+  dsn?: string;
+  tracesSampleRate?: number;
+  environment?: string;
+  release?: string;
 }
 
 export interface PostHogErrorTrackingConfig {
@@ -68,6 +77,17 @@ export interface ResolvedBetterStackConnectorConfig {
   sourceToken?: string;
   ingestingHost?: string;
   serviceName: string;
+  errorTracking: ResolvedBetterStackErrorTrackingConfig;
+  ready: boolean;
+  status: 'enabled' | 'missing';
+}
+
+export interface ResolvedBetterStackErrorTrackingConfig {
+  enabled: boolean;
+  dsn?: string;
+  tracesSampleRate: number;
+  environment?: string;
+  release?: string;
   ready: boolean;
   status: 'enabled' | 'missing';
 }

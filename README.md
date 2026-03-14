@@ -187,6 +187,10 @@ export default {
       mode: 'auto',
       sourceToken: process.env.SOURCE_TOKEN,
       ingestingHost: process.env.INGESTING_HOST,
+      errorTracking: {
+        dsn: process.env.BETTERSTACK_ERROR_TRACKING_DSN,
+        tracesSampleRate: 1.0,
+      },
     },
   },
 };
@@ -198,11 +202,15 @@ In `auto` mode, the normal Blyp server loggers forward to Better Stack automatic
 
 ```typescript
 import {
+  captureBetterStackException,
+  createBetterStackErrorTracker,
   createBetterStackLogger,
   createStructuredBetterStackLogger,
 } from 'blyp-js/betterstack';
 
 createBetterStackLogger().info('manual better stack log');
+createBetterStackErrorTracker().capture(new Error('manual better stack exception'));
+captureBetterStackException(new Error('wrapped better stack exception'));
 
 const structured = createStructuredBetterStackLogger('checkout', {
   orderId: 'ord_123',
@@ -210,6 +218,8 @@ const structured = createStructuredBetterStackLogger('checkout', {
 structured.info('manual start');
 structured.emit({ status: 200 });
 ```
+
+When `connectors.betterstack.errorTracking.dsn` is configured, Blyp captures handled server errors into Better Stack error tracking using the Sentry SDK. Client `error` and `critical` logs requested through the Better Stack connector are promoted to exceptions as well.
 
 Browser and Expo loggers can request server-side Better Stack forwarding through the existing ingestion endpoint:
 

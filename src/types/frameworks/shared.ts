@@ -74,6 +74,16 @@ export interface ResolvedBetterStackConnector {
   serviceName: string;
   ingestingHost?: string;
   status: 'enabled' | 'missing';
+  errorTracking: {
+    enabled: boolean;
+    ready: boolean;
+    status: 'enabled' | 'missing';
+    dsn?: string;
+    tracesSampleRate: number;
+    environment?: string;
+    release?: string;
+  };
+  shouldAutoCaptureExceptions: () => boolean;
   send: (
     record: {
       timestamp: string;
@@ -84,6 +94,14 @@ export interface ResolvedBetterStackConnector {
     options?: {
       source?: 'server' | 'client';
       warnIfUnavailable?: boolean;
+    }
+  ) => void;
+  captureException: (
+    error: unknown,
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+      context?: Record<string, unknown>;
     }
   ) => void;
 }

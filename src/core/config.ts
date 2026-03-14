@@ -6,6 +6,7 @@ import { createWarnOnceLogger } from '../shared/once';
 import { hasNonEmptyString, isAbsoluteHttpUrl } from '../shared/validation';
 import type {
   BetterStackConnectorConfig,
+  BetterStackErrorTrackingConfig,
   BlypConfig,
   BlypConnectorsConfig,
   ClientLoggingConfig,
@@ -15,6 +16,7 @@ import type {
   OTLPConnectorConfig,
   PostHogConnectorConfig,
   ResolvedBetterStackConnectorConfig,
+  ResolvedBetterStackErrorTrackingConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
   ResolvedSentryConnectorConfig,
@@ -25,6 +27,7 @@ export type { ConnectorMode } from '../types/connectors/mode';
 export type {
   BlypConfig,
   BetterStackConnectorConfig,
+  BetterStackErrorTrackingConfig,
   BlypConnectorsConfig,
   ClientLoggingConfig,
   LogFileConfig,
@@ -32,6 +35,7 @@ export type {
   OTLPConnectorConfig,
   PostHogConnectorConfig,
   ResolvedBetterStackConnectorConfig,
+  ResolvedBetterStackErrorTrackingConfig,
   PostHogErrorTrackingConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
@@ -372,6 +376,12 @@ function mergeBetterStackConnectorConfig(
   const sourceToken = override?.sourceToken ?? base?.sourceToken;
   const ingestingHost = override?.ingestingHost ?? base?.ingestingHost;
   const enabled = override?.enabled ?? base?.enabled ?? false;
+  const baseErrorTracking = base?.enabled === true ? base?.errorTracking : undefined;
+  const errorTracking = mergeBetterStackErrorTrackingConfig(
+    enabled,
+    baseErrorTracking,
+    override?.errorTracking
+  );
   const ready =
     enabled &&
     hasNonEmptyString(sourceToken) &&
@@ -386,6 +396,27 @@ function mergeBetterStackConnectorConfig(
       override?.serviceName ??
       base?.serviceName ??
       resolveDefaultConnectorServiceName(),
+    errorTracking,
+    ready,
+    status: ready ? 'enabled' : 'missing',
+  };
+}
+
+function mergeBetterStackErrorTrackingConfig(
+  connectorEnabled: boolean,
+  base: BetterStackErrorTrackingConfig | undefined,
+  override: BetterStackErrorTrackingConfig | undefined
+): ResolvedBetterStackErrorTrackingConfig {
+  const dsn = override?.dsn ?? base?.dsn;
+  const enabled = override?.enabled ?? base?.enabled ?? connectorEnabled;
+  const ready = enabled && hasNonEmptyString(dsn);
+
+  return {
+    enabled,
+    dsn,
+    tracesSampleRate: override?.tracesSampleRate ?? base?.tracesSampleRate ?? 1.0,
+    environment: override?.environment ?? base?.environment,
+    release: override?.release ?? base?.release,
     ready,
     status: ready ? 'enabled' : 'missing',
   };

@@ -14,12 +14,16 @@ import {
   createBetterStackSender,
 } from './sender';
 import type {
+  BetterStackErrorTracker,
+  BetterStackExceptionCaptureOptions,
   BetterStackLogger,
   BetterStackLoggerConfig,
   BetterStackSender,
 } from '../../types/connectors/betterstack';
 
 export type {
+  BetterStackErrorTracker,
+  BetterStackExceptionCaptureOptions,
   BetterStackLogger,
   BetterStackLoggerConfig,
 } from '../../types/connectors/betterstack';
@@ -106,10 +110,49 @@ function createBetterStackLoggerInstance(
   };
 }
 
+function createBetterStackErrorTrackerInstance(
+  sender: BetterStackSender,
+  bindings: Record<string, unknown> = {}
+): BetterStackErrorTracker {
+  return {
+    capture: (error: unknown, options: BetterStackExceptionCaptureOptions = {}) => {
+      sender.captureException(error, {
+        source: options.source ?? 'server',
+        warnIfUnavailable: options.warnIfUnavailable ?? true,
+        context: {
+          ...bindings,
+          ...(options.context ?? {}),
+          'blyp.manual': true,
+        },
+      });
+    },
+    child: (childBindings: Record<string, unknown>) => {
+      return createBetterStackErrorTrackerInstance(sender, {
+        ...bindings,
+        ...childBindings,
+      });
+    },
+  };
+}
+
 export function createBetterStackLogger(
   config: BetterStackLoggerConfig = {}
 ): BetterStackLogger {
   return createBetterStackLoggerInstance(resolveSender(config));
+}
+
+export function createBetterStackErrorTracker(
+  config: BetterStackLoggerConfig = {}
+): BetterStackErrorTracker {
+  return createBetterStackErrorTrackerInstance(resolveSender(config));
+}
+
+export function captureBetterStackException(
+  error: unknown,
+  options: BetterStackExceptionCaptureOptions = {},
+  config: BetterStackLoggerConfig = {}
+): void {
+  createBetterStackErrorTracker(config).capture(error, options);
 }
 
 export function createStructuredBetterStackLogger<

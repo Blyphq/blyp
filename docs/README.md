@@ -322,6 +322,10 @@ export default {
       mode: 'auto',
       sourceToken: process.env.SOURCE_TOKEN,
       ingestingHost: process.env.INGESTING_HOST,
+      errorTracking: {
+        dsn: process.env.BETTERSTACK_ERROR_TRACKING_DSN,
+        tracesSampleRate: 1.0,
+      },
     },
   },
 };
@@ -333,12 +337,16 @@ export default {
 
 ```typescript
 import {
+  captureBetterStackException,
+  createBetterStackErrorTracker,
   createBetterStackLogger,
   createStructuredBetterStackLogger,
 } from 'blyp-js/betterstack';
 
 const betterStackLogger = createBetterStackLogger();
 betterStackLogger.info('manual better stack log');
+createBetterStackErrorTracker().capture(new Error('manual better stack exception'));
+captureBetterStackException(new Error('wrapped better stack exception'));
 
 const structured = createStructuredBetterStackLogger('checkout', {
   orderId: 'ord_123',
@@ -346,6 +354,26 @@ const structured = createStructuredBetterStackLogger('checkout', {
 structured.info('manual start');
 structured.emit({ status: 200 });
 ```
+
+Configure `connectors.betterstack.errorTracking.dsn` when you want Better Stack error tracking through the Sentry SDK:
+
+```typescript
+export default {
+  connectors: {
+    betterstack: {
+      enabled: true,
+      sourceToken: process.env.SOURCE_TOKEN,
+      ingestingHost: process.env.INGESTING_HOST,
+      errorTracking: {
+        dsn: process.env.BETTERSTACK_ERROR_TRACKING_DSN,
+        tracesSampleRate: 1.0,
+      },
+    },
+  },
+};
+```
+
+With Better Stack error tracking configured, Blyp captures handled server errors, promotes client `error` and `critical` connector logs into exceptions, and exposes manual exception helpers through `blyp-js/betterstack`.
 
 Browser and Expo loggers can request Better Stack forwarding through the existing Blyp ingestion route:
 

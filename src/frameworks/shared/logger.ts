@@ -10,6 +10,7 @@ import {
   getOtlpRegistry,
   getPostHogSender,
   getSentrySender,
+  tryGetBetterStackSender,
   tryGetPostHogSender,
 } from '../../core/logger';
 import {
@@ -262,6 +263,22 @@ export function emitHttpErrorLog(
     });
   }
 
+  const betterstack = tryGetBetterStackSender(logger);
+  if (betterstack?.shouldAutoCaptureExceptions()) {
+    betterstack.captureException(captureContext.error ?? error ?? message, {
+      source: 'server',
+      warnIfUnavailable: true,
+      context: {
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        message,
+        status: statusCode,
+        path,
+        data: errorLogData,
+      },
+    });
+  }
+
   return errorLogData;
 }
 
@@ -360,14 +377,41 @@ export async function handleClientLogIngestion<Ctx>(options: {
     headers['x-blyp-betterstack-status'] = config.betterstack.ready ? 'enabled' : 'missing';
 
     if (config.betterstack.ready) {
-      config.betterstack.send({
+      const forwardedRecord = {
         timestamp: structuredPayload.receivedAt as string,
         level: payload.level,
         message: `[client] ${payload.message}`,
         data: structuredPayload,
-      }, {
+      };
+
+      config.betterstack.send(forwardedRecord, {
         source: 'client',
       });
+
+      if (
+        (payload.level === 'error' || payload.level === 'critical') &&
+        config.betterstack.shouldAutoCaptureExceptions()
+      ) {
+        const clientErrorCandidate =
+          payload.data &&
+          typeof payload.data === 'object' &&
+          !Array.isArray(payload.data) &&
+          typeof (payload.data as Record<string, unknown>).message === 'string'
+            ? payload.data
+            : payload.message;
+
+        config.betterstack.captureException(clientErrorCandidate, {
+          source: 'client',
+          warnIfUnavailable: true,
+          context: {
+            sessionId: payload.session.sessionId,
+            pageUrl: payload.page.url,
+            pagePath: payload.page.pathname,
+            metadata: payload.metadata,
+            payload: structuredPayload,
+          },
+        });
+      }
     }
   } else if (payload.connector === 'posthog') {
     headers['x-blyp-posthog-status'] = config.posthog.ready ? 'enabled' : 'missing';

@@ -7,7 +7,11 @@ import {
   type BlypErrorCode
 } from '../shared/errors';
 import type { CreateErrorInput } from '../types/core/errors';
-import { logger as defaultLogger, tryGetPostHogSender } from './logger';
+import {
+  logger as defaultLogger,
+  tryGetBetterStackSender,
+  tryGetPostHogSender,
+} from './logger';
 
 export type {
   BlypErrorCode,
@@ -29,6 +33,24 @@ export function createError(input: CreateErrorInput): BlypError {
         source: 'server',
         warnIfUnavailable: true,
         properties: {
+          'blyp.type': 'application_error',
+          status: error.status,
+          statusCode: error.statusCode,
+          ...(error.code !== undefined ? { code: error.code } : {}),
+          ...(error.why !== undefined ? { why: error.why } : {}),
+          ...(error.fix !== undefined ? { fix: error.fix } : {}),
+          ...(error.link !== undefined ? { link: error.link } : {}),
+          ...(error.details !== undefined ? { details: error.details } : {}),
+        },
+      });
+    }
+
+    const betterstack = tryGetBetterStackSender(input.logger ?? defaultLogger);
+    if (betterstack?.shouldAutoCaptureExceptions()) {
+      betterstack.captureException(error, {
+        source: 'server',
+        warnIfUnavailable: true,
+        context: {
           'blyp.type': 'application_error',
           status: error.status,
           statusCode: error.statusCode,

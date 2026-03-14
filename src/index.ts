@@ -51,6 +51,7 @@ export type {
   ClientLoggingConfig,
   BlypConfig,
   BetterStackConnectorConfig,
+  BetterStackErrorTrackingConfig,
   ConnectorMode,
   LogFileConfig,
   LogRotationConfig,
@@ -71,10 +72,14 @@ export * from './core/helpers';
 export * from './core/colors';
 export { normalizeOTLPRecord } from './connectors/otlp/sender';
 export {
+  captureBetterStackException,
+  createBetterStackErrorTracker,
   createBetterStackLogger,
   createStructuredBetterStackLogger,
 } from './connectors/betterstack';
 export type {
+  BetterStackErrorTracker,
+  BetterStackExceptionCaptureOptions,
   BetterStackLogger,
   BetterStackLoggerConfig,
 } from './connectors/betterstack';

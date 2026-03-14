@@ -196,6 +196,14 @@ export function tryGetPostHogSender(logger: unknown): PostHogSender | null {
   }
 }
 
+export function tryGetBetterStackSender(logger: unknown): BetterStackSender | null {
+  try {
+    return getBetterStackSender(logger as BlypLogger);
+  } catch {
+    return null;
+  }
+}
+
 export function getSentrySender(logger: BlypLogger): SentrySender {
   return getLoggerFactory(logger).sentry;
 }
