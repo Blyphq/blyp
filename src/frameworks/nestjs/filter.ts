@@ -19,7 +19,7 @@ import {
   getNestRequestStartTime,
   getNestStructuredLogEmitted,
 } from './helpers';
-import type { NestLoggerState } from './logger';
+import type { NestLoggerState } from '../../types/frameworks/nestjs';
 
 @Catch()
 export class BlypNestExceptionFilter extends BaseExceptionFilter {

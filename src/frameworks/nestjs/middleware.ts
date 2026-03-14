@@ -18,7 +18,7 @@ import {
   setNestStructuredLogEmitted,
   setNestRequestStartTime,
 } from './helpers';
-import type { NestLoggerState } from './logger';
+import type { NestLoggerState } from '../../types/frameworks/nestjs';
 
 @Injectable()
 export class BlypNestMiddleware implements NestMiddleware {

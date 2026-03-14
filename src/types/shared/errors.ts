@@ -87,7 +87,7 @@ export interface ErrorConstructionInput extends BlypErrorLike {
   skipLogging?: boolean;
 }
 
-export type HttpCodeRegistry = { readonly [key: string]: BlypErrorCode };
+export type HttpCodeRegistry<TKeys extends string = string> = Readonly<Record<TKeys, BlypErrorCode>>;
 
 export type CreateCodeFunction = (
   definition: BlypErrorCodeDefinition,

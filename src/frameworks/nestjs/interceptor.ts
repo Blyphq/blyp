@@ -27,7 +27,7 @@ import {
   getNestResponseStatus,
   setNestRequestStartTime,
 } from './helpers';
-import type { NestLoggerState } from './logger';
+import type { NestLoggerState } from '../../types/frameworks/nestjs';
 
 @Injectable()
 export class BlypNestInterceptor implements NestInterceptor {

@@ -457,12 +457,14 @@ function createErrorCode(
 
 export function buildHttpCodeRegistry(
   createErrorFromCode?: CreateCodeFunction
-): HttpCodeRegistry {
+): HttpCodeRegistry<keyof typeof HTTP_STATUS_DEFINITIONS> {
   const entries = Object.entries(HTTP_STATUS_DEFINITIONS).map(([key, value]) => {
     return [key, createErrorCode({ key, ...value }, createErrorFromCode)] as const;
   });
 
-  return Object.freeze(Object.fromEntries(entries) as HttpCodeRegistry);
+  return Object.freeze(
+    Object.fromEntries(entries) as HttpCodeRegistry<keyof typeof HTTP_STATUS_DEFINITIONS>
+  );
 }
 
 export const HTTP_CODES = buildHttpCodeRegistry();
