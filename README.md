@@ -1,5 +1,7 @@
 # Blyp Logger
 
+> **Blyp HQ** (`Blyphq`) is the GitHub org behind the Blyp project.
+
 > *The silent observer for your applications*
 
 **Blyp** is a high-performance, runtime-adaptive logger for standalone apps and modern TypeScript web frameworks. It combines Bun-friendly runtime detection, structured NDJSON file logging, browser-to-server log ingestion, and framework-specific HTTP logging helpers.
@@ -60,18 +62,18 @@ blyp/
 ## Installation
 
 ```bash
-bun add blyp-js
+bun add @blyp/core
 npx expo install expo-network
 ```
 
-Also: `npm install blyp-js` | `yarn add blyp-js` | `pnpm add blyp-js`
+Also: `npm install @blyp/core` | `yarn add @blyp/core` | `pnpm add @blyp/core`
 
 ## Usage
 
 ### Basic logger
 
 ```typescript
-import { logger } from 'blyp-js';
+import { logger } from '@blyp/core';
 
 logger.info('Hello world');
 logger.success('Operation completed');
@@ -84,7 +86,7 @@ logger.warning('Warning message');
 Standalone usage:
 
 ```typescript
-import { createStructuredLog } from 'blyp-js';
+import { createStructuredLog } from '@blyp/core';
 
 const structuredLog = createStructuredLog('checkout', {
   service: 'web-api',
@@ -105,9 +107,9 @@ structuredLog.emit({ status: 200 });
 Framework usage with Elysia:
 
 ```typescript
-import { createStructuredLog } from 'blyp-js';
+import { createStructuredLog } from '@blyp/core';
 import { Elysia } from 'elysia';
-import { createLogger } from 'blyp-js/elysia';
+import { createLogger } from '@blyp/core/elysia';
 
 const app = new Elysia()
   .use(createLogger({ level: 'info' }))
@@ -139,7 +141,7 @@ Inside framework handlers, the imported `createStructuredLog(...)` automatically
 ### Errors
 
 ```typescript
-import { createError } from 'blyp-js';
+import { createError } from '@blyp/core';
 
 throw createError({ status: 404, message: 'Not found' });
 ```
@@ -152,7 +154,7 @@ Blyp supports **Elysia**, **Hono**, **Express**, **Fastify**, **NestJS**, **Next
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createLogger } from 'blyp-js/elysia';
+import { createLogger } from '@blyp/core/elysia';
 
 const app = new Elysia()
   .use(createLogger({ level: 'info', autoLogging: true }))
@@ -165,7 +167,7 @@ For other frameworks, client logging, advanced configuration, and utilities, see
 ### Expo
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -184,7 +186,7 @@ Prisma:
 
 ```typescript
 import { PrismaClient } from '@prisma/client';
-import { createPrismaDatabaseAdapter } from 'blyp-js/database';
+import { createPrismaDatabaseAdapter } from '@blyp/core/database';
 
 const prisma = new PrismaClient();
 
@@ -203,7 +205,7 @@ export default {
 Drizzle:
 
 ```typescript
-import { createDrizzleDatabaseAdapter } from 'blyp-js/database';
+import { createDrizzleDatabaseAdapter } from '@blyp/core/database';
 import { db } from './db';
 import { blypLogs } from './db/schema/blyp';
 
@@ -251,7 +253,7 @@ export default {
 
 `INGESTING_HOST` must be a full absolute `http://` or `https://` URL. Blyp does not auto-read `SOURCE_TOKEN` or `INGESTING_HOST`; wire them through your config explicitly.
 
-In `auto` mode, the normal Blyp server loggers forward to Better Stack automatically. In `manual` mode, use `blyp-js/betterstack`:
+In `auto` mode, the normal Blyp server loggers forward to Better Stack automatically. In `manual` mode, use `@blyp/core/betterstack`:
 
 ```typescript
 import {
@@ -259,7 +261,7 @@ import {
   createBetterStackErrorTracker,
   createBetterStackLogger,
   createStructuredBetterStackLogger,
-} from 'blyp-js/betterstack';
+} from '@blyp/core/betterstack';
 
 createBetterStackLogger().info('manual better stack log');
 createBetterStackErrorTracker().capture(new Error('manual better stack exception'));
@@ -277,7 +279,7 @@ When `connectors.betterstack.errorTracking.dsn` is configured, Blyp captures han
 Browser and Expo loggers can request server-side Better Stack forwarding through the existing ingestion endpoint:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -286,7 +288,7 @@ const logger = createClientLogger({
 ```
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -316,7 +318,7 @@ export default {
 };
 ```
 
-In `auto` mode, the normal Blyp server loggers forward to PostHog automatically. In `manual` mode, use `blyp-js/posthog`:
+In `auto` mode, the normal Blyp server loggers forward to PostHog automatically. In `manual` mode, use `@blyp/core/posthog`:
 
 ```typescript
 import {
@@ -324,7 +326,7 @@ import {
   createPosthogErrorTracker,
   createPosthogLogger,
   createStructuredPosthogLogger,
-} from 'blyp-js/posthog';
+} from '@blyp/core/posthog';
 
 createPosthogLogger().info('manual posthog log');
 createPosthogErrorTracker().capture(new Error('manual posthog exception'));
@@ -340,7 +342,7 @@ structured.emit({ status: 200 });
 Browser and Expo loggers can request server-side PostHog forwarding through the existing ingestion endpoint:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -370,10 +372,10 @@ export default {
 };
 ```
 
-In `auto` mode, normal Blyp server loggers forward to Sentry automatically. In `manual` mode, use `blyp-js/sentry`:
+In `auto` mode, normal Blyp server loggers forward to Sentry automatically. In `manual` mode, use `@blyp/core/sentry`:
 
 ```typescript
-import { createSentryLogger, createStructuredSentryLogger } from 'blyp-js/sentry';
+import { createSentryLogger, createStructuredSentryLogger } from '@blyp/core/sentry';
 
 createSentryLogger().info('manual sentry log');
 
@@ -387,7 +389,7 @@ structured.emit({ status: 200 });
 Browser and Expo loggers can request server-side forwarding through Blyp's ingestion endpoint:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -396,7 +398,7 @@ const logger = createClientLogger({
 ```
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -438,10 +440,10 @@ export default {
 };
 ```
 
-In `auto` mode, normal Blyp server loggers forward to every ready OTLP target automatically. In `manual` mode, use `blyp-js/otlp` and select a named target:
+In `auto` mode, normal Blyp server loggers forward to every ready OTLP target automatically. In `manual` mode, use `@blyp/core/otlp` and select a named target:
 
 ```typescript
-import { createOtlpLogger, createStructuredOtlpLogger } from 'blyp-js/otlp';
+import { createOtlpLogger, createStructuredOtlpLogger } from '@blyp/core/otlp';
 
 createOtlpLogger({
   name: 'grafana',
@@ -459,7 +461,7 @@ structured.emit({ status: 200 });
 Browser and Expo loggers can request server-side forwarding to a named OTLP target through the existing ingestion endpoint:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -468,7 +470,7 @@ const logger = createClientLogger({
 ```
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -522,7 +524,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 ## Links
 
 - [GitHub Repository](https://github.com/Blyphq/blyp)
-- [NPM Package](https://www.npmjs.com/package/blyp-js)
+- [NPM Package](https://www.npmjs.com/package/@blyp/core)
 - [Documentation](docs/README.md)
 - [Issues](https://github.com/Blyphq/blyp/issues)
 

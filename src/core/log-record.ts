@@ -31,7 +31,7 @@ function isInternalLoggerFrame(filePath: string): boolean {
     normalizedPath.startsWith('node:') ||
     normalizedPath.includes('/node_modules/pino') ||
     normalizedPath.includes('/node_modules/pino-pretty') ||
-    normalizedPath.includes('/node_modules/blyp-js/') ||
+    normalizedPath.includes('/node_modules/@blyp/core/') ||
     normalizedPath.includes('/blyp/src/core/') ||
     normalizedPath.includes('/blyp/src/frameworks/') ||
     normalizedPath.includes('/blyp/src/posthog/') ||

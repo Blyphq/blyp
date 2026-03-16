@@ -66,7 +66,7 @@ export type {
   SentryConnectorConfig
 } from '../types/core/config';
 
-const PACKAGE_NAME = 'blyp-js';
+const PACKAGE_NAME = '@blyp/core';
 const GITIGNORE_FILE_NAME = '.gitignore';
 const CONFIG_FILE_NAMES = [
   'blyp.config.ts',

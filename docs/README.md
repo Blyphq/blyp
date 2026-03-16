@@ -27,7 +27,7 @@ This document contains detailed usage, all framework integrations, configuration
 ## Basic logger usage
 
 ```typescript
-import { logger } from 'blyp-js';
+import { logger } from '@blyp/core';
 
 // Basic logging
 logger.info('Hello world');
@@ -54,7 +54,7 @@ logger.info('User login', {
 ## Structured request batches
 
 ```typescript
-import { createStructuredLog } from 'blyp-js';
+import { createStructuredLog } from '@blyp/core';
 
 const structuredLog = createStructuredLog('checkout', {
   service: 'web-api',
@@ -75,7 +75,7 @@ structuredLog.emit({ status: 200 });
 Typed usage:
 
 ```typescript
-import { createStructuredLog } from 'blyp-js';
+import { createStructuredLog } from '@blyp/core';
 
 const structuredLog = createStructuredLog<{
   message: string;
@@ -103,7 +103,7 @@ Structured logs are written only when you call `.emit()`. In framework request h
 ### Application Errors
 
 ```typescript
-import { createError, HTTP_CODES } from 'blyp-js';
+import { createError, HTTP_CODES } from '@blyp/core';
 
 throw createError({
   status: 404,
@@ -131,7 +131,7 @@ throw PAYMENT_AMOUNT_INVALID.create({
 ### Client Error Parsing
 
 ```typescript
-import { parseError } from 'blyp-js/client';
+import { parseError } from '@blyp/core/client';
 
 const response = await fetch('/api/payments', {
   method: 'POST',
@@ -157,7 +157,7 @@ const error = parseError({
 ### Client Logger Sync
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -180,7 +180,7 @@ The client logger logs to the browser console by default and queues remote event
 ### Expo Logger Sync
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -224,7 +224,7 @@ Database mode requires an executable config file such as `blyp.config.ts` or run
 
 ```typescript
 import { PrismaClient } from '@prisma/client';
-import { createPrismaDatabaseAdapter } from 'blyp-js/database';
+import { createPrismaDatabaseAdapter } from '@blyp/core/database';
 
 const prisma = new PrismaClient();
 
@@ -243,7 +243,7 @@ export default {
 ### Drizzle
 
 ```typescript
-import { createDrizzleDatabaseAdapter } from 'blyp-js/database';
+import { createDrizzleDatabaseAdapter } from '@blyp/core/database';
 import { db } from './db';
 import { blypLogs } from './db/schema/blyp';
 
@@ -329,7 +329,7 @@ import {
   createPosthogErrorTracker,
   createPosthogLogger,
   createStructuredPosthogLogger,
-} from 'blyp-js/posthog';
+} from '@blyp/core/posthog';
 
 const posthogLogger = createPosthogLogger();
 posthogLogger.info('manual posthog log');
@@ -361,12 +361,12 @@ export default {
 };
 ```
 
-With `errorTracking.mode: "auto"`, Blyp captures handled server errors, promotes client `error` and `critical` connector logs into PostHog exceptions, and can enable uncaught exception / unhandled rejection autocapture. With `errorTracking.mode: "manual"`, only the explicit `blyp-js/posthog` exception APIs run automatically.
+With `errorTracking.mode: "auto"`, Blyp captures handled server errors, promotes client `error` and `critical` connector logs into PostHog exceptions, and can enable uncaught exception / unhandled rejection autocapture. With `errorTracking.mode: "manual"`, only the explicit `@blyp/core/posthog` exception APIs run automatically.
 
 Browser and Expo loggers can request PostHog forwarding through the existing Blyp ingestion route:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -375,7 +375,7 @@ const logger = createClientLogger({
 ```
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -420,7 +420,7 @@ import {
   createBetterStackErrorTracker,
   createBetterStackLogger,
   createStructuredBetterStackLogger,
-} from 'blyp-js/betterstack';
+} from '@blyp/core/betterstack';
 
 const betterStackLogger = createBetterStackLogger();
 betterStackLogger.info('manual better stack log');
@@ -452,12 +452,12 @@ export default {
 };
 ```
 
-With Better Stack error tracking configured, Blyp captures handled server errors, promotes client `error` and `critical` connector logs into exceptions, and exposes manual exception helpers through `blyp-js/betterstack`.
+With Better Stack error tracking configured, Blyp captures handled server errors, promotes client `error` and `critical` connector logs into exceptions, and exposes manual exception helpers through `@blyp/core/betterstack`.
 
 Browser and Expo loggers can request Better Stack forwarding through the existing Blyp ingestion route:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -466,7 +466,7 @@ const logger = createClientLogger({
 ```
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -515,7 +515,7 @@ Static JSON config works too:
 `mode: "auto"` forwards normal server-side Blyp logs to Sentry automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the Sentry subpath:
 
 ```typescript
-import { createSentryLogger, createStructuredSentryLogger } from 'blyp-js/sentry';
+import { createSentryLogger, createStructuredSentryLogger } from '@blyp/core/sentry';
 
 const sentryLogger = createSentryLogger();
 sentryLogger.info('manual sentry log');
@@ -530,7 +530,7 @@ structured.emit({ status: 200 });
 Browser and Expo loggers can request Sentry forwarding through the existing Blyp ingestion route:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -539,7 +539,7 @@ const logger = createClientLogger({
 ```
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -621,7 +621,7 @@ Notes:
 `mode: "auto"` forwards normal server-side Blyp logs to every ready OTLP target automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the OTLP subpath:
 
 ```typescript
-import { createOtlpLogger, createStructuredOtlpLogger } from 'blyp-js/otlp';
+import { createOtlpLogger, createStructuredOtlpLogger } from '@blyp/core/otlp';
 
 const otlpLogger = createOtlpLogger({
   name: 'grafana',
@@ -640,7 +640,7 @@ structured.emit({ status: 200 });
 Browser and Expo loggers can request named OTLP forwarding through the existing Blyp ingestion route:
 
 ```typescript
-import { createClientLogger } from 'blyp-js/client';
+import { createClientLogger } from '@blyp/core/client';
 
 const logger = createClientLogger({
   endpoint: '/inngest',
@@ -649,7 +649,7 @@ const logger = createClientLogger({
 ```
 
 ```typescript
-import { createExpoLogger } from 'blyp-js/expo';
+import { createExpoLogger } from '@blyp/core/expo';
 
 const logger = createExpoLogger({
   endpoint: 'https://api.example.com/inngest',
@@ -667,7 +667,7 @@ The browser and Expo OTLP connectors do not send directly to Grafana, Datadog, o
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createLogger } from 'blyp-js/elysia';
+import { createLogger } from '@blyp/core/elysia';
 
 const app = new Elysia()
   .use(createLogger({
@@ -687,7 +687,7 @@ const app = new Elysia()
 
 ```typescript
 import { Hono } from 'hono';
-import { createLogger } from 'blyp-js/hono';
+import { createLogger } from '@blyp/core/hono';
 
 const app = new Hono();
 
@@ -709,7 +709,7 @@ import express from 'express';
 import {
   createLogger,
   createExpressErrorLogger,
-} from 'blyp-js/express';
+} from '@blyp/core/express';
 
 const app = express();
 
@@ -733,7 +733,7 @@ app.use((error, _req, res, _next) => {
 
 ```typescript
 import Fastify from 'fastify';
-import { createLogger } from 'blyp-js/fastify';
+import { createLogger } from '@blyp/core/fastify';
 
 const app = Fastify();
 
@@ -753,8 +753,8 @@ app.get('/posts', async (request) => {
 import 'reflect-metadata';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { logger } from 'blyp-js';
-import { createLogger, BlypModule } from 'blyp-js/nestjs';
+import { logger } from '@blyp/core';
+import { createLogger, BlypModule } from '@blyp/core/nestjs';
 
 @Module({
   imports: [BlypModule.forRoot()],
@@ -777,7 +777,7 @@ Call `createLogger(...)` before `NestFactory.create(...)`. `BlypModule` wires HT
 ### Next.js App Router
 
 ```typescript
-import { createLogger } from 'blyp-js/nextjs';
+import { createLogger } from '@blyp/core/nextjs';
 
 const nextLogger = createLogger({
   level: 'info',
@@ -795,7 +795,7 @@ export const POST = nextLogger.clientLogHandler;
 ### TanStack Start
 
 ```typescript
-import { createLogger } from 'blyp-js/tanstack-start';
+import { createLogger } from '@blyp/core/tanstack-start';
 
 const tanstackLogger = createLogger({
   level: 'info',
@@ -810,7 +810,7 @@ export const POST = tanstackLogger.clientLogHandlers.POST;
 ### SvelteKit
 
 ```typescript
-import { createLogger } from 'blyp-js/sveltekit';
+import { createLogger } from '@blyp/core/sveltekit';
 
 const svelteLogger = createLogger({
   level: 'info',
@@ -825,7 +825,7 @@ export const POST = svelteLogger.clientLogHandler;
 ### Cloudflare Workers
 
 ```typescript
-import { initWorkersLogger, createWorkersLogger } from 'blyp-js/workers';
+import { initWorkersLogger, createWorkersLogger } from '@blyp/core/workers';
 
 initWorkersLogger({
   env: { service: 'my-worker' },
@@ -858,14 +858,14 @@ try {
 }
 ```
 
-The Workers integration is console-based. It does not use file logging, does not read `blyp.config.json`, and does not include client-log ingestion in this first version. Use the subpath import `blyp-js/workers`.
+The Workers integration is console-based. It does not use file logging, does not read `blyp.config.json`, and does not include client-log ingestion in this first version. Use the subpath import `@blyp/core/workers`.
 
 ---
 
 ## Advanced configuration
 
 ```typescript
-import { createLogger } from 'blyp-js/elysia';
+import { createLogger } from '@blyp/core/elysia';
 
 const logger = createLogger({
   level: 'info',
@@ -903,7 +903,7 @@ const logger = createLogger({
 
 ```typescript
 import { Elysia } from 'elysia';
-import { createLogger } from 'blyp-js/elysia';
+import { createLogger } from '@blyp/core/elysia';
 
 const app = new Elysia()
   .use(createLogger({
@@ -932,7 +932,7 @@ Set `"enabled": false` to disable the auto-registered ingestion route.
 ## Runtime detection
 
 ```typescript
-import { runtime } from 'blyp-js/utils';
+import { runtime } from '@blyp/core';
 
 console.log(`Running on: ${runtime.type}`); // 'bun' or 'node'
 console.log(`Is Bun: ${runtime.isBun}`);
@@ -951,11 +951,11 @@ if (runtime.isBun) {
 ## Color utilities
 
 ```typescript
-import { 
+import {
   getMethodColor, 
   getStatusColor, 
   getColoredLevel 
-} from 'blyp-js/utils';
+} from '@blyp/core';
 
 // Color HTTP methods
 console.log(getMethodColor('GET'));    // Green GET
@@ -1078,7 +1078,7 @@ Defaults:
 Example configuration:
 
 ```typescript
-import { createStandaloneLogger } from 'blyp-js';
+import { createStandaloneLogger } from '@blyp/core';
 
 const logger = createStandaloneLogger({
   pretty: true,
@@ -1095,7 +1095,7 @@ const logger = createStandaloneLogger({
 ### Reading stored logs
 
 ```typescript
-import { readLogFile } from 'blyp-js';
+import { readLogFile } from '@blyp/core';
 
 const pretty = await readLogFile('logs/log.ndjson');
 const records = await readLogFile('logs/archive/log.20260309T101530Z.ndjson.gz', {
