@@ -2,6 +2,7 @@ import type { ConnectorMode } from '../connectors/mode';
 import type {
   BlypDestination,
   DatabaseLoggerConfig,
+  ResolvedDatabaseLoggerConfig,
 } from '../database';
 
 export type { ConnectorMode } from '../connectors/mode';
@@ -166,6 +167,21 @@ export interface BlypConfig {
   database?: DatabaseLoggerConfig;
   clientLogging?: ClientLoggingConfig;
   connectors?: BlypConnectorsConfig;
+}
+
+export interface ResolvedBlypConnectorsConfig {
+  betterstack: ResolvedBetterStackConnectorConfig;
+  posthog: ResolvedPostHogConnectorConfig;
+  sentry: ResolvedSentryConnectorConfig;
+  otlp: ResolvedOTLPConnectorConfig[];
+}
+
+export interface ResolvedBlypConfig extends BlypConfig {
+  destination: BlypDestination;
+  file: Required<LogFileConfig>;
+  database?: ResolvedDatabaseLoggerConfig;
+  clientLogging: Required<ClientLoggingConfig>;
+  connectors: ResolvedBlypConnectorsConfig;
 }
 
 export interface ConfigFileMatch {

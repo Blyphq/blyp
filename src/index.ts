@@ -69,6 +69,7 @@ export type {
   PostHogErrorTrackingConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
+  ResolvedBlypConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedDatabaseDeliveryConfig,
   ResolvedDatabaseLoggerConfig,

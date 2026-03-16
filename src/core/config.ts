@@ -23,6 +23,8 @@ import type {
   PrismaDatabaseAdapterConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
+  ResolvedBlypConfig,
+  ResolvedBlypConnectorsConfig,
   ResolvedDatabaseLoggerConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
@@ -50,6 +52,7 @@ export type {
   OTLPConnectorConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
+  ResolvedBlypConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
   ResolvedDatabaseDeliveryConfig,
@@ -127,7 +130,7 @@ export const DEFAULT_CONFIG: BlypConfig = {
   connectors: {},
 };
 
-let cachedConfig: BlypConfig | null = null;
+let cachedConfig: ResolvedBlypConfig | null = null;
 
 function findNearestPackageName(startDir: string): string | undefined {
   let currentDir = startDir;
@@ -674,7 +677,7 @@ function mergeOTLPConnectorsConfig(
 function mergeConnectorsConfig(
   base: BlypConnectorsConfig | undefined,
   override: BlypConnectorsConfig | undefined
-): Required<BlypConnectorsConfig> {
+): ResolvedBlypConnectorsConfig {
   return {
     betterstack: mergeBetterStackConnectorConfig(base?.betterstack, override?.betterstack),
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
@@ -687,7 +690,7 @@ export function mergeBlypConfig(
   base: BlypConfig,
   override: Partial<BlypConfig> = {},
   options: { configFileType?: ConfigFileMatch['type'] } = {}
-): BlypConfig {
+): ResolvedBlypConfig {
   return {
     ...base,
     ...override,
@@ -699,7 +702,7 @@ export function mergeBlypConfig(
   };
 }
 
-export function loadConfig(): BlypConfig {
+export function loadConfig(): ResolvedBlypConfig {
   if (cachedConfig !== null) {
     return cachedConfig;
   }
@@ -719,11 +722,11 @@ export function loadConfig(): BlypConfig {
   return cachedConfig;
 }
 
-export function resolveConfig(overrides: Partial<BlypConfig> = {}): BlypConfig {
+export function resolveConfig(overrides: Partial<BlypConfig> = {}): ResolvedBlypConfig {
   return mergeBlypConfig(loadConfig(), overrides);
 }
 
-export function getConfig(): BlypConfig {
+export function getConfig(): ResolvedBlypConfig {
   return loadConfig();
 }
 
