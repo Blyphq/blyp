@@ -11,6 +11,7 @@ import {
   emitHttpErrorLog,
   emitHttpRequestLog,
   extractPathname,
+  flushServerLoggerSafely,
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
@@ -59,6 +60,7 @@ export function createNextJsLogger(
           try {
             const response = await handler(request, context, { log: scopedLogger });
             if (structuredLogEmitted) {
+              await flushServerLoggerSafely(shared);
               return response;
             }
 
@@ -96,6 +98,8 @@ export function createNextJsLogger(
               );
             }
 
+            await flushServerLoggerSafely(shared);
+
             return response;
           } catch (error) {
             if (!structuredLogEmitted && !shouldSkipErrorLogging(shared, path)) {
@@ -113,6 +117,7 @@ export function createNextJsLogger(
                 }
               );
             }
+            await flushServerLoggerSafely(shared);
             throw error;
           }
         });
@@ -140,6 +145,7 @@ export function createNextJsLogger(
         request,
         deliveryPath: path,
       });
+      await flushServerLoggerSafely(shared);
       return new Response(null, {
         status: result.status,
         headers: result.headers,

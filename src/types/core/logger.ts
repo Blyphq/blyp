@@ -2,6 +2,7 @@ import type { BetterStackSender } from '../connectors/betterstack';
 import type { PostHogSender } from '../connectors/posthog';
 import type { SentrySender } from '../connectors/sentry';
 import type { OTLPRegistry } from '../connectors/otlp';
+import type { BlypPrimarySink } from '../../core/primary-sink';
 import type { StructuredLog, StructuredLogPayload } from './structured-log';
 
 export interface BlypLogger {
@@ -13,6 +14,8 @@ export interface BlypLogger {
   error: (message: unknown, ...args: unknown[]) => void;
   warn: (message: unknown, ...args: unknown[]) => void;
   table: (message: string, data?: unknown) => void;
+  flush: () => Promise<void>;
+  shutdown: () => Promise<void>;
   createStructuredLog: (
     groupId: string,
     initial?: Record<string, unknown>
@@ -35,6 +38,7 @@ export interface LoggerFactoryHandle {
   posthog: PostHogSender;
   sentry: SentrySender;
   otlp: OTLPRegistry;
+  sink: BlypPrimarySink;
   create: (source: InternalLoggerSource, bindings?: Record<string, unknown>) => BlypLogger;
   writeStructured: (
     payload: StructuredLogPayload,

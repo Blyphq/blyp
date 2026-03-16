@@ -1,0 +1,12 @@
+import type { BlypLogger } from '../../core/logger';
+import type { BlypRequestContextStore } from '../../types/frameworks/request-context';
+export type { BlypRequestContextStore } from '../../types/frameworks/request-context';
+export declare function runWithRequestContext<T>(callback: () => T): T;
+export declare function enterRequestContext(): BlypRequestContextStore;
+export declare function getRequestContextStore(): BlypRequestContextStore | undefined;
+export declare function setActiveRequestLogger(logger: BlypLogger): void;
+export declare function getActiveRequestLogger(): BlypLogger | undefined;
+export declare function markStructuredCollectorActive(): void;
+export declare function markStructuredLogEmitted(): void;
+export declare function hasStructuredLogBeenEmitted(): boolean;
+export declare function shouldDropRootLogWrite(): boolean;

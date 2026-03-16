@@ -1,4 +1,10 @@
-import type { BlypConfig, BlypConnectorsConfig, LogFileConfig } from '../core/config';
+import type {
+  BlypConfig,
+  BlypConnectorsConfig,
+  BlypDestination,
+  DatabaseLoggerConfig,
+  LogFileConfig,
+} from '../core/config';
 import type { BlypLogger } from '../core/logger';
 import type { ClientLogEvent } from '../shared/client-log';
 import type { ConnectorMode } from '../connectors/mode';
@@ -19,8 +25,10 @@ export interface ClientLogIngestionConfig<Ctx> {
 export interface ServerLoggerConfig<Ctx> {
   level?: string;
   pretty?: boolean;
+  destination?: BlypDestination;
   logDir?: string;
   file?: LogFileConfig;
+  database?: DatabaseLoggerConfig;
   autoLogging?: boolean | { ignore?: (ctx: Ctx) => boolean };
   customProps?: (ctx: Ctx) => Record<string, unknown>;
   logErrors?: boolean;

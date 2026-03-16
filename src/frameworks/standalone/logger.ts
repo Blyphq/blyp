@@ -69,6 +69,10 @@ function wrapBaseLogger(baseLogger: BlypLogger, config: StandaloneLoggerConfig):
       baseLogger.table(message, data);
     },
 
+    flush: () => baseLogger.flush(),
+
+    shutdown: () => baseLogger.shutdown(),
+
     createStructuredLog: (groupId: string, initial?: Record<string, unknown>) => {
       return baseLogger.createStructuredLog(groupId, initial);
     },
@@ -133,6 +137,10 @@ function createLoggerProxy(): StandaloneLogger {
     table: (message: string, data?: unknown) => {
       getDefaultLogger().table(message, data);
     },
+
+    flush: () => getDefaultLogger().flush(),
+
+    shutdown: () => getDefaultLogger().shutdown(),
 
     createStructuredLog: (groupId: string, initial?: Record<string, unknown>) => {
       return getDefaultLogger().createStructuredLog(groupId, initial);

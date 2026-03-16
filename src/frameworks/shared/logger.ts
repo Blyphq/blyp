@@ -80,15 +80,19 @@ export function resolveServerLogger<Ctx>(
   const resolvedConfig = resolveConfig({
     ...(config.level !== undefined ? { level: config.level } : {}),
     ...(config.pretty !== undefined ? { pretty: config.pretty } : {}),
+    ...(config.destination !== undefined ? { destination: config.destination } : {}),
     ...(config.logDir !== undefined ? { logDir: config.logDir } : {}),
     ...(config.file !== undefined ? { file: config.file } : {}),
+    ...(config.database !== undefined ? { database: config.database } : {}),
     ...(config.connectors !== undefined ? { connectors: config.connectors } : {}),
   });
   const {
     level = resolvedConfig.level,
     pretty = resolvedConfig.pretty,
+    destination = resolvedConfig.destination,
     logDir = resolvedConfig.logDir,
     file = resolvedConfig.file,
+    database = resolvedConfig.database,
     autoLogging = true,
     customProps,
     logErrors = true,
@@ -96,7 +100,15 @@ export function resolveServerLogger<Ctx>(
     clientLogging,
     connectors,
   } = config;
-  const logger = loggerOverride ?? createBaseLogger({ level, pretty, logDir, file, connectors });
+  const logger = loggerOverride ?? createBaseLogger({
+    level,
+    pretty,
+    destination,
+    logDir,
+    file,
+    database,
+    connectors,
+  });
   const resolvedClientLogging = resolveClientLoggingConfig(
     clientLogging,
     resolvedConfig.clientLogging
@@ -546,6 +558,26 @@ export function resolveRequestStatus(
     errorCode,
     isError
   );
+}
+
+export function shouldAutoFlushServerLogger<Ctx>(
+  config: ResolvedServerLogger<Ctx>
+): boolean {
+  return config.resolvedConfig.destination === 'database';
+}
+
+export async function flushServerLoggerSafely<Ctx>(
+  config: ResolvedServerLogger<Ctx>
+): Promise<void> {
+  if (!shouldAutoFlushServerLogger(config)) {
+    return;
+  }
+
+  try {
+    await config.logger.flush();
+  } catch (error) {
+    console.warn('[Blyp] Warning: Failed to flush database logs.', error);
+  }
 }
 
 export {

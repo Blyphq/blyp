@@ -1,0 +1,10 @@
+import type { ErrorLike, HttpRequestLog, RequestLike } from '../../types/frameworks/http';
+export type { ErrorLike, HeaderRecord, HttpRequestLog, RequestLike, ResolveLike } from '../../types/frameworks/http';
+export declare function getHeaderValue(headers: RequestLike['headers'], name: string): string | undefined;
+export declare function extractPathname(requestUrl: string, fallbackPath?: string): string;
+export declare function createRequestLike(method: string, url: string, headers?: RequestLike['headers']): RequestLike;
+export declare function buildClientDetails(request: RequestLike, fallbackPath?: string): Omit<HttpRequestLog, 'type' | 'method' | 'url' | 'statusCode' | 'responseTime' | 'error' | 'stack'>;
+export declare function buildRequestLogData(request: RequestLike, type: 'http_request' | 'http_error', path: string, statusCode: number, responseTime: number, extra?: Record<string, unknown>): HttpRequestLog;
+export declare function buildInfoLogMessage(method: string, statusCode: number, url: string, responseTime: number): string;
+export declare function toErrorLike(error: unknown, fallbackStatusCode?: number): ErrorLike | undefined;
+export declare function isErrorStatus(statusCode: number): boolean;

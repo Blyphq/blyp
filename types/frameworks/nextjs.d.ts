@@ -1,1 +1,1 @@
-export * from '../../dist/nextjs';
+export * from '../../dist/frameworks/nextjs';

@@ -1,1 +1,1 @@
-export * from '../../dist/sveltekit';
+export * from '../../dist/frameworks/sveltekit';

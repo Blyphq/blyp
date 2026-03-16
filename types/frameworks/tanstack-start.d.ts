@@ -1,1 +1,1 @@
-export * from '../../dist/tanstack-start';
+export * from '../../dist/frameworks/tanstack-start';

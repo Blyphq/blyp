@@ -10,6 +10,7 @@ import {
   createRequestLike,
   emitHttpErrorLog,
   emitHttpRequestLog,
+  flushServerLoggerSafely,
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
@@ -57,6 +58,7 @@ export function createSvelteKitLogger(
       try {
         const response = await resolve(event);
         if (structuredLogEmitted) {
+          await flushServerLoggerSafely(shared);
           return response;
         }
 
@@ -89,6 +91,8 @@ export function createSvelteKitLogger(
           );
         }
 
+        await flushServerLoggerSafely(shared);
+
         return response;
       } catch (error) {
         if (!structuredLogEmitted && !shouldSkipErrorLogging(shared, path)) {
@@ -106,6 +110,7 @@ export function createSvelteKitLogger(
             }
           );
         }
+        await flushServerLoggerSafely(shared);
         throw error;
       }
     });
@@ -136,6 +141,7 @@ export function createSvelteKitLogger(
         request: event.request,
         deliveryPath: path,
       });
+      await flushServerLoggerSafely(shared);
       return new Response(null, {
         status: result.status,
         headers: result.headers,

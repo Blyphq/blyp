@@ -1,1 +1,1 @@
-export * from '../../dist/nestjs';
+export * from '../../dist/frameworks/nestjs';

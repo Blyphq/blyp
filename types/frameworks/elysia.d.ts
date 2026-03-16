@@ -1,1 +1,1 @@
-export * from '../../dist/elysia';
+export * from '../../dist/frameworks/elysia';

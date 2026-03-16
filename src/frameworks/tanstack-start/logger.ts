@@ -10,6 +10,7 @@ import {
   emitHttpErrorLog,
   emitHttpRequestLog,
   extractPathname,
+  flushServerLoggerSafely,
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
@@ -59,6 +60,7 @@ export function createTanStackStartLogger(
         try {
           const response = await next({ context: nextContext });
           if (structuredLogEmitted) {
+            await flushServerLoggerSafely(shared);
             return response;
           }
 
@@ -91,6 +93,8 @@ export function createTanStackStartLogger(
             );
           }
 
+          await flushServerLoggerSafely(shared);
+
           return response;
         } catch (error) {
           if (!structuredLogEmitted && !shouldSkipErrorLogging(shared, path)) {
@@ -108,6 +112,7 @@ export function createTanStackStartLogger(
               }
             );
           }
+          await flushServerLoggerSafely(shared);
           throw error;
         }
       });
@@ -135,6 +140,7 @@ export function createTanStackStartLogger(
           request,
           deliveryPath: path,
         });
+        await flushServerLoggerSafely(shared);
         return new Response(null, {
           status: result.status,
           headers: result.headers,

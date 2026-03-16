@@ -60,6 +60,8 @@ function createFakeLogger() {
     table: (message: string, data?: unknown) => {
       calls.push({ level: 'table', message, meta: data === undefined ? [] : [data] });
     },
+    flush: async () => {},
+    shutdown: async () => {},
     createStructuredLog: () => fakeStructuredLog,
     child: () => logger,
   };

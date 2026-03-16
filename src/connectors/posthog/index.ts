@@ -92,6 +92,8 @@ function createPostHogLoggerInstance(
     table: (message: string, data?: unknown) => {
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
+    flush: async () => {},
+    shutdown: async () => {},
     createStructuredLog: (
       groupId: string,
       initial?: Record<string, unknown>

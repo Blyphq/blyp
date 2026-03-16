@@ -11,6 +11,7 @@ import {
   emitHttpErrorLog,
   emitHttpRequestLog,
   extractPathname,
+  flushServerLoggerSafely,
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
@@ -47,13 +48,15 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
         }),
       };
     })
-    .onAfterResponse({ as: 'scoped' }, (ctx) => {
+    .onAfterResponse({ as: 'scoped' }, async (ctx) => {
       const requestContext = ctx as unknown as ElysiaContext;
       const path = requestContext.path || extractPathname(requestContext.request.url);
       if ((requestContext as ElysiaContext & { blypStructuredLogEmitted?: boolean }).blypStructuredLogEmitted) {
+        await flushServerLoggerSafely(shared);
         return;
       }
       if (shouldSkipAutoLogging(shared, requestContext, path)) {
+        await flushServerLoggerSafely(shared);
         return;
       }
 
@@ -76,6 +79,7 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
             error: requestContext.error,
           }
         );
+        await flushServerLoggerSafely(shared);
         return;
       }
 
@@ -88,14 +92,17 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
         responseTime,
         resolveAdditionalProps(shared, requestContext)
       );
+      await flushServerLoggerSafely(shared);
     })
-    .onError({ as: 'scoped' }, (ctx) => {
+    .onError({ as: 'scoped' }, async (ctx) => {
       const requestContext = ctx as unknown as ElysiaContext;
       const path = requestContext.path || extractPathname(requestContext.request.url);
       if ((requestContext as ElysiaContext & { blypStructuredLogEmitted?: boolean }).blypStructuredLogEmitted) {
+        await flushServerLoggerSafely(shared);
         return;
       }
       if (shouldSkipErrorLogging(shared, path)) {
+        await flushServerLoggerSafely(shared);
         return;
       }
       const responseTime = Math.round(performance.now() - (requestContext.startTime ?? performance.now()));
@@ -118,6 +125,7 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
           error: requestContext.error,
         }
       );
+      await flushServerLoggerSafely(shared);
     });
 
   if (shared.resolvedClientLogging) {
@@ -130,6 +138,7 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
         body: requestContext.body,
         deliveryPath: shared.ingestionPath,
       });
+      await flushServerLoggerSafely(shared);
 
       return new Response(null, {
         status: result.status,

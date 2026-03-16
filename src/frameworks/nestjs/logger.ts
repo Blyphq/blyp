@@ -31,8 +31,10 @@ function toStandaloneLoggerConfig(
   return {
     ...(config.level !== undefined ? { level: config.level } : {}),
     ...(config.pretty !== undefined ? { pretty: config.pretty } : {}),
+    ...(config.destination !== undefined ? { destination: config.destination } : {}),
     ...(config.logDir !== undefined ? { logDir: config.logDir } : {}),
     ...(config.file !== undefined ? { file: config.file } : {}),
+    ...(config.database !== undefined ? { database: config.database } : {}),
     ...(clientLogging !== undefined ? { clientLogging } : {}),
     ...(config.connectors !== undefined ? { connectors: config.connectors } : {}),
   };

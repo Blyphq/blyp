@@ -1,1 +1,1 @@
-export * from '../../dist/standalone';
+export * from '../../dist/frameworks/standalone';

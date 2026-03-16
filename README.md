@@ -18,6 +18,7 @@
 - **OTLP connector** — Automatic or manual OpenTelemetry log forwarding for Grafana, Datadog, Honeycomb, and any OTLP-compatible backend
 - **Standalone usage** — Use without any framework
 - **Structured file logging** — NDJSON with size-based rotation and gzip archives
+- **Database logging** — Serverless-friendly persistence with Prisma and Drizzle adapters for Postgres and MySQL
 - **Client log sync** — Browser logs ingested into your backend stream
 
 ## Project structure
@@ -174,6 +175,58 @@ logger.info('app mounted');
 ```
 
 Expo uses the runtime `fetch` implementation for delivery and `expo-network` for connectivity metadata. Install `expo-network` in your app and use an absolute ingestion URL.
+
+### Database logging
+
+Use `destination: 'database'` when you cannot rely on filesystem writes, such as serverless deployments. Database mode requires an executable config file like `blyp.config.ts` because Prisma and Drizzle adapters are runtime objects.
+
+Prisma:
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+import { createPrismaDatabaseAdapter } from 'blyp-js/database';
+
+const prisma = new PrismaClient();
+
+export default {
+  destination: 'database',
+  database: {
+    dialect: 'postgres',
+    adapter: createPrismaDatabaseAdapter({
+      client: prisma,
+      model: 'blypLog',
+    }),
+  },
+};
+```
+
+Drizzle:
+
+```typescript
+import { createDrizzleDatabaseAdapter } from 'blyp-js/database';
+import { db } from './db';
+import { blypLogs } from './db/schema/blyp';
+
+export default {
+  destination: 'database',
+  database: {
+    dialect: 'mysql',
+    adapter: createDrizzleDatabaseAdapter({
+      db,
+      table: blypLogs,
+    }),
+  },
+};
+```
+
+In database mode, Blyp keeps connectors working as usual and replaces only the primary local persistence backend. Promise-based framework integrations flush database writes before the request finishes. In callback-style servers, call `await logger.flush()` at your own boundary when you need a hard durability point.
+
+Use the Blyp CLI to scaffold the schema and migrations:
+
+```bash
+blyp logs init --adapter prisma --dialect postgres
+blyp logs init --adapter drizzle --dialect mysql
+```
 
 ### Better Stack
 

@@ -1,1 +1,1 @@
-export * from '../../dist/express';
+export * from '../../dist/frameworks/express';

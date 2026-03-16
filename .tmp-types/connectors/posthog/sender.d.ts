@@ -1,0 +1,11 @@
+import type { BlypConfig, PostHogConnectorConfig, ResolvedPostHogConnectorConfig } from '../../core/config';
+import type { LogRecord } from '../../core/file-logger';
+import type { PostHogNormalizedRecord, PostHogSender, PostHogSource, PostHogTestHooks } from '../../types/connectors/posthog';
+export declare function isPreviouslyCapturedPostHogError(value: unknown): boolean;
+export declare function markPostHogCapturedError(value: unknown): void;
+export declare function isClientLogRecord(record: LogRecord): boolean;
+export declare function normalizePostHogRecord(record: LogRecord, connector: ResolvedPostHogConnectorConfig, source?: PostHogSource): PostHogNormalizedRecord;
+export declare function createPostHogSender(config: BlypConfig | ResolvedPostHogConnectorConfig | PostHogConnectorConfig): PostHogSender;
+export declare function buildPostHogExceptionProperties(record: LogRecord, source: PostHogSource, properties?: Record<string, unknown>): Record<string, unknown>;
+export declare function setPostHogTestHooks(hooks: PostHogTestHooks): void;
+export declare function resetPostHogTestHooks(): void;

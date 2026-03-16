@@ -1,7 +1,9 @@
 import type { BlypLogger } from '../core/logger';
 import type {
+  BlypDestination,
   BlypConnectorsConfig,
   ClientLoggingConfig,
+  DatabaseLoggerConfig,
   LogFileConfig,
   LogRotationConfig,
 } from '../core/config';
@@ -11,8 +13,10 @@ export type LogLevel = 'error' | 'critical' | 'warning' | 'info' | 'success' | '
 export interface StandaloneLoggerConfig {
   pretty?: boolean;
   level?: string;
+  destination?: BlypDestination;
   logDir?: string;
   file?: LogFileConfig;
+  database?: DatabaseLoggerConfig;
   clientLogging?: ClientLoggingConfig;
   connectors?: BlypConnectorsConfig;
 }
@@ -25,7 +29,14 @@ export interface StandaloneLogger extends BlypLogger {
   warning: (message: unknown, ...args: unknown[]) => void;
 }
 
-export type { BlypConnectorsConfig, ClientLoggingConfig, LogFileConfig, LogRotationConfig };
+export type {
+  BlypConnectorsConfig,
+  BlypDestination,
+  ClientLoggingConfig,
+  DatabaseLoggerConfig,
+  LogFileConfig,
+  LogRotationConfig,
+};
 
 export type RuntimeType = 'bun' | 'node';
 

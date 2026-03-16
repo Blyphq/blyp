@@ -1,1 +1,1 @@
-export * from '../../dist/hono';
+export * from '../../dist/frameworks/hono';

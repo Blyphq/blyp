@@ -1,6 +1,24 @@
 import type { ConnectorMode } from '../connectors/mode';
+import type {
+  BlypDestination,
+  DatabaseLoggerConfig,
+} from '../database';
 
 export type { ConnectorMode } from '../connectors/mode';
+export type {
+  BlypDestination,
+  DatabaseAdapterConfig,
+  DatabaseAdapterKind,
+  DatabaseDeliveryConfig,
+  DatabaseDialect,
+  DatabaseLoggerConfig,
+  DatabaseRetryConfig,
+  DrizzleDatabaseAdapterConfig,
+  PrismaDatabaseAdapterConfig,
+  ResolvedDatabaseDeliveryConfig,
+  ResolvedDatabaseLoggerConfig,
+  ResolvedDatabaseRetryConfig,
+} from '../database';
 
 export interface LogRotationConfig {
   enabled?: boolean;
@@ -142,8 +160,10 @@ export interface BlypConnectorsConfig {
 export interface BlypConfig {
   pretty: boolean;
   level: string;
+  destination?: BlypDestination;
   logDir?: string;
   file?: LogFileConfig;
+  database?: DatabaseLoggerConfig;
   clientLogging?: ClientLoggingConfig;
   connectors?: BlypConnectorsConfig;
 }

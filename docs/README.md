@@ -11,6 +11,7 @@ This document contains detailed usage, all framework integrations, configuration
 - [Errors](#errors)
 - [Client](#client)
 - [Framework integrations](#framework-integrations)
+- [Database logging](#database-logging)
 - [Advanced configuration](#advanced-configuration)
 - [Frontend + Backend log sync](#frontend--backend-log-sync)
 - [Runtime detection](#runtime-detection)
@@ -203,6 +204,84 @@ npx expo install expo-network
 ```
 
 The Expo logger uses the runtime `fetch` implementation to send logs and reads connectivity metadata from `expo-network`. The `endpoint` must be an absolute `http://` or `https://` URL because Expo apps do not have a browser origin. Failed deliveries are queued in memory and retried by default `3` times with `5000ms` delay, with a default queue limit of `100`.
+
+---
+
+## Database logging
+
+Use database logging when your deployment cannot safely write local files, especially in serverless environments. Blyp treats this as the primary persistence destination, not as a connector, so Better Stack, PostHog, Sentry, and OTLP continue to work independently.
+
+Database mode supports:
+
+- Postgres
+- MySQL
+- Prisma adapters
+- Drizzle adapters
+
+Database mode requires an executable config file such as `blyp.config.ts` or runtime config passed directly to `createStandaloneLogger()` or a framework logger factory. `blyp.config.json` is intentionally not enough because Prisma and Drizzle adapters are runtime objects.
+
+### Prisma
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+import { createPrismaDatabaseAdapter } from 'blyp-js/database';
+
+const prisma = new PrismaClient();
+
+export default {
+  destination: 'database',
+  database: {
+    dialect: 'postgres',
+    adapter: createPrismaDatabaseAdapter({
+      client: prisma,
+      model: 'blypLog',
+    }),
+  },
+};
+```
+
+### Drizzle
+
+```typescript
+import { createDrizzleDatabaseAdapter } from 'blyp-js/database';
+import { db } from './db';
+import { blypLogs } from './db/schema/blyp';
+
+export default {
+  destination: 'database',
+  database: {
+    dialect: 'mysql',
+    adapter: createDrizzleDatabaseAdapter({
+      db,
+      table: blypLogs,
+    }),
+  },
+};
+```
+
+### Flushing
+
+All Blyp loggers now expose:
+
+```typescript
+await logger.flush();
+await logger.shutdown();
+```
+
+Promise-based framework integrations such as Hono, Elysia, Next.js, SvelteKit, and TanStack Start flush automatically in database mode so request logs are persisted before the response completes. For callback-style servers like Express, Fastify, and NestJS, call `await logger.flush()` at your own boundary when you need the same guarantee.
+
+### CLI schema setup
+
+Use the Blyp CLI to scaffold and apply the `blyp_logs` schema:
+
+```bash
+blyp logs init --adapter prisma --dialect postgres
+blyp logs init --adapter prisma --dialect mysql
+blyp logs init --adapter drizzle --dialect postgres
+blyp logs init --adapter drizzle --dialect mysql
+```
+
+The generated schema stores the full canonical record plus extracted query fields like `level`, `type`, `group_id`, `status`, and `duration`.
 
 ---
 

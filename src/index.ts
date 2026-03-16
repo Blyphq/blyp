@@ -38,6 +38,8 @@ export { runtime, createRuntimeAdapter, createLogDir } from './core/runtime';
 export {
   DEFAULT_CONFIG,
   DEFAULT_CLIENT_LOGGING_CONFIG,
+  DEFAULT_DATABASE_DELIVERY_CONFIG,
+  DEFAULT_DATABASE_RETRY_CONFIG,
   DEFAULT_FILE_CONFIG,
   DEFAULT_ROTATION_CONFIG,
   getConfig,
@@ -52,13 +54,25 @@ export type {
   BlypConfig,
   BetterStackConnectorConfig,
   BetterStackErrorTrackingConfig,
+  BlypDestination,
   ConnectorMode,
+  DatabaseAdapterConfig,
+  DatabaseAdapterKind,
+  DatabaseDeliveryConfig,
+  DatabaseDialect,
+  DatabaseLoggerConfig,
+  DatabaseRetryConfig,
+  DrizzleDatabaseAdapterConfig,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
   PostHogErrorTrackingConfig,
   PostHogConnectorConfig,
+  PrismaDatabaseAdapterConfig,
   ResolvedBetterStackConnectorConfig,
+  ResolvedDatabaseDeliveryConfig,
+  ResolvedDatabaseLoggerConfig,
+  ResolvedDatabaseRetryConfig,
   ResolvedPostHogErrorTrackingConfig,
   ResolvedPostHogConnectorConfig,
   ResolvedSentryConnectorConfig,
@@ -68,6 +82,10 @@ export type {
 export { readLogFile, formatLogRecord } from './core/log-reader';
 export type { ReadLogFileOptions } from './core/log-reader';
 export type { LogRecord } from './core/file-logger';
+export {
+  createDrizzleDatabaseAdapter,
+  createPrismaDatabaseAdapter,
+} from './database';
 export * from './core/helpers';
 export * from './core/colors';
 export { normalizeOTLPRecord } from './connectors/otlp/sender';

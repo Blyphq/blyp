@@ -6,6 +6,7 @@ import {
   emitHttpErrorLog,
   emitHttpRequestLog,
   extractPathname,
+  flushServerLoggerSafely,
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
@@ -50,6 +51,7 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
           request: context.req.raw,
           deliveryPath: shared.ingestionPath,
         });
+        await flushServerLoggerSafely(shared);
 
         return new Response(null, {
           status: result.status,
@@ -65,6 +67,7 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
         throw error;
       } finally {
         if (structuredLogEmitted) {
+          await flushServerLoggerSafely(shared);
           return;
         }
 
@@ -92,6 +95,7 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
               }
             );
           }
+          await flushServerLoggerSafely(shared);
           return;
         }
 
@@ -106,6 +110,7 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
             resolveAdditionalProps(shared, context)
           );
         }
+        await flushServerLoggerSafely(shared);
       }
     });
   };

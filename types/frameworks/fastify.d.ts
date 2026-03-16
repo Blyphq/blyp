@@ -1,1 +1,1 @@
-export * from '../../dist/fastify';
+export * from '../../dist/frameworks/fastify';

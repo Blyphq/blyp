@@ -3,6 +3,7 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createNextJsLogger } from '../../src/frameworks/nextjs';
 import { resetConfigCache } from '../../src/core/config';
+import { createDrizzleDatabaseAdapter } from '../../src/database';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
@@ -139,5 +140,44 @@ describe('Next.js Integration', () => {
     ).toBe(false);
     expect(warnings).toHaveLength(1);
     console.warn = originalWarn;
+  });
+
+  it('flushes database logs before returning responses in database mode', async () => {
+    const batches: Array<Array<Record<string, unknown>>> = [];
+    const table = { name: 'blypLogs' };
+    const nextLogger = createNextJsLogger({
+      pretty: false,
+      destination: 'database',
+      database: {
+        dialect: 'postgres',
+        adapter: createDrizzleDatabaseAdapter({
+          db: {
+            insert(target: unknown) {
+              expect(target).toBe(table);
+              return {
+                async values(rows: Array<Record<string, unknown>>) {
+                  await new Promise((resolve) => setTimeout(resolve, 25));
+                  batches.push(rows);
+                },
+              };
+            },
+          },
+          table,
+        }),
+      },
+    });
+    const handler = nextLogger.withLogger(async () => new Response('ok', { status: 200 }));
+
+    const startedAt = Date.now();
+    const response = await handler(new Request('http://localhost/api/db-flush'), {});
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(response.status).toBe(200);
+    expect(elapsedMs).toBeGreaterThanOrEqual(20);
+    expect(batches.flat().some((row) => {
+      const record = row.record as Record<string, unknown> | undefined;
+      const data = record?.data as Record<string, unknown> | undefined;
+      return data?.type === 'http_request' && data?.url === '/api/db-flush';
+    })).toBe(true);
   });
 });

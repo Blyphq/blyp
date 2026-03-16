@@ -8,10 +8,8 @@ import {
   serializeMessage,
 } from './log-record';
 import type { LogMethodName } from '../types/core/log-record';
-import {
-  createFileLogger,
-  type RotatingFileLogger,
-} from './file-logger';
+import { createPrimarySink } from './primary-sink';
+import type { BlypPrimarySink } from './primary-sink';
 import {
   createBetterStackSender,
 } from '../connectors/betterstack/sender';
@@ -321,7 +319,7 @@ function maybeSendToOTLP(
 
 function createLoggerInstance(
   rootRawLogger: any,
-  fileLogger: RotatingFileLogger,
+  sink: BlypPrimarySink,
   betterstack: BetterStackSender,
   posthog: PostHogSender,
   sentry: SentrySender,
@@ -366,7 +364,7 @@ function createLoggerInstance(
       payload,
       consoleMessage
     );
-    fileLogger.write(record);
+    sink.write(record);
     maybeSendToBetterStack(betterstack, record);
     maybeSendToPostHog(posthog, record);
     maybeSendToSentry(sentry, record);
@@ -397,7 +395,7 @@ function createLoggerInstance(
     );
 
     if (writeSource !== 'root' || !shouldDropRootLogWrite()) {
-      fileLogger.write(record);
+      sink.write(record);
     }
 
     maybeSendToBetterStack(betterstack, record);
@@ -443,6 +441,10 @@ function createLoggerInstance(
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
 
+    flush: () => sink.flush(),
+
+    shutdown: () => sink.shutdown(),
+
     createStructuredLog: (
       groupId: string,
       initial?: Record<string, unknown>
@@ -456,7 +458,7 @@ function createLoggerInstance(
       const mergedBindings = { ...bindings, ...childBindings };
       return createLoggerInstance(
         rootRawLogger,
-        fileLogger,
+        sink,
         betterstack,
         posthog,
         sentry,
@@ -472,13 +474,14 @@ function createLoggerInstance(
       posthog,
       sentry,
       otlp,
+      sink,
       create: (
         nextSource: InternalLoggerSource,
         nextBindings: Record<string, unknown> = bindings
       ) => {
         return createLoggerInstance(
           rootRawLogger,
-          fileLogger,
+          sink,
           betterstack,
           posthog,
           sentry,
@@ -509,14 +512,14 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
 
   const resolvedConfig = resolveConfig(config);
   const rawLogger = createPinoLogger(resolvedConfig);
-  const fileLogger = createFileLogger(resolvedConfig);
+  const sink = createPrimarySink(resolvedConfig);
   const betterstack = createBetterStackSender(resolvedConfig);
   const posthog = createPostHogSender(resolvedConfig);
   const sentry = createSentrySender(resolvedConfig);
   const otlp = createOTLPRegistry(resolvedConfig);
   const instance = createLoggerInstance(
     rawLogger,
-    fileLogger,
+    sink,
     betterstack,
     posthog,
     sentry,

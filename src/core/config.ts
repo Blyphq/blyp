@@ -7,16 +7,23 @@ import { hasNonEmptyString, isAbsoluteHttpUrl } from '../shared/validation';
 import type {
   BetterStackConnectorConfig,
   BetterStackErrorTrackingConfig,
+  BlypDestination,
   BlypConfig,
   BlypConnectorsConfig,
   ClientLoggingConfig,
   ConfigFileMatch,
+  DatabaseDeliveryConfig,
+  DatabaseLoggerConfig,
+  DatabaseRetryConfig,
+  DrizzleDatabaseAdapterConfig,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
+  PrismaDatabaseAdapterConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
+  ResolvedDatabaseLoggerConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
   ResolvedSentryConnectorConfig,
@@ -28,17 +35,29 @@ export type {
   BlypConfig,
   BetterStackConnectorConfig,
   BetterStackErrorTrackingConfig,
+  BlypDestination,
   BlypConnectorsConfig,
   ClientLoggingConfig,
+  DatabaseAdapterConfig,
+  DatabaseAdapterKind,
+  DatabaseDeliveryConfig,
+  DatabaseDialect,
+  DatabaseLoggerConfig,
+  DatabaseRetryConfig,
+  DrizzleDatabaseAdapterConfig,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
+  PrismaDatabaseAdapterConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
+  ResolvedDatabaseDeliveryConfig,
+  ResolvedDatabaseLoggerConfig,
   PostHogErrorTrackingConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
+  ResolvedDatabaseRetryConfig,
   ResolvedPostHogErrorTrackingConfig,
   ResolvedSentryConnectorConfig,
   SentryConnectorConfig
@@ -82,9 +101,27 @@ export const DEFAULT_CLIENT_LOGGING_CONFIG: Required<ClientLoggingConfig> = {
   path: DEFAULT_CLIENT_LOG_ENDPOINT,
 };
 
+export const DEFAULT_DATABASE_RETRY_CONFIG: Required<DatabaseRetryConfig> = {
+  maxRetries: 1,
+  backoffMs: 100,
+};
+
+export const DEFAULT_DATABASE_DELIVERY_CONFIG: Required<Omit<DatabaseDeliveryConfig, 'retry'>> & {
+  retry: Required<DatabaseRetryConfig>;
+} = {
+  strategy: 'immediate',
+  batchSize: 1,
+  flushIntervalMs: 250,
+  maxQueueSize: 1000,
+  overflowStrategy: 'drop-oldest',
+  flushTimeoutMs: 5000,
+  retry: DEFAULT_DATABASE_RETRY_CONFIG,
+};
+
 export const DEFAULT_CONFIG: BlypConfig = {
   pretty: true,
   level: 'info',
+  destination: 'file',
   file: DEFAULT_FILE_CONFIG,
   clientLogging: DEFAULT_CLIENT_LOGGING_CONFIG,
   connectors: {},
@@ -125,6 +162,7 @@ function getBootstrapConfig(): BlypConfig {
   return {
     pretty: true,
     level: 'info',
+    destination: 'file',
     file: {
       enabled: true,
       format: 'ndjson',
@@ -291,6 +329,119 @@ function parseConfigFile(config: ConfigFileMatch): Partial<BlypConfig> {
     : parseExecutableConfigFile(config.path);
 }
 
+function isPrismaAdapter(
+  value: DatabaseLoggerConfig['adapter']
+): value is PrismaDatabaseAdapterConfig {
+  return !!value && typeof value === 'object' && value.type === 'prisma';
+}
+
+function isDrizzleAdapter(
+  value: DatabaseLoggerConfig['adapter']
+): value is DrizzleDatabaseAdapterConfig {
+  return !!value && typeof value === 'object' && value.type === 'drizzle';
+}
+
+function mergeDatabaseRetryConfig(
+  base: DatabaseRetryConfig | undefined,
+  override: DatabaseRetryConfig | undefined
+): Required<DatabaseRetryConfig> {
+  return {
+    ...DEFAULT_DATABASE_RETRY_CONFIG,
+    ...base,
+    ...override,
+  };
+}
+
+function mergeDatabaseDeliveryConfig(
+  base: DatabaseDeliveryConfig | undefined,
+  override: DatabaseDeliveryConfig | undefined
+): ResolvedDatabaseLoggerConfig['delivery'] {
+  return {
+    ...DEFAULT_DATABASE_DELIVERY_CONFIG,
+    ...base,
+    ...override,
+    retry: mergeDatabaseRetryConfig(base?.retry, override?.retry),
+  };
+}
+
+function hasPrismaDelegate(adapter: PrismaDatabaseAdapterConfig): boolean {
+  const model = adapter.model ?? 'blypLog';
+  const client = adapter.client as Record<string, unknown> | null | undefined;
+  const delegate = client?.[model] as Record<string, unknown> | undefined;
+
+  return !!delegate && typeof delegate.create === 'function';
+}
+
+function hasDrizzleAdapterShape(adapter: DrizzleDatabaseAdapterConfig): boolean {
+  const db = adapter.db as { insert?: unknown } | null | undefined;
+  return !!db && typeof db.insert === 'function' && adapter.table !== undefined;
+}
+
+function resolveDatabaseLoggerConfig(
+  config: DatabaseLoggerConfig | undefined,
+  sourceType?: ConfigFileMatch['type']
+): ResolvedDatabaseLoggerConfig | undefined {
+  if (!config) {
+    return undefined;
+  }
+
+  const adapter = config.adapter;
+  let ready = false;
+
+  if (sourceType === 'json') {
+    warnOnce(
+      'database-json-config',
+      '[Blyp] Warning: Database logging requires an executable blyp config file. Database destination remains disabled until you move this config to blyp.config.ts/js.'
+    );
+  } else if (config.dialect !== 'postgres' && config.dialect !== 'mysql') {
+    warnOnce(
+      `database-dialect:${String(config.dialect)}`,
+      `[Blyp] Warning: Unsupported database dialect "${String(config.dialect)}". Database logging is disabled.`
+    );
+  } else if (!adapter) {
+    warnOnce(
+      'database-adapter-missing',
+      '[Blyp] Warning: Database logging is enabled without an adapter. Database logging is disabled.'
+    );
+  } else if (isPrismaAdapter(adapter)) {
+    ready = hasPrismaDelegate({
+      ...adapter,
+      model: adapter.model ?? 'blypLog',
+    });
+
+    if (!ready) {
+      warnOnce(
+        'database-prisma-missing',
+        `[Blyp] Warning: Prisma database adapter is missing the "${adapter.model ?? 'blypLog'}" delegate or its create method. Database logging is disabled.`
+      );
+    }
+  } else if (isDrizzleAdapter(adapter)) {
+    ready = hasDrizzleAdapterShape(adapter);
+
+    if (!ready) {
+      warnOnce(
+        'database-drizzle-missing',
+        '[Blyp] Warning: Drizzle database adapter is missing a db.insert function or table reference. Database logging is disabled.'
+      );
+    }
+  }
+
+  const normalizedAdapter = isPrismaAdapter(adapter)
+    ? {
+        ...adapter,
+        model: adapter.model ?? 'blypLog',
+      }
+    : adapter;
+
+  return {
+    dialect: config.dialect,
+    adapter: normalizedAdapter,
+    delivery: mergeDatabaseDeliveryConfig(undefined, config.delivery),
+    ready,
+    status: ready ? 'enabled' : 'missing',
+  };
+}
+
 function mergeRotationConfig(
   base: LogRotationConfig | undefined,
   override: LogRotationConfig | undefined
@@ -324,6 +475,32 @@ function mergeClientLoggingConfig(
     ...override,
     path: override?.path ?? base?.path ?? DEFAULT_CLIENT_LOGGING_CONFIG.path,
   };
+}
+
+function mergeDatabaseLoggerConfig(
+  base: DatabaseLoggerConfig | undefined,
+  override: DatabaseLoggerConfig | undefined,
+  sourceType?: ConfigFileMatch['type']
+): ResolvedDatabaseLoggerConfig | undefined {
+  if (!base && !override) {
+    return undefined;
+  }
+
+  return resolveDatabaseLoggerConfig(
+    {
+      dialect: override?.dialect ?? base?.dialect,
+      adapter: override?.adapter ?? base?.adapter,
+      delivery: {
+        ...(base?.delivery ?? {}),
+        ...(override?.delivery ?? {}),
+        retry: {
+          ...(base?.delivery?.retry ?? {}),
+          ...(override?.delivery?.retry ?? {}),
+        },
+      },
+    },
+    sourceType
+  );
 }
 
 function mergePostHogConnectorConfig(
@@ -508,12 +685,15 @@ function mergeConnectorsConfig(
 
 export function mergeBlypConfig(
   base: BlypConfig,
-  override: Partial<BlypConfig> = {}
+  override: Partial<BlypConfig> = {},
+  options: { configFileType?: ConfigFileMatch['type'] } = {}
 ): BlypConfig {
   return {
     ...base,
     ...override,
+    destination: override.destination ?? base.destination ?? 'file',
     file: mergeFileConfig(base.file, override.file),
+    database: mergeDatabaseLoggerConfig(base.database, override.database, options.configFileType),
     clientLogging: mergeClientLoggingConfig(base.clientLogging, override.clientLogging),
     connectors: mergeConnectorsConfig(base.connectors, override.connectors),
   };
@@ -529,7 +709,9 @@ export function loadConfig(): BlypConfig {
 
   if (configFile) {
     const userConfig = parseConfigFile(configFile);
-    cachedConfig = mergeBlypConfig(DEFAULT_CONFIG, userConfig);
+    cachedConfig = mergeBlypConfig(DEFAULT_CONFIG, userConfig, {
+      configFileType: configFile.type,
+    });
   } else {
     cachedConfig = mergeBlypConfig(DEFAULT_CONFIG);
   }
