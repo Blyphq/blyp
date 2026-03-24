@@ -109,42 +109,44 @@ describe('Astro Integration', () => {
     console.warn = (...args: unknown[]) => {
       warnings.push(args);
     };
+    try {
+      const astroLogger = createAstroLogger({
+        logDir: tempDir,
+        pretty: false,
+        customProps: () => ({ framework: 'astro' }),
+      });
+      const context = createContext('http://localhost/structured', 'POST') as {
+        request: Request;
+        url: URL;
+        locals: { blypLog?: typeof rootLogger };
+      };
 
-    const astroLogger = createAstroLogger({
-      logDir: tempDir,
-      pretty: false,
-      customProps: () => ({ framework: 'astro' }),
-    });
-    const context = createContext('http://localhost/structured', 'POST') as {
-      request: Request;
-      url: URL;
-      locals: { blypLog?: typeof rootLogger };
-    };
+      const response = await astroLogger.onRequest(context, async () => {
+        const log = context.locals.blypLog as typeof rootLogger;
+        const structured = log.createStructuredLog('checkout', { userId: 'user-1' });
+        structured.set({ cartItems: 3 });
+        structured.info('user logged in');
+        log.info('scoped-allowed');
+        rootLogger.info('root-ignored');
+        structured.emit({ status: 200 });
+        return new Response('ok', { status: 200 });
+      });
+      await waitForFileFlush();
 
-    const response = await astroLogger.onRequest(context, async () => {
-      const log = context.locals.blypLog as typeof rootLogger;
-      const structured = log.createStructuredLog('checkout', { userId: 'user-1' });
-      structured.set({ cartItems: 3 });
-      structured.info('user logged in');
-      log.info('scoped-allowed');
-      rootLogger.info('root-ignored');
-      structured.emit({ status: 200 });
-      return new Response('ok', { status: 200 });
-    });
-    await waitForFileFlush();
+      expect(response.status).toBe(200);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const structuredRecord = records.find((record) => record.groupId === 'checkout');
 
-    expect(response.status).toBe(200);
-    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
-    const structuredRecord = records.find((record) => record.groupId === 'checkout');
-
-    expect(structuredRecord?.method).toBe('POST');
-    expect(structuredRecord?.path).toBe('/structured');
-    expect(structuredRecord?.framework).toBe('astro');
-    expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
-    expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
-    expect(records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')).toBe(false);
-    expect(warnings).toHaveLength(1);
-    console.warn = originalWarn;
+      expect(structuredRecord?.method).toBe('POST');
+      expect(structuredRecord?.path).toBe('/structured');
+      expect(structuredRecord?.framework).toBe('astro');
+      expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
+      expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
+      expect(records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')).toBe(false);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   it('flushes database logs before middleware resolves in database mode', async () => {

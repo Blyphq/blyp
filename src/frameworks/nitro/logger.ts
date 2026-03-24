@@ -169,14 +169,16 @@ function buildFactory(shared: ReturnType<typeof resolveServerLogger<NitroLoggerC
         );
       }
 
+      const body = await readNitroBody(event);
+
       const result = await handleClientLogIngestion({
         config: shared,
         ctx: createContext(event),
         request: {
           ...createNitroRequestLike(event),
-          json: async () => readNitroBody(event),
+          json: async () => body,
         },
-        body: await readNitroBody(event),
+        body,
         deliveryPath: path,
       });
       await flushServerLoggerSafely(shared);

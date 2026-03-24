@@ -132,6 +132,33 @@ describe('Nitro Integration', () => {
     expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
   });
 
+  it('reads a stream-backed client log body once during ingestion', async () => {
+    const nitroLogger = createNitroLogger({
+      logDir: tempDir,
+      pretty: false,
+    });
+
+    const payload = createClientPayload();
+    const event: NitroEventLike = {
+      request: new Request('http://localhost/inngest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+      context: {},
+      node: {
+        res: { statusCode: 200 },
+      },
+    };
+
+    const response = await nitroLogger.clientLogHandler(event);
+    await waitForFileFlush();
+
+    expect(response.status).toBe(204);
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
+  });
+
   it('suppresses default request logs after structured emit and drops mixed root writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;
@@ -139,37 +166,40 @@ describe('Nitro Integration', () => {
       warnings.push(args);
     };
 
-    const nitroLogger = createNitroLogger({
-      logDir: tempDir,
-      pretty: false,
-      customProps: () => ({ framework: 'nitro' }),
-    });
-    const hooks = await registerPlugin(nitroLogger.plugin);
-    const event = createEvent('http://localhost/structured', 'POST');
+    try {
+      const nitroLogger = createNitroLogger({
+        logDir: tempDir,
+        pretty: false,
+        customProps: () => ({ framework: 'nitro' }),
+      });
+      const hooks = await registerPlugin(nitroLogger.plugin);
+      const event = createEvent('http://localhost/structured', 'POST');
 
-    await runHooks(hooks, 'request', event);
-    const log = nitroLogger.getLogger(event) as typeof rootLogger;
-    const structured = log.createStructuredLog('checkout', { userId: 'user-1' });
-    structured.set({ cartItems: 3 });
-    structured.info('user logged in');
-    log.info('scoped-allowed');
-    rootLogger.info('root-ignored');
-    structured.emit({ status: 200 });
-    await runHooks(hooks, 'beforeResponse', event, new Response('ok', { status: 200 }));
-    await runHooks(hooks, 'afterResponse', event);
-    await waitForFileFlush();
+      await runHooks(hooks, 'request', event);
+      const log = nitroLogger.getLogger(event) as typeof rootLogger;
+      const structured = log.createStructuredLog('checkout', { userId: 'user-1' });
+      structured.set({ cartItems: 3 });
+      structured.info('user logged in');
+      log.info('scoped-allowed');
+      rootLogger.info('root-ignored');
+      structured.emit({ status: 200 });
+      await runHooks(hooks, 'beforeResponse', event, new Response('ok', { status: 200 }));
+      await runHooks(hooks, 'afterResponse', event);
+      await waitForFileFlush();
 
-    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
-    const structuredRecord = records.find((record) => record.groupId === 'checkout');
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const structuredRecord = records.find((record) => record.groupId === 'checkout');
 
-    expect(structuredRecord?.method).toBe('POST');
-    expect(structuredRecord?.path).toBe('/structured');
-    expect(structuredRecord?.framework).toBe('nitro');
-    expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
-    expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
-    expect(records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')).toBe(false);
-    expect(warnings).toHaveLength(1);
-    console.warn = originalWarn;
+      expect(structuredRecord?.method).toBe('POST');
+      expect(structuredRecord?.path).toBe('/structured');
+      expect(structuredRecord?.framework).toBe('nitro');
+      expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
+      expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
+      expect(records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')).toBe(false);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   it('flushes database logs during lifecycle finalization in database mode', async () => {

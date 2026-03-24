@@ -9,6 +9,30 @@ function readRepoFile(relativePath: string): string {
 }
 
 describe('Package type shims', () => {
+  it('declares optional peer dependencies for framework-specific entrypoints', () => {
+    const packageJson = JSON.parse(readRepoFile('package.json')) as {
+      peerDependencies?: Record<string, string>;
+      peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+    };
+
+    expect(packageJson.peerDependencies?.next).toBe('^15');
+    expect(packageJson.peerDependenciesMeta?.next?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.['@sveltejs/kit']).toBe('^2');
+    expect(packageJson.peerDependenciesMeta?.['@sveltejs/kit']?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.['@tanstack/react-start']).toBe('^1');
+    expect(packageJson.peerDependenciesMeta?.['@tanstack/react-start']?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.elysia).toBe('^1.4.27');
+    expect(packageJson.peerDependenciesMeta?.elysia?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.['react-router']).toBe('^7');
+    expect(packageJson.peerDependenciesMeta?.['react-router']?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.astro).toBe('^6');
+    expect(packageJson.peerDependenciesMeta?.astro?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.nitropack).toBe('^2');
+    expect(packageJson.peerDependenciesMeta?.nitropack?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.nuxt).toBe('^4');
+    expect(packageJson.peerDependenciesMeta?.nuxt?.optional).toBe(true);
+  });
+
   it('points public exports at shipped declaration files', () => {
     const packageJson = JSON.parse(readRepoFile('package.json')) as {
       exports: Record<string, { types?: string; import?: string; require?: string }>;
