@@ -50,6 +50,10 @@ describe('Package type shims', () => {
     expect(packageJson.exports['./sentry']?.types).toBe('./types/connectors/sentry.d.ts');
     expect(packageJson.exports['./workers']?.types).toBe('./types/workers.d.ts');
     expect(packageJson.exports['./ai/vercel']?.types).toBe('./types/ai/vercel.d.ts');
+    expect(packageJson.exports['./ai/openai']?.types).toBe('./types/ai/openai.d.ts');
+    expect(packageJson.exports['./ai/anthropic']?.types).toBe('./types/ai/anthropic.d.ts');
+    expect(packageJson.exports['./ai/shared']?.types).toBe('./types/ai/shared.d.ts');
+    expect(packageJson.exports['./ai/fetch']?.types).toBe('./types/ai/fetch.d.ts');
     expect(packageJson.exports['./react-router']?.types).toBe('./types/frameworks/react-router.d.ts');
     expect(packageJson.exports['./astro']?.types).toBe('./types/frameworks/astro.d.ts');
     expect(packageJson.exports['./nitro']?.types).toBe('./types/frameworks/nitro.d.ts');
@@ -67,7 +71,15 @@ describe('Package type shims', () => {
     expect(packageJson.exports['./otlp']?.require).toBe('./exports/connectors/otlp.js');
     expect(packageJson.exports['./sentry']?.require).toBe('./exports/connectors/sentry.js');
     expect(packageJson.exports['./ai/vercel']?.import).toBe('./exports/ai/vercel.mjs');
+    expect(packageJson.exports['./ai/openai']?.import).toBe('./exports/ai/openai.mjs');
+    expect(packageJson.exports['./ai/anthropic']?.import).toBe('./exports/ai/anthropic.mjs');
+    expect(packageJson.exports['./ai/shared']?.import).toBe('./exports/ai/shared.mjs');
+    expect(packageJson.exports['./ai/fetch']?.import).toBe('./exports/ai/fetch.mjs');
     expect(packageJson.exports['./ai/vercel']?.require).toBe('./exports/ai/vercel.js');
+    expect(packageJson.exports['./ai/openai']?.require).toBe('./exports/ai/openai.js');
+    expect(packageJson.exports['./ai/anthropic']?.require).toBe('./exports/ai/anthropic.js');
+    expect(packageJson.exports['./ai/shared']?.require).toBe('./exports/ai/shared.js');
+    expect(packageJson.exports['./ai/fetch']?.require).toBe('./exports/ai/fetch.js');
     expect(packageJson.exports['./react-router']?.import).toBe('./exports/frameworks/react-router.mjs');
     expect(packageJson.exports['./astro']?.import).toBe('./exports/frameworks/astro.mjs');
     expect(packageJson.exports['./nitro']?.import).toBe('./exports/frameworks/nitro.mjs');
@@ -87,6 +99,10 @@ describe('Package type shims', () => {
     expect(fs.existsSync(path.join(repoRoot, 'types/connectors/sentry.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/workers.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/ai/vercel.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/ai/openai.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/ai/anthropic.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/ai/shared.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/ai/fetch.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/client.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/expo.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/react-router.d.ts'))).toBe(true);
@@ -110,6 +126,10 @@ describe('Package type shims', () => {
     const sentryTypes = readRepoFile('types/connectors/sentry.d.ts');
     const workersTypes = readRepoFile('types/workers.d.ts');
     const aiVercelTypes = readRepoFile('types/ai/vercel.d.ts');
+    const aiOpenAITypes = readRepoFile('types/ai/openai.d.ts');
+    const aiAnthropicTypes = readRepoFile('types/ai/anthropic.d.ts');
+    const aiSharedTypes = readRepoFile('types/ai/shared.d.ts');
+    const aiFetchTypes = readRepoFile('types/ai/fetch.d.ts');
 
     expect(clientTypes).toContain('createClientLogger');
     expect(clientTypes).toContain("from './frameworks/client'");
@@ -124,6 +144,10 @@ describe('Package type shims', () => {
     expect(workersTypes).toContain('createWorkersLogger');
     expect(workersTypes).toContain("from './frameworks/workers'");
     expect(aiVercelTypes).toContain('../../dist/ai/vercel');
+    expect(aiOpenAITypes).toContain('../../dist/ai/openai');
+    expect(aiAnthropicTypes).toContain('../../dist/ai/anthropic');
+    expect(aiSharedTypes).toContain('../../dist/ai/shared');
+    expect(aiFetchTypes).toContain('../../dist/ai/fetch');
     expect(clientTypes).not.toContain("../dist/client");
     expect(expoTypes).not.toContain("../dist/expo");
     expect(betterStackTypes).not.toContain('../../dist/betterstack');

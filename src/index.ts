@@ -282,6 +282,21 @@ export type {
   OTLPLogger,
   OTLPLoggerConfig,
 } from './connectors/otlp';
+export { wrapOpenAI, createOpenAITracker } from './ai/openai';
+export { wrapAnthropic } from './ai/anthropic';
+export { blypFetch } from './ai/shared/fetch';
+export type {
+  AIToolCallRecord,
+  BlypAIProvider,
+  BlypAISDK,
+  BlypCaptureOptions,
+  BlypExcludeOptions,
+  BlypLimitOptions,
+  BlypLLMEventPart,
+  BlypLLMTrace,
+  BlypProviderOptions,
+  BlypSDKContext,
+} from './ai/shared/types';
 
 export function createStructuredLog<
   TFields extends Record<string, unknown> = Record<string, unknown>,

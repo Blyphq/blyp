@@ -51,10 +51,10 @@ function createMockModel(options?: {
 
       return {
         content: [{ type: 'text', text: 'hello world' }],
-        finishReason: 'stop',
+        finishReason: 'stop' as unknown as LanguageModelV3GenerateResult['finishReason'],
         usage: createUsage(),
         warnings: [],
-      };
+      } as LanguageModelV3GenerateResult;
     },
     async doStream(params) {
       if (options?.doStream) {
@@ -73,7 +73,11 @@ function createMockModel(options?: {
               controller.enqueue({ type: 'text-end', id: 'text-1' });
               controller.enqueue({
                 type: 'finish',
-                finishReason: 'stop',
+                finishReason: 'stop' as unknown as LanguageModelV3StreamPart extends infer T
+                  ? T extends { type: 'finish'; finishReason: infer F }
+                    ? F
+                    : never
+                  : never,
                 usage: createUsage(4, 5),
               });
               controller.close();
@@ -195,7 +199,11 @@ describe('AI SDK Vercel Integration', () => {
                 controller.enqueue({ type: 'text-end', id: 'text-1' });
                 controller.enqueue({
                   type: 'finish',
-                  finishReason: 'stop',
+                  finishReason: 'stop' as unknown as LanguageModelV3StreamPart extends infer T
+                    ? T extends { type: 'finish'; finishReason: infer F }
+                      ? F
+                      : never
+                    : never,
                   usage: createUsage(4, 5),
                 });
                 controller.close();

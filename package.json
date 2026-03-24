@@ -100,6 +100,26 @@
       "import": "./exports/ai/vercel.mjs",
       "require": "./exports/ai/vercel.js"
     },
+    "./ai/openai": {
+      "types": "./types/ai/openai.d.ts",
+      "import": "./exports/ai/openai.mjs",
+      "require": "./exports/ai/openai.js"
+    },
+    "./ai/anthropic": {
+      "types": "./types/ai/anthropic.d.ts",
+      "import": "./exports/ai/anthropic.mjs",
+      "require": "./exports/ai/anthropic.js"
+    },
+    "./ai/shared": {
+      "types": "./types/ai/shared.d.ts",
+      "import": "./exports/ai/shared.mjs",
+      "require": "./exports/ai/shared.js"
+    },
+    "./ai/fetch": {
+      "types": "./types/ai/fetch.d.ts",
+      "import": "./exports/ai/fetch.mjs",
+      "require": "./exports/ai/fetch.js"
+    },
     "./client": {
       "types": "./types/client.d.ts",
       "import": "./exports/client.mjs",
@@ -210,6 +230,18 @@
       ],
       "ai/vercel": [
         "./types/ai/vercel.d.ts"
+      ],
+      "ai/openai": [
+        "./types/ai/openai.d.ts"
+      ],
+      "ai/anthropic": [
+        "./types/ai/anthropic.d.ts"
+      ],
+      "ai/shared": [
+        "./types/ai/shared.d.ts"
+      ],
+      "ai/fetch": [
+        "./types/ai/fetch.d.ts"
       ],
       "standalone": [
         "./types/frameworks/standalone.d.ts"

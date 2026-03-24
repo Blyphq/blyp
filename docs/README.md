@@ -210,7 +210,12 @@ The Expo logger uses the runtime `fetch` implementation to send logs and reads c
 
 ## AI SDK tracing
 
-Phase 1 supports the Vercel AI SDK only through language model middleware.
+Blyp supports two AI tracing modes:
+
+- `@blyp/core/ai/vercel` for Vercel AI SDK middleware
+- `@blyp/core/ai/openai` and `@blyp/core/ai/anthropic` for direct provider SDK wrappers
+
+Blyp normalizes telemetry. It does not expose a cross-provider generation API.
 
 Install the AI SDK in apps that use this entrypoint:
 
@@ -300,10 +305,89 @@ The normalized payload includes:
 
 ### Limitations
 
-- Phase 1 traces AI SDK model calls only.
-- Direct OpenAI SDK, Anthropic SDK, and OpenRouter SDK support are not included yet.
+- Vercel middleware and provider wrappers are separate surfaces. Blyp does not translate request params across providers.
+- OpenRouter support in v1 goes through `wrapOpenAI(..., { provider: 'openrouter' })`.
 - Tool call tracing is best-effort and only captures what AI SDK middleware surfaces.
 - Blyp does not install a separate AI sink; AI traces flow through the normal Blyp logger, connectors, and file or database destinations.
+
+## Provider SDK tracing
+
+### OpenAI
+
+```typescript
+import OpenAI from 'openai';
+import { wrapOpenAI } from '@blyp/core/ai/openai';
+
+const client = wrapOpenAI(
+  new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+  {
+    operation: 'draft_blog_intro',
+  }
+);
+
+const result = await client.responses.create({
+  model: 'gpt-5',
+  input: 'Write a short intro about edge logging',
+});
+```
+
+### Anthropic
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+import { wrapAnthropic } from '@blyp/core/ai/anthropic';
+
+const client = wrapAnthropic(
+  new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
+  {
+    operation: 'summarize_ticket',
+  }
+);
+
+const result = await client.messages.create({
+  model: 'claude-sonnet-4-5',
+  max_tokens: 500,
+  messages: [{ role: 'user', content: 'Summarize this support thread' }],
+});
+```
+
+### OpenRouter
+
+```typescript
+import OpenAI from 'openai';
+import { wrapOpenAI } from '@blyp/core/ai/openai';
+
+const client = wrapOpenAI(
+  new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+  }),
+  {
+    provider: 'openrouter',
+    operation: 'route_experiment',
+  }
+);
+```
+
+### Optional fetch tracing
+
+```typescript
+import OpenAI from 'openai';
+import { blypFetch } from '@blyp/core/ai/fetch';
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  fetch: blypFetch(fetch, {
+    metadata: { service: 'assistant-api' },
+  }),
+});
+```
+
+### Wrapper vs fetch
+
+- Provider wrappers are the authoritative source for usage, finish reason, tool calls, content capture, and final `ai_trace`.
+- `blypFetch` is optional and secondary. Use it for transport latency, status codes, request ids, and low-level debugging.
+- Content capture is metadata-only by default for both surfaces. Input, output, tool payloads, reasoning, stream events, and raw provider payload capture stay off until explicitly enabled.
 
 ---
 

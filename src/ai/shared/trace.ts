@@ -9,9 +9,21 @@ import type {
 import { logger as rootLogger } from '../../core/logger';
 import type { BlypLogger } from '../../core/logger';
 import { getActiveRequestLogger } from '../../frameworks/shared/request-context';
+import {
+  normalizeFinishReason as normalizeSDKFinishReason,
+  normalizeTokenUsage,
+  safeErrorSummary as summarizeSDKError,
+  toProviderPayload,
+  toToolEventData,
+} from './normalize';
 import { omitPaths, toLoggableValue, truncateValue } from './redaction';
 import type {
   AIToolCallRecord,
+  BlypAIProvider,
+  BlypAISDK,
+  BlypLLMTrace,
+  BlypProviderOptions,
+  BlypSDKContext,
   BlypMiddlewareContext,
   BlypModelOptions,
   BlypResolvedModelOptions,
@@ -24,11 +36,15 @@ const DEFAULT_CAPTURE = {
   toolInputs: false,
   toolOutputs: false,
   reasoning: false,
+  streamEvents: false,
   streamChunks: false,
+  rawProviderPayload: false,
 } as const;
 
 const DEFAULT_EXCLUDE = {
   providerOptions: false,
+  requestPaths: [],
+  responsePaths: [],
   metadataPaths: [],
   toolNames: [],
 } as const;
@@ -57,6 +73,10 @@ function safeParseJson(value: string): unknown {
   } catch {
     return value;
   }
+}
+
+function sdkNowIso(): string {
+  return new Date().toISOString();
 }
 
 function normalizeUsage(usage?: LanguageModelV3Usage) {
@@ -210,14 +230,19 @@ type MutableTrace = {
 export function resolveBlypModelOptions(options: BlypModelOptions = {}): BlypResolvedModelOptions {
   return {
     logger: options.logger,
+    provider: options.provider,
     operation: options.operation,
     metadata: { ...(options.metadata ?? {}) },
     capture: {
       ...DEFAULT_CAPTURE,
       ...(options.capture ?? {}),
+      streamEvents: options.capture?.streamEvents ?? options.capture?.streamChunks ?? DEFAULT_CAPTURE.streamEvents,
+      streamChunks: options.capture?.streamChunks ?? options.capture?.streamEvents ?? DEFAULT_CAPTURE.streamChunks,
     },
     exclude: {
       providerOptions: options.exclude?.providerOptions ?? DEFAULT_EXCLUDE.providerOptions,
+      requestPaths: [...(options.exclude?.requestPaths ?? DEFAULT_EXCLUDE.requestPaths)],
+      responsePaths: [...(options.exclude?.responsePaths ?? DEFAULT_EXCLUDE.responsePaths)],
       metadataPaths: [...(options.exclude?.metadataPaths ?? DEFAULT_EXCLUDE.metadataPaths)],
       toolNames: [...(options.exclude?.toolNames ?? DEFAULT_EXCLUDE.toolNames)],
     },
@@ -228,6 +253,386 @@ export function resolveBlypModelOptions(options: BlypModelOptions = {}): BlypRes
     },
     hooks: options.hooks ?? {},
   };
+}
+
+type MutableSDKTrace = {
+  traceId: string;
+  provider: BlypAIProvider;
+  sdk: Exclude<BlypAISDK, 'ai-sdk'>;
+  operation: string;
+  method: string;
+  model: string;
+  logger: BlypLogger;
+  metadata: Record<string, unknown>;
+  request: unknown;
+  response?: unknown;
+  usage?: BlypSDKContext['usage'];
+  finishReason?: string;
+  input?: unknown;
+  output?: unknown;
+  toolCalls: AIToolCallRecord[];
+  events: BlypTraceEvent[];
+  error?: unknown;
+  startedAt: string;
+  endedAt?: string;
+  startedAtMs: number;
+  firstChunkAt?: string;
+  firstChunkAtMs?: number;
+  options: BlypResolvedModelOptions;
+  capture: Required<BlypResolvedModelOptions['capture']>;
+  streamed: boolean;
+  rawProviderPayload?: unknown;
+  emitted?: boolean;
+  truncated: boolean;
+};
+
+export function resolveBlypProviderOptions(options: BlypProviderOptions = {}): BlypResolvedModelOptions {
+  return resolveBlypModelOptions(options);
+}
+
+export function createSDKTraceState(options: {
+  provider: BlypAIProvider;
+  sdk: Exclude<BlypAISDK, 'ai-sdk'>;
+  operation?: string;
+  method: string;
+  model: string;
+  request: unknown;
+  streamed: boolean;
+  config: BlypResolvedModelOptions;
+}): { state: MutableSDKTrace; context: BlypSDKContext } {
+  const logger = options.config.logger ?? getActiveRequestLogger() ?? rootLogger;
+  const traceId = createTraceId();
+  const startedAt = sdkNowIso();
+  const state: MutableSDKTrace = {
+    traceId,
+    provider: options.provider,
+    sdk: options.sdk,
+    operation: options.operation ?? options.config.operation ?? options.method,
+    method: options.method,
+    model: options.model,
+    logger,
+    metadata: { ...options.config.metadata },
+    request: options.request,
+    toolCalls: [],
+    events: [],
+    startedAt,
+    startedAtMs: performance.now(),
+    options: options.config,
+    capture: { ...options.config.capture },
+    streamed: options.streamed,
+    truncated: false,
+  };
+
+  const context: BlypSDKContext = {
+    traceId,
+    provider: state.provider,
+    sdk: state.sdk,
+    operation: state.operation,
+    method: state.method,
+    logger,
+    metadata: state.metadata,
+    request: state.request,
+    get response() {
+      return state.response;
+    },
+    get usage() {
+      return state.usage;
+    },
+    get finishReason() {
+      return state.finishReason;
+    },
+    get input() {
+      return state.input;
+    },
+    get output() {
+      return state.output;
+    },
+    get toolCalls() {
+      return state.toolCalls.length > 0 ? state.toolCalls : undefined;
+    },
+    get startedAt() {
+      return state.startedAt;
+    },
+    get firstChunkAt() {
+      return state.firstChunkAt;
+    },
+    get endedAt() {
+      return state.endedAt;
+    },
+    get error() {
+      return state.error;
+    },
+    setMetadata(extra) {
+      Object.assign(state.metadata, extra);
+    },
+    disableCapture(field) {
+      state.capture[field] = false;
+    },
+  };
+
+  return { state, context };
+}
+
+export function recordSDKUsage(
+  state: MutableSDKTrace,
+  usage?: Partial<NonNullable<BlypSDKContext['usage']>>
+): void {
+  state.usage = normalizeTokenUsage(usage);
+}
+
+export function recordSDKFinishReason(state: MutableSDKTrace, reason: unknown): void {
+  state.finishReason = normalizeSDKFinishReason(reason);
+}
+
+export function setSDKResponse(state: MutableSDKTrace, response: unknown): void {
+  state.response = response;
+}
+
+export function setSDKInput(state: MutableSDKTrace, input: unknown): void {
+  state.input = input;
+}
+
+export function setSDKOutput(state: MutableSDKTrace, output: unknown): void {
+  state.output = output;
+}
+
+export function setSDKRawProviderPayload(state: MutableSDKTrace, payload: unknown): void {
+  state.rawProviderPayload = toProviderPayload(payload);
+}
+
+export async function markSDKFirstChunk(
+  state: MutableSDKTrace,
+  context: BlypSDKContext
+): Promise<void> {
+  if (state.firstChunkAt) {
+    return;
+  }
+
+  state.firstChunkAt = sdkNowIso();
+  state.firstChunkAtMs = performance.now();
+  await addTraceEvent(state as unknown as MutableTrace, context as unknown as BlypMiddlewareContext, {
+    type: 'ai.first_chunk',
+    timestamp: state.firstChunkAt,
+  });
+}
+
+export async function addSDKChunkEvent(
+  state: MutableSDKTrace,
+  context: BlypSDKContext,
+  data: Record<string, unknown>
+): Promise<void> {
+  if (!state.capture.streamEvents) {
+    return;
+  }
+
+  await addTraceEvent(state as unknown as MutableTrace, context as unknown as BlypMiddlewareContext, {
+    type: 'ai.chunk',
+    data,
+  });
+}
+
+export function upsertSDKToolCall(state: MutableSDKTrace, toolCall: AIToolCallRecord): void {
+  const toolId = toolCall.id ?? `${toolCall.name}:${state.toolCalls.length}`;
+  const currentIndex = state.toolCalls.findIndex((item, index) => {
+    return (item.id ?? `${item.name}:${index}`) === toolId;
+  });
+
+  if (currentIndex === -1 && state.toolCalls.length >= state.options.limits.maxToolCalls) {
+    state.truncated = true;
+    return;
+  }
+
+  if (currentIndex === -1) {
+    state.toolCalls.push(toolCall);
+    return;
+  }
+
+  state.toolCalls[currentIndex] = {
+    ...state.toolCalls[currentIndex],
+    ...toolCall,
+  };
+}
+
+export async function emitSDKToolStart(
+  state: MutableSDKTrace,
+  context: BlypSDKContext,
+  toolCall: AIToolCallRecord
+): Promise<void> {
+  upsertSDKToolCall(state, toolCall);
+  await addTraceEvent(state as unknown as MutableTrace, context as unknown as BlypMiddlewareContext, {
+    type: 'ai.tool_call.start',
+    data: toToolEventData(toolCall),
+  });
+}
+
+export async function emitSDKToolResult(
+  state: MutableSDKTrace,
+  context: BlypSDKContext,
+  toolCall: AIToolCallRecord
+): Promise<void> {
+  upsertSDKToolCall(state, toolCall);
+  await addTraceEvent(state as unknown as MutableTrace, context as unknown as BlypMiddlewareContext, {
+    type: 'ai.tool_call.result',
+    data: toToolEventData(toolCall),
+  });
+}
+
+function finalizeSDKTools(state: MutableSDKTrace): BlypLLMTrace['tools'] | undefined {
+  const tools = state.toolCalls
+    .filter((toolCall) => !state.options.exclude.toolNames.includes(toolCall.name))
+    .map((toolCall) => {
+      const normalized: NonNullable<BlypLLMTrace['tools']>[number] = {
+        id: toolCall.id,
+        name: toolCall.name,
+        status: toolCall.status,
+      };
+
+      if (state.capture.toolInputs && toolCall.input !== undefined) {
+        const captured = captureValue(toolCall.input, state.options.limits.maxContentBytes);
+        normalized.input = captured.value;
+        state.truncated ||= captured.truncated;
+      }
+
+      if (state.capture.toolOutputs && toolCall.output !== undefined) {
+        const captured = captureValue(toolCall.output, state.options.limits.maxContentBytes);
+        normalized.output = captured.value;
+        state.truncated ||= captured.truncated;
+      }
+
+      if (toolCall.providerFormat !== undefined) {
+        normalized.providerFormat = toLoggableValue(toolCall.providerFormat);
+      }
+
+      return normalized;
+    });
+
+  return tools.length > 0 ? tools : undefined;
+}
+
+export async function finalizeSDKTrace(
+  state: MutableSDKTrace,
+  context: BlypSDKContext,
+  options?: { error?: unknown }
+): Promise<void> {
+  if (state.emitted) {
+    return;
+  }
+  state.emitted = true;
+
+  if (options?.error !== undefined) {
+    state.error = options.error;
+    await addTraceEvent(state as unknown as MutableTrace, context as unknown as BlypMiddlewareContext, {
+      type: 'ai.error',
+      data: {
+        error: toLoggableValue(options.error),
+      },
+    });
+    await runHookSafely(state.options.hooks.onError, [context]);
+  }
+
+  state.endedAt = sdkNowIso();
+  await addTraceEvent(state as unknown as MutableTrace, context as unknown as BlypMiddlewareContext, {
+    type: 'ai.finish',
+    timestamp: state.endedAt,
+  });
+
+  if (!state.error) {
+    await runHookSafely(state.options.hooks.onFinish, [context]);
+  }
+
+  const timing: BlypLLMTrace['timing'] = {
+    startedAt: state.startedAt,
+    endedAt: state.endedAt,
+    durationMs: Math.max(0, Math.round(performance.now() - state.startedAtMs)),
+  };
+
+  if (state.firstChunkAt && state.firstChunkAtMs !== undefined) {
+    timing.firstChunkAt = state.firstChunkAt;
+    timing.msToFirstChunk = Math.max(0, Math.round(state.firstChunkAtMs - state.startedAtMs));
+  }
+
+  const trace: BlypLLMTrace = {
+    provider: state.provider,
+    sdk: state.sdk,
+    model: state.model,
+    operation: state.operation,
+    method: state.method,
+    streamed: state.streamed,
+    timing,
+    metadata: omitPaths(state.metadata, state.options.exclude.metadataPaths),
+  };
+
+  if (state.usage) {
+    trace.usage = state.usage;
+  }
+  if (state.finishReason) {
+    trace.finishReason = state.finishReason;
+  }
+
+  if (state.capture.input && state.input !== undefined) {
+    const captured = captureValue(
+      omitPaths(toLoggableValue(state.input) as Record<string, unknown>, state.options.exclude.requestPaths),
+      state.options.limits.maxContentBytes
+    );
+    trace.input = captured.value;
+    state.truncated ||= captured.truncated;
+  }
+
+  if (state.capture.output && state.output !== undefined) {
+    const outputValue = toLoggableValue(state.output);
+    const captured = captureValue(
+      typeof outputValue === 'object' && outputValue !== null && !Array.isArray(outputValue)
+        ? omitPaths(outputValue as Record<string, unknown>, state.options.exclude.responsePaths)
+        : outputValue,
+      state.options.limits.maxContentBytes
+    );
+    trace.output = captured.value;
+    state.truncated ||= captured.truncated;
+  }
+
+  const tools = finalizeSDKTools(state);
+  if (tools) {
+    trace.tools = tools;
+  }
+
+  if (state.capture.rawProviderPayload && state.rawProviderPayload !== undefined) {
+    const captured = captureValue(state.rawProviderPayload, state.options.limits.maxContentBytes);
+    trace.rawProviderPayload = captured.value;
+    state.truncated ||= captured.truncated;
+  }
+
+  if (state.truncated && trace.metadata) {
+    trace.metadata = { ...trace.metadata, truncated: true };
+  }
+
+  const ai: Record<string, unknown> = {
+    ...trace,
+  };
+
+  if (state.error !== undefined) {
+    const { errorType, errorCode } = summarizeSDKError(state.error);
+    if (errorType) {
+      ai.errorType = errorType;
+    }
+    if (errorCode !== undefined) {
+      ai.errorCode = errorCode;
+    }
+  }
+
+  try {
+    const structured = state.logger.createStructuredLog(state.traceId, {
+      type: 'ai_trace',
+      ai,
+      events: state.events,
+    });
+    structured.emit({
+      message: 'ai_trace',
+      level: state.error === undefined ? 'info' : 'error',
+      ...(state.error === undefined ? {} : { error: state.error }),
+    });
+  } catch (error) {
+    console.warn('[Blyp] Failed to emit AI trace.', serializeHookError(error));
+  }
 }
 
 export function createTraceState(options: {

@@ -180,9 +180,9 @@ logger.info('app mounted');
 
 Expo uses the runtime `fetch` implementation for delivery and `expo-network` for connectivity metadata. Install `expo-network` in your app and use an absolute ingestion URL.
 
-### AI SDK tracing
+### AI tracing
 
-Use `@blyp/core/ai/vercel` when you want Blyp to instrument the Vercel AI SDK without replacing its normal ergonomics.
+Use `@blyp/core/ai/vercel` for Vercel AI SDK middleware, or the provider wrappers when you want direct SDK instrumentation without a universal LLM abstraction.
 
 Common case:
 
@@ -217,6 +217,53 @@ const model = wrapLanguageModel({
 ```
 
 By default Blyp logs one structured `ai_trace` record per AI SDK call with provider, model, operation, token usage, finish reason, timing, and best-effort tool events. Prompt, response, reasoning, tool input, tool output, and stream chunk capture are off by default. When Blyp request context is active, AI traces inherit the active request-scoped logger automatically.
+
+Direct provider wrappers:
+
+```typescript
+import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+import { wrapOpenAI } from '@blyp/core/ai/openai';
+import { wrapAnthropic } from '@blyp/core/ai/anthropic';
+
+const openai = wrapOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }), {
+  operation: 'draft_blog_intro',
+});
+
+const anthropic = wrapAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }), {
+  operation: 'summarize_ticket',
+});
+```
+
+OpenRouter is supported through the OpenAI-compatible path:
+
+```typescript
+import OpenAI from 'openai';
+import { wrapOpenAI } from '@blyp/core/ai/openai';
+
+const client = wrapOpenAI(
+  new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+  }),
+  {
+    provider: 'openrouter',
+    operation: 'route_experiment',
+  }
+);
+```
+
+Optional transport tracing:
+
+```typescript
+import OpenAI from 'openai';
+import { blypFetch } from '@blyp/core/ai/fetch';
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  fetch: blypFetch(fetch),
+});
+```
 
 ### Database logging
 
