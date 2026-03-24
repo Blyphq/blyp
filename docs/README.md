@@ -268,7 +268,7 @@ await logger.flush();
 await logger.shutdown();
 ```
 
-Promise-based framework integrations such as Hono, Elysia, Next.js, SvelteKit, and TanStack Start flush automatically in database mode so request logs are persisted before the response completes. For callback-style servers like Express, Fastify, and NestJS, call `await logger.flush()` at your own boundary when you need the same guarantee.
+Promise-based and hook-driven framework integrations such as Hono, Elysia, Next.js, React Router, Astro, Nitro, Nuxt, SvelteKit, and TanStack Start flush automatically in database mode so request logs are persisted before the response completes. For callback-style servers like Express, Fastify, and NestJS, call `await logger.flush()` at your own boundary when you need the same guarantee.
 
 ### CLI schema setup
 
@@ -384,6 +384,87 @@ const logger = createExpoLogger({
 ```
 
 The browser and Expo connectors do not send directly to PostHog. They continue to send to Blyp's ingestion endpoint and Blyp forwards to PostHog when the server connector is configured. Browser and Expo apps do not use `posthog-node` directly. Workers are still out of scope for this connector.
+
+---
+
+## Databuddy connector
+
+Use Databuddy when you want Blyp logs and handled errors forwarded as Databuddy events:
+
+```typescript
+export default {
+  connectors: {
+    databuddy: {
+      enabled: true,
+      mode: 'auto',
+      apiKey: process.env.DATABUDDY_API_KEY,
+      websiteId: process.env.DATABUDDY_WEBSITE_ID,
+      enableBatching: true,
+    },
+  },
+};
+```
+
+Static JSON config works too:
+
+```json
+{
+  "connectors": {
+    "databuddy": {
+      "enabled": true,
+      "mode": "manual",
+      "apiKey": "db_xxx",
+      "websiteId": "site_xxx"
+    }
+  }
+}
+```
+
+Databuddy requires both `apiKey` and `websiteId`. Blyp marks the connector as missing until both values are present.
+
+`mode: "auto"` forwards normal server-side Blyp logs to Databuddy automatically and captures handled server errors as Databuddy `error` events. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the Databuddy subpath:
+
+```typescript
+import {
+  captureDatabuddyException,
+  createDatabuddyErrorTracker,
+  createDatabuddyLogger,
+  createStructuredDatabuddyLogger,
+} from '@blyp/core/databuddy';
+
+const databuddyLogger = createDatabuddyLogger();
+databuddyLogger.info('manual databuddy log');
+createDatabuddyErrorTracker().capture(new Error('manual databuddy exception'));
+captureDatabuddyException(new Error('wrapped databuddy exception'));
+
+const structured = createStructuredDatabuddyLogger('checkout', {
+  orderId: 'ord_123',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request Databuddy forwarding through the existing Blyp ingestion route:
+
+```typescript
+import { createClientLogger } from '@blyp/core/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'databuddy',
+});
+```
+
+```typescript
+import { createExpoLogger } from '@blyp/core/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: 'databuddy',
+});
+```
+
+The browser and Expo connectors do not send directly to Databuddy. They continue to send to Blyp's ingestion endpoint and Blyp forwards to Databuddy when the server connector is configured. Browser and Expo apps do not use `@databuddy/sdk` directly. Workers are still out of scope for this connector.
 
 ---
 
@@ -792,6 +873,28 @@ export const GET = nextLogger.withLogger(async (_request, _context, { log }) => 
 export const POST = nextLogger.clientLogHandler;
 ```
 
+### React Router
+
+```typescript
+import { createLogger } from '@blyp/core/react-router';
+
+const reactRouterLogger = createLogger({
+  level: 'info',
+});
+
+export const middleware = [reactRouterLogger.middleware];
+
+export async function loader({ context }: { context: Record<string, unknown> }) {
+  reactRouterLogger.getLogger(context).info('loaded route');
+  return Response.json({ ok: true });
+}
+
+// app/routes/inngest.ts
+export async function action({ request }: { request: Request }) {
+  return reactRouterLogger.clientLogHandler(request);
+}
+```
+
 ### TanStack Start
 
 ```typescript
@@ -805,6 +908,21 @@ export const requestMiddleware = tanstackLogger.requestMiddleware;
 
 // In a server route mounted at /inngest
 export const POST = tanstackLogger.clientLogHandlers.POST;
+```
+
+### Astro
+
+```typescript
+import { createLogger } from '@blyp/core/astro';
+
+const astroLogger = createLogger({
+  level: 'info',
+});
+
+export const onRequest = astroLogger.onRequest;
+
+// src/pages/inngest.ts
+export const POST = astroLogger.clientLogHandler;
 ```
 
 ### SvelteKit
@@ -821,6 +939,44 @@ export const handle = svelteLogger.handle;
 // src/routes/inngest/+server.ts
 export const POST = svelteLogger.clientLogHandler;
 ```
+
+### Nitro
+
+```typescript
+import { createLogger } from '@blyp/core/nitro';
+
+const nitroLogger = createLogger({
+  level: 'info',
+});
+
+// server/plugins/blyp.ts
+const plugin = nitroLogger.plugin;
+export default plugin;
+
+// server/api/inngest.post.ts
+const clientLogHandler = nitroLogger.clientLogHandler;
+export default clientLogHandler;
+```
+
+### Nuxt
+
+```typescript
+import { createLogger } from '@blyp/core/nuxt';
+
+const nuxtLogger = createLogger({
+  level: 'info',
+});
+
+// server/plugins/blyp.ts
+const serverPlugin = nuxtLogger.serverPlugin;
+export default serverPlugin;
+
+// server/api/inngest.post.ts
+const clientLogHandler = nuxtLogger.clientLogHandler;
+export default clientLogHandler;
+```
+
+Nuxt reuses the Nitro request lifecycle internally, so request-scoped `blypLog` behavior matches the Nitro adapter.
 
 ### Cloudflare Workers
 

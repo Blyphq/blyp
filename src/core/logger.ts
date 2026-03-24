@@ -14,6 +14,9 @@ import {
   createBetterStackSender,
 } from '../connectors/betterstack/sender';
 import {
+  createDatabuddySender,
+} from '../connectors/databuddy/sender';
+import {
   createPostHogSender,
   isClientLogRecord,
 } from '../connectors/posthog/sender';
@@ -24,6 +27,7 @@ import {
   createOTLPRegistry,
 } from '../connectors/otlp/sender';
 import type { BetterStackSender } from '../types/connectors/betterstack';
+import type { DatabuddySender } from '../types/connectors/databuddy';
 import type { PostHogSender } from '../types/connectors/posthog';
 import type { SentrySender } from '../types/connectors/sentry';
 import type { OTLPRegistry } from '../types/connectors/otlp';
@@ -186,6 +190,10 @@ export function getBetterStackSender(logger: BlypLogger): BetterStackSender {
   return getLoggerFactory(logger).betterstack;
 }
 
+export function getDatabuddySender(logger: BlypLogger): DatabuddySender {
+  return getLoggerFactory(logger).databuddy;
+}
+
 export function tryGetPostHogSender(logger: unknown): PostHogSender | null {
   try {
     return getPostHogSender(logger as BlypLogger);
@@ -197,6 +205,14 @@ export function tryGetPostHogSender(logger: unknown): PostHogSender | null {
 export function tryGetBetterStackSender(logger: unknown): BetterStackSender | null {
   try {
     return getBetterStackSender(logger as BlypLogger);
+  } catch {
+    return null;
+  }
+}
+
+export function tryGetDatabuddySender(logger: unknown): DatabuddySender | null {
+  try {
+    return getDatabuddySender(logger as BlypLogger);
   } catch {
     return null;
   }
@@ -286,6 +302,24 @@ function maybeSendToBetterStack(
   betterstack.send(record, { source: 'server', warnIfUnavailable: true });
 }
 
+function maybeSendToDatabuddy(
+  databuddy: DatabuddySender,
+  record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
+): void {
+  if (isClientLogRecord(record)) {
+    return;
+  }
+
+  if (!databuddy.shouldAutoForwardServerLogs()) {
+    if (databuddy.enabled && !databuddy.ready) {
+      databuddy.send(record, { source: 'server', warnIfUnavailable: true });
+    }
+    return;
+  }
+
+  databuddy.send(record, { source: 'server', warnIfUnavailable: true });
+}
+
 function maybeSendToSentry(
   sentry: SentrySender,
   record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
@@ -321,6 +355,7 @@ function createLoggerInstance(
   rootRawLogger: any,
   sink: BlypPrimarySink,
   betterstack: BetterStackSender,
+  databuddy: DatabuddySender,
   posthog: PostHogSender,
   sentry: SentrySender,
   otlp: OTLPRegistry,
@@ -366,6 +401,7 @@ function createLoggerInstance(
     );
     sink.write(record);
     maybeSendToBetterStack(betterstack, record);
+    maybeSendToDatabuddy(databuddy, record);
     maybeSendToPostHog(posthog, record);
     maybeSendToSentry(sentry, record);
     maybeSendToOTLP(otlp, record);
@@ -399,6 +435,7 @@ function createLoggerInstance(
     }
 
     maybeSendToBetterStack(betterstack, record);
+    maybeSendToDatabuddy(databuddy, record);
     maybeSendToPostHog(posthog, record);
     maybeSendToSentry(sentry, record);
     maybeSendToOTLP(otlp, record);
@@ -441,9 +478,27 @@ function createLoggerInstance(
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
 
-    flush: () => sink.flush(),
+    flush: async () => {
+      await sink.flush();
+      await Promise.allSettled([
+        betterstack.flush(),
+        databuddy.flush(),
+        posthog.flush(),
+        sentry.flush(),
+        otlp.flush(),
+      ]);
+    },
 
-    shutdown: () => sink.shutdown(),
+    shutdown: async () => {
+      await sink.shutdown();
+      await Promise.allSettled([
+        betterstack.flush(),
+        databuddy.flush(),
+        posthog.flush(),
+        sentry.flush(),
+        otlp.flush(),
+      ]);
+    },
 
     createStructuredLog: (
       groupId: string,
@@ -460,6 +515,7 @@ function createLoggerInstance(
         rootRawLogger,
         sink,
         betterstack,
+        databuddy,
         posthog,
         sentry,
         otlp,
@@ -471,6 +527,7 @@ function createLoggerInstance(
     [LOGGER_FACTORY]: {
       bindings,
       betterstack,
+      databuddy,
       posthog,
       sentry,
       otlp,
@@ -483,6 +540,7 @@ function createLoggerInstance(
           rootRawLogger,
           sink,
           betterstack,
+          databuddy,
           posthog,
           sentry,
           otlp,
@@ -514,6 +572,7 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   const rawLogger = createPinoLogger(resolvedConfig);
   const sink = createPrimarySink(resolvedConfig);
   const betterstack = createBetterStackSender(resolvedConfig);
+  const databuddy = createDatabuddySender(resolvedConfig);
   const posthog = createPostHogSender(resolvedConfig);
   const sentry = createSentrySender(resolvedConfig);
   const otlp = createOTLPRegistry(resolvedConfig);
@@ -521,6 +580,7 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
     rawLogger,
     sink,
     betterstack,
+    databuddy,
     posthog,
     sentry,
     otlp

@@ -60,6 +60,7 @@ const CLIENT_LOG_LEVELS: ClientLogLevel[] = [
 ];
 const clientConnectorRequestSchema = z.union([
   z.literal('betterstack'),
+  z.literal('databuddy'),
   z.literal('posthog'),
   z.literal('sentry'),
   z.undefined(),

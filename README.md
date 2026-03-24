@@ -14,9 +14,10 @@
 
 - **Runtime detection** — Automatically optimizes for Bun vs Node.js
 - **TypeScript** — Full type safety throughout
-- **Framework integrations** — Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, TanStack Start, SvelteKit, Cloudflare Workers
+- **Framework integrations** — Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, React Router, Astro, Nitro, Nuxt, TanStack Start, SvelteKit, Cloudflare Workers
 - **Expo integration** — Mobile client logging for Expo apps with structured backend sync
 - **PostHog connector** — Automatic or manual PostHog log forwarding for server, browser, and Expo flows
+- **Databuddy connector** — Automatic or manual Databuddy log forwarding and handled-error tracking for server, browser, and Expo flows
 - **OTLP connector** — Automatic or manual OpenTelemetry log forwarding for Grafana, Datadog, Honeycomb, and any OTLP-compatible backend
 - **Standalone usage** — Use without any framework
 - **Structured file logging** — NDJSON with size-based rotation and gzip archives
@@ -150,7 +151,7 @@ For the full error API (`HTTP_CODES`, `extend`, `create`), see [Full documentati
 
 ### Framework integrations
 
-Blyp supports **Elysia**, **Hono**, **Express**, **Fastify**, **NestJS**, **Next.js**, **TanStack Start**, **SvelteKit**, and **Cloudflare Workers**. Example with Elysia:
+Blyp supports **Elysia**, **Hono**, **Express**, **Fastify**, **NestJS**, **Next.js**, **React Router**, **Astro**, **Nitro**, **Nuxt**, **TanStack Start**, **SvelteKit**, and **Cloudflare Workers**. Example with Elysia:
 
 ```typescript
 import { Elysia } from 'elysia';
@@ -221,7 +222,7 @@ export default {
 };
 ```
 
-In database mode, Blyp keeps connectors working as usual and replaces only the primary local persistence backend. Promise-based framework integrations flush database writes before the request finishes. In callback-style servers, call `await logger.flush()` at your own boundary when you need a hard durability point.
+In database mode, Blyp keeps connectors working as usual and replaces only the primary local persistence backend. Promise-based and hook-driven framework integrations such as Hono, Elysia, Next.js, React Router, Astro, Nitro, Nuxt, SvelteKit, and TanStack Start flush database writes before the request finishes. In callback-style servers, call `await logger.flush()` at your own boundary when you need a hard durability point.
 
 Use the Blyp CLI to scaffold the schema and migrations:
 
@@ -353,6 +354,58 @@ const logger = createClientLogger({
 Client `error` and `critical` logs requested through the PostHog connector are promoted to PostHog exceptions only when server-side PostHog error tracking is enabled in `auto` mode.
 
 The client and Expo connector flow still posts to Blyp first. Blyp forwards to PostHog only when the server connector is configured, and browser or Expo apps do not use `posthog-node` directly. Workers remain out of scope for this connector.
+
+### Databuddy
+
+Use `connectors.databuddy` when you want Blyp logs and handled errors forwarded into Databuddy:
+
+```typescript
+export default {
+  connectors: {
+    databuddy: {
+      enabled: true,
+      mode: 'auto',
+      apiKey: process.env.DATABUDDY_API_KEY,
+      websiteId: process.env.DATABUDDY_WEBSITE_ID,
+      enableBatching: true,
+    },
+  },
+};
+```
+
+Databuddy requires both `apiKey` and `websiteId`. Blyp treats the connector as unavailable until both are configured.
+
+In `auto` mode, normal Blyp server loggers forward to Databuddy automatically and handled errors are captured as Databuddy `error` events. In `manual` mode, use `@blyp/core/databuddy`:
+
+```typescript
+import {
+  captureDatabuddyException,
+  createDatabuddyErrorTracker,
+  createDatabuddyLogger,
+  createStructuredDatabuddyLogger,
+} from '@blyp/core/databuddy';
+
+createDatabuddyLogger().info('manual databuddy log');
+createDatabuddyErrorTracker().capture(new Error('manual databuddy exception'));
+captureDatabuddyException(new Error('wrapped databuddy exception'));
+
+const structured = createStructuredDatabuddyLogger('checkout', { orderId: 'ord_123' });
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Browser and Expo loggers can request server-side Databuddy forwarding through the existing ingestion endpoint:
+
+```typescript
+import { createClientLogger } from '@blyp/core/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: 'databuddy',
+});
+```
+
+Client `error` and `critical` logs requested through the Databuddy connector are promoted to Databuddy `error` events only when server-side Databuddy is enabled in `auto` mode. The client and Expo connector flow still posts to Blyp first. Blyp forwards to Databuddy only when the server connector is configured.
 
 ### Sentry
 

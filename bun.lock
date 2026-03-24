@@ -5,6 +5,7 @@
     "": {
       "name": "tsuki-logger",
       "dependencies": {
+        "@databuddy/sdk": "^2.0.0",
         "@logtail/node": "^0.5.8",
         "@opentelemetry/api-logs": "^0.206.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.206.0",
@@ -40,8 +41,10 @@
         "@nestjs/core": "^10 || ^11",
         "@nestjs/platform-express": "^10 || ^11",
         "@nestjs/platform-fastify": "^10 || ^11",
+        "@prisma/client": "^5 || ^6",
         "@sveltejs/kit": "^2",
         "@tanstack/react-start": "^1",
+        "drizzle-orm": "^0.36 || ^0.37 || ^0.38 || ^0.39 || ^0.40",
         "elysia": "^1.4.27",
         "express": "^5",
         "fastify": "^5",
@@ -55,8 +58,10 @@
         "@nestjs/core",
         "@nestjs/platform-express",
         "@nestjs/platform-fastify",
+        "@prisma/client",
         "@sveltejs/kit",
         "@tanstack/react-start",
+        "drizzle-orm",
         "elysia",
         "express",
         "fastify",
@@ -252,6 +257,8 @@
     "@babel/types": ["@babel/types@7.29.0", "", { "dependencies": { "@babel/helper-string-parser": "^7.27.1", "@babel/helper-validator-identifier": "^7.28.5" } }, "sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A=="],
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.1", "", {}, "sha512-k7vvKPbf7J2fZ5klGRD9AeKfUvojuZIQ3BT5u7Jfv+puwXkUBUT5PVyMDfJZpy30CBDXGMgw7fguK/lpOMBvgw=="],
+
+    "@databuddy/sdk": ["@databuddy/sdk@2.3.29", "", { "peerDependencies": { "@ai-sdk/provider": "^2.0.0", "ai": "^5.0.51", "msw": "^2.11.5", "react": ">=18", "tokenlens": "^2.0.0-alpha.3", "vue": ">=3" }, "optionalPeers": ["@ai-sdk/provider", "ai", "msw", "react", "tokenlens", "vue"] }, "sha512-GuqlPsrgxYpmICstsVEpr6FFWHCkcTW5sgdKgPmCXfJyzdOUXRn17HkGEiuZKYzbADSxx1x9dXMCL/40JP3p2g=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.27.3", "", { "os": "aix", "cpu": "ppc64" }, "sha512-9fJMTNFTWZMh5qwrBItuziu834eOCUcEqymSH7pY+zoMVEZg3gcPuBNxH1EvfVYe9h0x/Ptw8KBzv7qxb7l8dg=="],
 

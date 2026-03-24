@@ -12,6 +12,7 @@ import type {
   BlypConnectorsConfig,
   ClientLoggingConfig,
   ConfigFileMatch,
+  DatabuddyConnectorConfig,
   DatabaseDeliveryConfig,
   DatabaseLoggerConfig,
   DatabaseRetryConfig,
@@ -25,6 +26,7 @@ import type {
   ResolvedBetterStackErrorTrackingConfig,
   ResolvedBlypConfig,
   ResolvedBlypConnectorsConfig,
+  ResolvedDatabuddyConnectorConfig,
   ResolvedDatabaseLoggerConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
@@ -40,6 +42,7 @@ export type {
   BlypDestination,
   BlypConnectorsConfig,
   ClientLoggingConfig,
+  DatabuddyConnectorConfig,
   DatabaseAdapterConfig,
   DatabaseAdapterKind,
   DatabaseDeliveryConfig,
@@ -55,6 +58,7 @@ export type {
   ResolvedBlypConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
+  ResolvedDatabuddyConnectorConfig,
   ResolvedDatabaseDeliveryConfig,
   ResolvedDatabaseLoggerConfig,
   PostHogErrorTrackingConfig,
@@ -549,6 +553,33 @@ function mergePostHogConnectorConfig(
   };
 }
 
+function mergeDatabuddyConnectorConfig(
+  base: DatabuddyConnectorConfig | undefined,
+  override: DatabuddyConnectorConfig | undefined
+): ResolvedDatabuddyConnectorConfig {
+  const enabled = override?.enabled ?? base?.enabled ?? false;
+  const apiKey = override?.apiKey ?? base?.apiKey;
+  const websiteId = override?.websiteId ?? base?.websiteId;
+  const ready = enabled && hasNonEmptyString(apiKey) && hasNonEmptyString(websiteId);
+
+  return {
+    enabled,
+    mode: override?.mode ?? base?.mode ?? 'auto',
+    apiKey,
+    websiteId,
+    namespace: override?.namespace ?? base?.namespace,
+    source: override?.source ?? base?.source,
+    apiUrl: override?.apiUrl ?? base?.apiUrl,
+    debug: override?.debug ?? base?.debug ?? false,
+    enableBatching: override?.enableBatching ?? base?.enableBatching ?? true,
+    batchSize: override?.batchSize ?? base?.batchSize,
+    batchTimeout: override?.batchTimeout ?? base?.batchTimeout,
+    maxQueueSize: override?.maxQueueSize ?? base?.maxQueueSize,
+    ready,
+    status: ready ? 'enabled' : 'missing',
+  };
+}
+
 function mergeBetterStackConnectorConfig(
   base: BetterStackConnectorConfig | undefined,
   override: BetterStackConnectorConfig | undefined
@@ -680,6 +711,7 @@ function mergeConnectorsConfig(
 ): ResolvedBlypConnectorsConfig {
   return {
     betterstack: mergeBetterStackConnectorConfig(base?.betterstack, override?.betterstack),
+    databuddy: mergeDatabuddyConnectorConfig(base?.databuddy, override?.databuddy),
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
     sentry: mergeSentryConnectorConfig(base?.sentry, override?.sentry),
     otlp: mergeOTLPConnectorsConfig(base?.otlp, override?.otlp),
