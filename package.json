@@ -1,7 +1,7 @@
 {
   "name": "@blyp/core",
-  "version": "0.1.2",
-  "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino with and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, TanStack Start, and SvelteKit.",
+  "version": "0.1.21",
+  "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, React Router, Astro, Nitro, Nuxt, TanStack Start, and SvelteKit.",
   "keywords": [
     "logger",
     "pino",
@@ -65,6 +65,11 @@
       "import": "./exports/frameworks/nextjs.mjs",
       "require": "./exports/frameworks/nextjs.js"
     },
+    "./react-router": {
+      "types": "./types/frameworks/react-router.d.ts",
+      "import": "./exports/frameworks/react-router.mjs",
+      "require": "./exports/frameworks/react-router.js"
+    },
     "./tanstack-start": {
       "types": "./types/frameworks/tanstack-start.d.ts",
       "import": "./exports/frameworks/tanstack-start.mjs",
@@ -74,6 +79,21 @@
       "types": "./types/frameworks/sveltekit.d.ts",
       "import": "./exports/frameworks/sveltekit.mjs",
       "require": "./exports/frameworks/sveltekit.js"
+    },
+    "./astro": {
+      "types": "./types/frameworks/astro.d.ts",
+      "import": "./exports/frameworks/astro.mjs",
+      "require": "./exports/frameworks/astro.js"
+    },
+    "./nitro": {
+      "types": "./types/frameworks/nitro.d.ts",
+      "import": "./exports/frameworks/nitro.mjs",
+      "require": "./exports/frameworks/nitro.js"
+    },
+    "./nuxt": {
+      "types": "./types/frameworks/nuxt.d.ts",
+      "import": "./exports/frameworks/nuxt.mjs",
+      "require": "./exports/frameworks/nuxt.js"
     },
     "./client": {
       "types": "./types/client.d.ts",
@@ -94,6 +114,11 @@
       "types": "./types/connectors/betterstack.d.ts",
       "import": "./exports/connectors/betterstack.mjs",
       "require": "./exports/connectors/betterstack.js"
+    },
+    "./databuddy": {
+      "types": "./types/connectors/databuddy.d.ts",
+      "import": "./exports/connectors/databuddy.mjs",
+      "require": "./exports/connectors/databuddy.js"
     },
     "./posthog": {
       "types": "./types/connectors/posthog.d.ts",
@@ -130,6 +155,9 @@
       "betterstack": [
         "./types/connectors/betterstack.d.ts"
       ],
+      "databuddy": [
+        "./types/connectors/databuddy.d.ts"
+      ],
       "posthog": [
         "./types/connectors/posthog.d.ts"
       ],
@@ -157,11 +185,23 @@
       "nextjs": [
         "./types/frameworks/nextjs.d.ts"
       ],
+      "react-router": [
+        "./types/frameworks/react-router.d.ts"
+      ],
       "tanstack-start": [
         "./types/frameworks/tanstack-start.d.ts"
       ],
       "sveltekit": [
         "./types/frameworks/sveltekit.d.ts"
+      ],
+      "astro": [
+        "./types/frameworks/astro.d.ts"
+      ],
+      "nitro": [
+        "./types/frameworks/nitro.d.ts"
+      ],
+      "nuxt": [
+        "./types/frameworks/nuxt.d.ts"
       ],
       "standalone": [
         "./types/frameworks/standalone.d.ts"
@@ -221,12 +261,16 @@
     "@prisma/client": "^5 || ^6",
     "@sveltejs/kit": "^2",
     "@tanstack/react-start": "^1",
+    "astro": "^6",
     "drizzle-orm": "^0.36 || ^0.37 || ^0.38 || ^0.39 || ^0.40",
     "elysia": "^1.4.27",
     "express": "^5",
     "fastify": "^5",
     "hono": "^4",
     "next": "^15",
+    "nitropack": "^2",
+    "nuxt": "^4",
+    "react-router": "^7",
     "rxjs": "^7",
     "typescript": "^5"
   },
@@ -252,6 +296,9 @@
     "@tanstack/react-start": {
       "optional": true
     },
+    "astro": {
+      "optional": true
+    },
     "drizzle-orm": {
       "optional": true
     },
@@ -270,11 +317,21 @@
     "next": {
       "optional": true
     },
+    "nitropack": {
+      "optional": true
+    },
+    "nuxt": {
+      "optional": true
+    },
+    "react-router": {
+      "optional": true
+    },
     "rxjs": {
       "optional": true
     }
   },
   "dependencies": {
+    "@databuddy/sdk": "^2.0.0",
     "@logtail/node": "^0.5.8",
     "@opentelemetry/api-logs": "^0.206.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.206.0",

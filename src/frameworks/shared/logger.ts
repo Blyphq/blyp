@@ -7,10 +7,12 @@ import { buildPostHogExceptionProperties } from '../../connectors/posthog/sender
 import {
   createBaseLogger,
   getBetterStackSender,
+  getDatabuddySender,
   getOtlpRegistry,
   getPostHogSender,
   getSentrySender,
   tryGetBetterStackSender,
+  tryGetDatabuddySender,
   tryGetPostHogSender,
 } from '../../core/logger';
 import {
@@ -121,6 +123,7 @@ export function resolveServerLogger<Ctx>(
   return {
     logger,
     betterstack: getBetterStackSender(logger),
+    databuddy: getDatabuddySender(logger),
     posthog: getPostHogSender(logger),
     sentry: getSentrySender(logger),
     otlp: getOtlpRegistry(logger),
@@ -291,6 +294,25 @@ export function emitHttpErrorLog(
     });
   }
 
+  const databuddy = tryGetDatabuddySender(logger);
+  if (databuddy?.shouldAutoCaptureExceptions()) {
+    databuddy.captureException(captureContext.error ?? error ?? message, {
+      source: 'server',
+      warnIfUnavailable: true,
+      properties: {
+        method: request.method,
+        path,
+        status_code: statusCode,
+        ...(request.url ? { current_url: request.url } : {}),
+        ...(getHeaderValue(request.headers, 'user-agent')
+          ? { user_agent: getHeaderValue(request.headers, 'user-agent') }
+          : {}),
+        ...(errorLogData.ip ? { ip: errorLogData.ip } : {}),
+        payload: errorLogData,
+      },
+    });
+  }
+
   return errorLogData;
 }
 
@@ -419,6 +441,47 @@ export async function handleClientLogIngestion<Ctx>(options: {
             sessionId: payload.session.sessionId,
             pageUrl: payload.page.url,
             pagePath: payload.page.pathname,
+            metadata: payload.metadata,
+            payload: structuredPayload,
+          },
+        });
+      }
+    }
+  } else if (payload.connector === 'databuddy') {
+    headers['x-blyp-databuddy-status'] = config.databuddy.ready ? 'enabled' : 'missing';
+
+    if (config.databuddy.ready) {
+      const forwardedRecord = {
+        timestamp: structuredPayload.receivedAt as string,
+        level: payload.level,
+        message: `[client] ${payload.message}`,
+        data: structuredPayload,
+      };
+
+      config.databuddy.send(forwardedRecord, {
+        source: 'client',
+      });
+
+      if (
+        (payload.level === 'error' || payload.level === 'critical') &&
+        config.databuddy.shouldAutoCaptureExceptions()
+      ) {
+        const clientErrorCandidate =
+          payload.data &&
+          typeof payload.data === 'object' &&
+          !Array.isArray(payload.data) &&
+          typeof (payload.data as Record<string, unknown>).message === 'string'
+            ? payload.data
+            : payload.message;
+
+        config.databuddy.captureException(clientErrorCandidate, {
+          source: 'client',
+          warnIfUnavailable: true,
+          sessionId: payload.session.sessionId,
+          properties: {
+            page_url: payload.page.url,
+            page_path: payload.page.pathname,
+            client_runtime: payload.device?.runtime,
             metadata: payload.metadata,
             payload: structuredPayload,
           },

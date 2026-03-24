@@ -10,6 +10,7 @@ import type { CreateErrorInput } from '../types/core/errors';
 import {
   logger as defaultLogger,
   tryGetBetterStackSender,
+  tryGetDatabuddySender,
   tryGetPostHogSender,
 } from './logger';
 
@@ -54,6 +55,24 @@ export function createError(input: CreateErrorInput): BlypError {
           'blyp.type': 'application_error',
           status: error.status,
           statusCode: error.statusCode,
+          ...(error.code !== undefined ? { code: error.code } : {}),
+          ...(error.why !== undefined ? { why: error.why } : {}),
+          ...(error.fix !== undefined ? { fix: error.fix } : {}),
+          ...(error.link !== undefined ? { link: error.link } : {}),
+          ...(error.details !== undefined ? { details: error.details } : {}),
+        },
+      });
+    }
+
+    const databuddy = tryGetDatabuddySender(input.logger ?? defaultLogger);
+    if (databuddy?.shouldAutoCaptureExceptions()) {
+      databuddy.captureException(error, {
+        source: 'server',
+        warnIfUnavailable: true,
+        properties: {
+          blyp_type: 'application_error',
+          status: error.status,
+          status_code: error.statusCode,
           ...(error.code !== undefined ? { code: error.code } : {}),
           ...(error.why !== undefined ? { why: error.why } : {}),
           ...(error.fix !== undefined ? { fix: error.fix } : {}),

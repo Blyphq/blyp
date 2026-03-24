@@ -114,6 +114,36 @@ export interface ResolvedBetterStackConnector {
   ) => void;
 }
 
+export interface ResolvedDatabuddyConnector {
+  enabled: boolean;
+  ready: boolean;
+  mode: ConnectorMode;
+  status: 'enabled' | 'missing';
+  shouldAutoCaptureExceptions: () => boolean;
+  send: (
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+  captureException: (
+    error: unknown,
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+      properties?: Record<string, unknown>;
+      anonymousId?: string;
+      sessionId?: string;
+    }
+  ) => void;
+}
+
 export interface ResolvedSentryConnector {
   enabled: boolean;
   ready: boolean;
@@ -177,6 +207,7 @@ export interface ResolvedOTLPRegistry {
 export interface ResolvedServerLogger<Ctx> {
   logger: BlypLogger;
   betterstack: ResolvedBetterStackConnector;
+  databuddy: ResolvedDatabuddyConnector;
   posthog: ResolvedPostHogConnector;
   sentry: ResolvedSentryConnector;
   otlp: ResolvedOTLPRegistry;

@@ -56,6 +56,7 @@ export type {
   BetterStackErrorTrackingConfig,
   BlypDestination,
   ConnectorMode,
+  DatabuddyConnectorConfig,
   DatabaseAdapterConfig,
   DatabaseAdapterKind,
   DatabaseDeliveryConfig,
@@ -71,6 +72,7 @@ export type {
   PrismaDatabaseAdapterConfig,
   ResolvedBlypConfig,
   ResolvedBetterStackConnectorConfig,
+  ResolvedDatabuddyConnectorConfig,
   ResolvedDatabaseDeliveryConfig,
   ResolvedDatabaseLoggerConfig,
   ResolvedDatabaseRetryConfig,
@@ -102,6 +104,18 @@ export type {
   BetterStackLogger,
   BetterStackLoggerConfig,
 } from './connectors/betterstack';
+export {
+  captureDatabuddyException,
+  createDatabuddyErrorTracker,
+  createDatabuddyLogger,
+  createStructuredDatabuddyLogger,
+} from './connectors/databuddy';
+export type {
+  DatabuddyErrorTracker,
+  DatabuddyExceptionCaptureOptions,
+  DatabuddyLogger,
+  DatabuddyLoggerConfig,
+} from './connectors/databuddy';
 export {
   capturePosthogException,
   createPosthogErrorTracker,
@@ -162,6 +176,17 @@ export type {
   NextJsRouteContext,
   NextJsWrappedHandler,
 } from './frameworks/nextjs';
+export { createReactRouterLogger } from './frameworks/react-router';
+export type {
+  ReactRouterClientLogIngestionConfig,
+  ReactRouterContextStore,
+  ReactRouterLoggerConfig,
+  ReactRouterLoggerContext,
+  ReactRouterLoggerFactory,
+  ReactRouterLoggerMiddleware,
+  ReactRouterMiddlewareArgs,
+  ReactRouterMiddlewareNext,
+} from './frameworks/react-router';
 export { createTanStackStartLogger } from './frameworks/tanstack-start';
 export type {
   TanStackStartClientLogHandlers,
@@ -183,6 +208,46 @@ export type {
   SvelteKitRequestHandler,
   SvelteKitResolve,
 } from './frameworks/sveltekit';
+export { createAstroLogger } from './frameworks/astro';
+export type {
+  AstroClientLogIngestionConfig,
+  AstroEndpointContext,
+  AstroEndpointHandler,
+  AstroLocals,
+  AstroLoggerConfig,
+  AstroLoggerContext,
+  AstroLoggerFactory,
+  AstroMiddlewareContext,
+  AstroMiddlewareHandler,
+  AstroMiddlewareNext,
+} from './frameworks/astro';
+export { createNitroLogger } from './frameworks/nitro';
+export type {
+  NitroAppLike,
+  NitroClientLogIngestionConfig,
+  NitroEventContext,
+  NitroEventHandler,
+  NitroEventLike,
+  NitroHooksLike,
+  NitroLoggerConfig,
+  NitroLoggerContext,
+  NitroLoggerFactory,
+  NitroLoggerPlugin,
+  NitroNodeLike,
+  NitroNodeRequestLike,
+  NitroNodeResponseLike,
+  NitroResponseLike,
+} from './frameworks/nitro';
+export { createNuxtLogger } from './frameworks/nuxt';
+export type {
+  NuxtClientLogIngestionConfig,
+  NuxtEventHandler,
+  NuxtEventLike,
+  NuxtLoggerConfig,
+  NuxtLoggerContext,
+  NuxtLoggerFactory,
+  NuxtLoggerPlugin,
+} from './frameworks/nuxt';
 export { createNestLogger, BlypModule } from './frameworks/nestjs';
 export type {
   NestAdapterType,

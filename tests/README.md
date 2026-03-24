@@ -18,8 +18,12 @@ The test suite is split by concern instead of using one mixed catch-all file.
 - `frameworks/express.test.ts` - Express integration coverage
 - `frameworks/fastify.test.ts` - Fastify integration coverage
 - `frameworks/nextjs.test.ts` - Next.js App Router integration coverage
+- `frameworks/react-router.test.ts` - React Router integration coverage
 - `frameworks/tanstack-start.test.ts` - TanStack Start integration coverage
 - `frameworks/sveltekit.test.ts` - SvelteKit integration coverage
+- `frameworks/astro.test.ts` - Astro integration coverage
+- `frameworks/nitro.test.ts` - Nitro integration coverage
+- `frameworks/nuxt.test.ts` - Nuxt integration coverage
 - `helpers/` - shared fixtures and temp-dir utilities
 - `run-tests.ts` - lightweight test runner helper
 
@@ -68,8 +72,12 @@ The test suite covers:
 - Express
 - Fastify
 - Next.js App Router
+- React Router
 - TanStack Start
 - SvelteKit
+- Astro
+- Nitro
+- Nuxt
 
 ### ✅ Core Coverage
 - Runtime detection

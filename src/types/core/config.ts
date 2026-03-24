@@ -50,6 +50,21 @@ export interface PostHogConnectorConfig {
   errorTracking?: PostHogErrorTrackingConfig;
 }
 
+export interface DatabuddyConnectorConfig {
+  enabled?: boolean;
+  mode?: ConnectorMode;
+  apiKey?: string;
+  websiteId?: string;
+  namespace?: string;
+  source?: string;
+  apiUrl?: string;
+  debug?: boolean;
+  enableBatching?: boolean;
+  batchSize?: number;
+  batchTimeout?: number;
+  maxQueueSize?: number;
+}
+
 export interface BetterStackConnectorConfig {
   enabled?: boolean;
   mode?: ConnectorMode;
@@ -88,6 +103,23 @@ export interface ResolvedPostHogConnectorConfig {
   host: string;
   serviceName: string;
   errorTracking: ResolvedPostHogErrorTrackingConfig;
+}
+
+export interface ResolvedDatabuddyConnectorConfig {
+  enabled: boolean;
+  mode: ConnectorMode;
+  apiKey?: string;
+  websiteId?: string;
+  namespace?: string;
+  source?: string;
+  apiUrl?: string;
+  debug: boolean;
+  enableBatching: boolean;
+  batchSize?: number;
+  batchTimeout?: number;
+  maxQueueSize?: number;
+  ready: boolean;
+  status: 'enabled' | 'missing';
 }
 
 export interface ResolvedBetterStackConnectorConfig {
@@ -153,6 +185,7 @@ export interface ResolvedOTLPConnectorConfig {
 
 export interface BlypConnectorsConfig {
   betterstack?: BetterStackConnectorConfig;
+  databuddy?: DatabuddyConnectorConfig;
   posthog?: PostHogConnectorConfig;
   sentry?: SentryConnectorConfig;
   otlp?: OTLPConnectorConfig[];
@@ -171,6 +204,7 @@ export interface BlypConfig {
 
 export interface ResolvedBlypConnectorsConfig {
   betterstack: ResolvedBetterStackConnectorConfig;
+  databuddy: ResolvedDatabuddyConnectorConfig;
   posthog: ResolvedPostHogConnectorConfig;
   sentry: ResolvedSentryConnectorConfig;
   otlp: ResolvedOTLPConnectorConfig[];

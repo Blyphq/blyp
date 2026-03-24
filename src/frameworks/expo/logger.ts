@@ -151,6 +151,13 @@ async function sendRemoteLog(
         );
       }
 
+      if (config.connector === 'databuddy' && response.headers.get('x-blyp-databuddy-status') === 'missing') {
+        errorOnce(
+          'missing-databuddy-server-config',
+          '[blyp/expo] Databuddy connector requested but not configured on the server. Continuing without Databuddy forwarding.'
+        );
+      }
+
       if (config.connector === 'posthog' && response.headers.get('x-blyp-posthog-status') === 'missing') {
         errorOnce(
           'missing-posthog-server-config',
