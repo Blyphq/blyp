@@ -23,6 +23,7 @@
 - **Structured file logging** — NDJSON with size-based rotation and gzip archives
 - **Database logging** — Serverless-friendly persistence with Prisma and Drizzle adapters for Postgres and MySQL
 - **Client log sync** — Browser logs ingested into your backend stream
+- **AI SDK tracing** — AI SDK middleware-based tracing for `generateText` and `streamText` flows
 
 ## Project structure
 
@@ -178,6 +179,44 @@ logger.info('app mounted');
 ```
 
 Expo uses the runtime `fetch` implementation for delivery and `expo-network` for connectivity metadata. Install `expo-network` in your app and use an absolute ingestion URL.
+
+### AI SDK tracing
+
+Use `@blyp/core/ai/vercel` when you want Blyp to instrument the Vercel AI SDK without replacing its normal ergonomics.
+
+Common case:
+
+```typescript
+import { streamText } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { blypModel } from '@blyp/core/ai/vercel';
+
+const model = blypModel(anthropic('claude-sonnet-4-5'), {
+  operation: 'support_chat',
+});
+
+const result = streamText({
+  model,
+  prompt: 'Write a refund reply for this customer',
+});
+```
+
+Advanced middleware usage:
+
+```typescript
+import { wrapLanguageModel } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { blypMiddleware } from '@blyp/core/ai/vercel';
+
+const model = wrapLanguageModel({
+  model: anthropic('claude-sonnet-4-5'),
+  middleware: blypMiddleware({
+    operation: 'support_chat',
+  }),
+});
+```
+
+By default Blyp logs one structured `ai_trace` record per AI SDK call with provider, model, operation, token usage, finish reason, timing, and best-effort tool events. Prompt, response, reasoning, tool input, tool output, and stream chunk capture are off by default. When Blyp request context is active, AI traces inherit the active request-scoped logger automatically.
 
 ### Database logging
 

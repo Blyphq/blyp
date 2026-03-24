@@ -1,0 +1,689 @@
+import type {
+  LanguageModelV3CallOptions,
+  LanguageModelV3Content,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3StreamPart,
+  LanguageModelV3Usage,
+  LanguageModelV3,
+} from '@ai-sdk/provider';
+import { logger as rootLogger } from '../../core/logger';
+import type { BlypLogger } from '../../core/logger';
+import { getActiveRequestLogger } from '../../frameworks/shared/request-context';
+import { omitPaths, toLoggableValue, truncateValue } from './redaction';
+import type {
+  AIToolCallRecord,
+  BlypMiddlewareContext,
+  BlypModelOptions,
+  BlypResolvedModelOptions,
+  BlypTraceEvent,
+} from './types';
+
+const DEFAULT_CAPTURE = {
+  input: false,
+  output: false,
+  toolInputs: false,
+  toolOutputs: false,
+  reasoning: false,
+  streamChunks: false,
+} as const;
+
+const DEFAULT_EXCLUDE = {
+  providerOptions: false,
+  metadataPaths: [],
+  toolNames: [],
+} as const;
+
+const DEFAULT_LIMITS = {
+  maxContentBytes: 16_384,
+  maxEvents: 200,
+  maxToolCalls: 50,
+} as const;
+
+function createTraceId(): string {
+  return `ai_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function serializeHookError(error: unknown): unknown {
+  return toLoggableValue(error);
+}
+
+function safeParseJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeUsage(usage?: LanguageModelV3Usage) {
+  if (!usage) {
+    return undefined;
+  }
+
+  const inputTokens = usage.inputTokens.total;
+  const outputTokens = usage.outputTokens.total;
+  const totalTokens =
+    (inputTokens ?? 0) + (outputTokens ?? 0) || undefined;
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    reasoningTokens: usage.outputTokens.reasoning,
+    cachedInputTokens: usage.inputTokens.cacheRead,
+  };
+}
+
+function normalizeFinishReason(
+  finishReason: unknown
+): string | undefined {
+  if (typeof finishReason === 'string') {
+    return finishReason;
+  }
+
+  if (finishReason && typeof finishReason === 'object') {
+    const record = finishReason as {
+      unified?: unknown;
+      raw?: unknown;
+    };
+
+    if (typeof record.unified === 'string') {
+      return record.unified;
+    }
+
+    if (typeof record.raw === 'string') {
+      return record.raw;
+    }
+  }
+
+  return undefined;
+}
+
+function collectContentText(content: Array<LanguageModelV3Content>, type: 'text' | 'reasoning') {
+  return content
+    .filter((part): part is Extract<LanguageModelV3Content, { type: typeof type }> => part.type === type)
+    .map((part) => part.text)
+    .join('');
+}
+
+function extractToolCallsFromContent(content: Array<LanguageModelV3Content>): AIToolCallRecord[] {
+  const records = new Map<string, AIToolCallRecord>();
+
+  for (const part of content) {
+    if (part.type === 'tool-call') {
+      records.set(part.toolCallId, {
+        id: part.toolCallId,
+        name: part.toolName,
+        input: safeParseJson(part.input),
+        status: 'started',
+      });
+      continue;
+    }
+
+    if (part.type === 'tool-result') {
+      const current = records.get(part.toolCallId);
+      records.set(part.toolCallId, {
+        id: part.toolCallId,
+        name: part.toolName,
+        input: current?.input,
+        output: part.result,
+        status: part.isError ? 'failed' : 'completed',
+        error: part.isError ? part.result : undefined,
+      });
+    }
+  }
+
+  return [...records.values()];
+}
+
+function safeErrorSummary(error: unknown): {
+  errorType?: string;
+  errorCode?: string | number;
+} {
+  if (!error) {
+    return {};
+  }
+
+  if (error instanceof Error) {
+    const errorLike = error as Error & { code?: string | number };
+    return {
+      errorType: error.name,
+      errorCode: errorLike.code,
+    };
+  }
+
+  if (typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    return {
+      errorType:
+        typeof record.type === 'string'
+          ? record.type
+          : typeof record.name === 'string'
+            ? record.name
+            : 'Error',
+      errorCode:
+        typeof record.code === 'string' || typeof record.code === 'number'
+          ? record.code
+          : undefined,
+    };
+  }
+
+  return {
+    errorType: typeof error,
+  };
+}
+
+type MutableTrace = {
+  traceId: string;
+  provider: string;
+  model: string;
+  callType: 'generate' | 'stream';
+  logger: BlypLogger;
+  params: LanguageModelV3CallOptions;
+  options: BlypResolvedModelOptions;
+  operation: string;
+  metadata: Record<string, unknown>;
+  startedAt: string;
+  startedAtMs: number;
+  firstChunkAtMs?: number;
+  finishReason?: string;
+  usage?: BlypMiddlewareContext['usage'];
+  outputText?: string;
+  streamedText?: string;
+  reasoningText?: string;
+  toolCalls: AIToolCallRecord[];
+  toolCallMap: Map<string, AIToolCallRecord>;
+  events: BlypTraceEvent[];
+  streamChunks: unknown[];
+  truncated: boolean;
+  error?: unknown;
+  capture: Required<BlypResolvedModelOptions['capture']>;
+  input?: unknown;
+  output?: unknown;
+  reasoning?: unknown;
+};
+
+export function resolveBlypModelOptions(options: BlypModelOptions = {}): BlypResolvedModelOptions {
+  return {
+    logger: options.logger,
+    operation: options.operation,
+    metadata: { ...(options.metadata ?? {}) },
+    capture: {
+      ...DEFAULT_CAPTURE,
+      ...(options.capture ?? {}),
+    },
+    exclude: {
+      providerOptions: options.exclude?.providerOptions ?? DEFAULT_EXCLUDE.providerOptions,
+      metadataPaths: [...(options.exclude?.metadataPaths ?? DEFAULT_EXCLUDE.metadataPaths)],
+      toolNames: [...(options.exclude?.toolNames ?? DEFAULT_EXCLUDE.toolNames)],
+    },
+    limits: {
+      maxContentBytes: options.limits?.maxContentBytes ?? DEFAULT_LIMITS.maxContentBytes,
+      maxEvents: options.limits?.maxEvents ?? DEFAULT_LIMITS.maxEvents,
+      maxToolCalls: options.limits?.maxToolCalls ?? DEFAULT_LIMITS.maxToolCalls,
+    },
+    hooks: options.hooks ?? {},
+  };
+}
+
+export function createTraceState(options: {
+  model: LanguageModelV3;
+  params: LanguageModelV3CallOptions;
+  callType: 'generate' | 'stream';
+  config: BlypResolvedModelOptions;
+}): { state: MutableTrace; context: BlypMiddlewareContext } {
+  const logger = options.config.logger ?? getActiveRequestLogger() ?? rootLogger;
+  const traceId = createTraceId();
+  const startedAt = nowIso();
+  const state: MutableTrace = {
+    traceId,
+    provider: options.model.provider,
+    model: options.model.modelId,
+    callType: options.callType,
+    logger,
+    params: options.params,
+    options: options.config,
+    operation:
+      options.config.operation ??
+      (options.callType === 'stream' ? 'ai.stream' : 'ai.generate'),
+    metadata: { ...options.config.metadata },
+    startedAt,
+    startedAtMs: performance.now(),
+    toolCalls: [],
+    toolCallMap: new Map<string, AIToolCallRecord>(),
+    events: [],
+    streamChunks: [],
+    truncated: false,
+    capture: { ...options.config.capture },
+  };
+
+  const context: BlypMiddlewareContext = {
+    traceId,
+    operation: state.operation,
+    provider: state.provider,
+    model: state.model,
+    callType: state.callType,
+    logger,
+    params: options.params,
+    metadata: state.metadata,
+    startedAt,
+    get usage() {
+      return state.usage;
+    },
+    get finishReason() {
+      return state.finishReason;
+    },
+    get streamedText() {
+      return state.streamedText;
+    },
+    get outputText() {
+      return state.outputText;
+    },
+    get toolCalls() {
+      return state.toolCalls.length > 0 ? state.toolCalls : undefined;
+    },
+    get error() {
+      return state.error;
+    },
+    setMetadata(extra) {
+      Object.assign(state.metadata, extra);
+    },
+    disableCapture(field) {
+      state.capture[field] = false;
+    },
+  };
+
+  return { state, context };
+}
+
+export async function runHookSafely(
+  hook: ((...args: any[]) => void | Promise<void>) | undefined,
+  args: unknown[]
+): Promise<void> {
+  if (!hook) {
+    return;
+  }
+
+  try {
+    await hook(...args);
+  } catch (error) {
+    console.warn('[Blyp] AI middleware hook failed.', serializeHookError(error));
+  }
+}
+
+export async function addTraceEvent(
+  state: MutableTrace,
+  context: BlypMiddlewareContext,
+  event: Omit<BlypTraceEvent, 'timestamp'> & { timestamp?: string }
+): Promise<void> {
+  if (state.events.length < state.options.limits.maxEvents) {
+    state.events.push({
+      ...event,
+      timestamp: event.timestamp ?? nowIso(),
+    });
+  } else {
+    state.truncated = true;
+  }
+
+  await runHookSafely(state.options.hooks.onEvent, [
+    state.events[state.events.length - 1],
+    context,
+  ]);
+}
+
+export function captureValue(
+  value: unknown,
+  maxContentBytes: number
+): { value: unknown; truncated: boolean } {
+  return truncateValue(value, maxContentBytes);
+}
+
+export function sanitizeInput(
+  params: LanguageModelV3CallOptions,
+  state: MutableTrace
+): unknown {
+  const base = toLoggableValue(params) as Record<string, unknown>;
+
+  if (state.options.exclude.providerOptions) {
+    delete base.providerOptions;
+  }
+
+  return base;
+}
+
+export function recordGenerateResult(
+  state: MutableTrace,
+  result: LanguageModelV3GenerateResult
+): void {
+  state.usage = normalizeUsage(result.usage);
+  state.finishReason = normalizeFinishReason(result.finishReason);
+  state.outputText = collectContentText(result.content, 'text') || undefined;
+
+  const reasoningText = collectContentText(result.content, 'reasoning');
+  if (reasoningText) {
+    state.reasoningText = reasoningText;
+  }
+
+  for (const toolCall of extractToolCallsFromContent(result.content)) {
+    upsertToolCall(state, toolCall);
+  }
+}
+
+export function upsertToolCall(state: MutableTrace, toolCall: AIToolCallRecord): void {
+  const toolId = toolCall.id ?? `${toolCall.name}:${state.toolCalls.length}`;
+  const existing = state.toolCallMap.get(toolId);
+  const merged = {
+    ...existing,
+    ...toolCall,
+  } satisfies AIToolCallRecord;
+
+  if (!existing && state.toolCalls.length >= state.options.limits.maxToolCalls) {
+    state.truncated = true;
+    return;
+  }
+
+  if (!existing) {
+    state.toolCalls.push(merged);
+  } else {
+    const index = state.toolCalls.findIndex((item, itemIndex) => {
+      return (item.id ?? `${item.name}:${itemIndex}`) === toolId;
+    });
+    if (index >= 0) {
+      state.toolCalls[index] = merged;
+    }
+  }
+
+  state.toolCallMap.set(toolId, merged);
+}
+
+export async function consumeStreamPart(
+  state: MutableTrace,
+  context: BlypMiddlewareContext,
+  part: LanguageModelV3StreamPart
+): Promise<void> {
+  const timestamp = nowIso();
+
+  if (state.firstChunkAtMs === undefined && part.type !== 'stream-start') {
+    state.firstChunkAtMs = performance.now();
+    await addTraceEvent(state, context, { type: 'ai.first_chunk', timestamp });
+  }
+
+  switch (part.type) {
+    case 'text-delta':
+      state.streamedText = `${state.streamedText ?? ''}${part.delta}`;
+      if (state.capture.streamChunks) {
+        state.streamChunks.push(part.delta);
+        await addTraceEvent(state, context, {
+          type: 'ai.chunk',
+          timestamp,
+          data: { kind: 'text', delta: part.delta },
+        });
+      }
+      break;
+
+    case 'reasoning-delta':
+      state.reasoningText = `${state.reasoningText ?? ''}${part.delta}`;
+      if (state.capture.streamChunks) {
+        state.streamChunks.push({ reasoning: part.delta });
+        await addTraceEvent(state, context, {
+          type: 'ai.chunk',
+          timestamp,
+          data: { kind: 'reasoning', delta: part.delta },
+        });
+      }
+      break;
+
+    case 'tool-input-start': {
+      const started = {
+        id: part.id,
+        name: part.toolName,
+        startedAt: timestamp,
+        status: 'started',
+      } satisfies AIToolCallRecord;
+      upsertToolCall(state, started);
+      await addTraceEvent(state, context, {
+        type: 'ai.tool_call.start',
+        timestamp,
+        data: {
+          toolName: part.toolName,
+          toolCallId: part.id,
+        },
+      });
+      break;
+    }
+
+    case 'tool-input-delta': {
+      const current = state.toolCallMap.get(part.id);
+      if (current) {
+        const input = `${typeof current.input === 'string' ? current.input : ''}${part.delta}`;
+        upsertToolCall(state, {
+          ...current,
+          input,
+        });
+      }
+      break;
+    }
+
+    case 'tool-call': {
+      const existing = state.toolCallMap.get(part.toolCallId);
+      upsertToolCall(state, {
+        id: part.toolCallId,
+        name: part.toolName,
+        startedAt: existing?.startedAt ?? timestamp,
+        input: safeParseJson(part.input),
+        status: existing?.status ?? 'started',
+      });
+      break;
+    }
+
+    case 'tool-result': {
+      const existing = state.toolCallMap.get(part.toolCallId);
+      upsertToolCall(state, {
+        id: part.toolCallId,
+        name: part.toolName,
+        input: existing?.input,
+        output: part.result,
+        startedAt: existing?.startedAt,
+        finishedAt: timestamp,
+        durationMs: existing?.startedAt
+          ? Math.max(0, Math.round(Date.parse(timestamp) - Date.parse(existing.startedAt)))
+          : undefined,
+        status: part.isError ? 'failed' : 'completed',
+        error: part.isError ? part.result : undefined,
+      });
+      await addTraceEvent(state, context, {
+        type: 'ai.tool_call.result',
+        timestamp,
+        data: {
+          toolName: part.toolName,
+          toolCallId: part.toolCallId,
+          status: part.isError ? 'failed' : 'completed',
+        },
+      });
+      break;
+    }
+
+    case 'finish':
+      state.usage = normalizeUsage(part.usage);
+      state.finishReason = normalizeFinishReason(part.finishReason);
+      break;
+
+    case 'error':
+      state.error = part.error;
+      await addTraceEvent(state, context, {
+        type: 'ai.error',
+        timestamp,
+        data: {
+          error: toLoggableValue(part.error),
+        },
+      });
+      break;
+
+    case 'raw':
+      if (state.capture.streamChunks) {
+        state.streamChunks.push({ raw: toLoggableValue(part.rawValue) });
+      }
+      break;
+
+    default:
+      break;
+  }
+}
+
+export async function finalizeTrace(
+  state: MutableTrace,
+  context: BlypMiddlewareContext,
+  options?: { error?: unknown }
+): Promise<void> {
+  if ((state as MutableTrace & { emitted?: boolean }).emitted) {
+    return;
+  }
+  (state as MutableTrace & { emitted?: boolean }).emitted = true;
+
+  if (options?.error !== undefined) {
+    state.error = options.error;
+    await addTraceEvent(state, context, {
+      type: 'ai.error',
+      data: {
+        error: toLoggableValue(options.error),
+      },
+    });
+    await runHookSafely(state.options.hooks.onError, [context]);
+  }
+
+  await addTraceEvent(state, context, { type: 'ai.finish' });
+
+  if (!state.error) {
+    await runHookSafely(state.options.hooks.onFinish, [context]);
+  }
+
+  const metadata = omitPaths(state.metadata, state.options.exclude.metadataPaths);
+  const ai: Record<string, unknown> = {
+    sdk: 'ai-sdk',
+    provider: state.provider,
+    model: state.model,
+    operation: state.operation,
+    callType: state.callType,
+    streamed: state.callType === 'stream',
+    finishReason: state.finishReason,
+    toolCallCount: state.toolCalls.length,
+    metadata,
+    ...(state.usage ?? {}),
+  };
+
+  const msToFinish = Math.max(0, Math.round(performance.now() - state.startedAtMs));
+  ai.msToFinish = msToFinish;
+
+  if (state.firstChunkAtMs !== undefined) {
+    ai.msToFirstChunk = Math.max(0, Math.round(state.firstChunkAtMs - state.startedAtMs));
+  }
+
+  if (
+    typeof state.usage?.outputTokens === 'number' &&
+    state.usage.outputTokens > 0 &&
+    msToFinish > 0
+  ) {
+    ai.tokensPerSecond = Number(((state.usage.outputTokens / msToFinish) * 1000).toFixed(2));
+  }
+
+  if (state.capture.input) {
+    const captured = captureValue(
+      sanitizeInput(state.params, state),
+      state.options.limits.maxContentBytes
+    );
+    ai.input = captured.value;
+    state.truncated ||= captured.truncated;
+  }
+
+  if (state.capture.output) {
+    const outputSource =
+      state.callType === 'stream'
+        ? state.streamedText ?? state.outputText
+        : state.outputText ?? state.output;
+    if (outputSource !== undefined) {
+      const captured = captureValue(outputSource, state.options.limits.maxContentBytes);
+      ai.output = captured.value;
+      state.truncated ||= captured.truncated;
+    }
+  }
+
+  if (state.capture.reasoning && state.reasoningText) {
+    const captured = captureValue(state.reasoningText, state.options.limits.maxContentBytes);
+    ai.reasoning = captured.value;
+    state.truncated ||= captured.truncated;
+  }
+
+  if (state.capture.streamChunks && state.streamChunks.length > 0) {
+    const captured = captureValue(state.streamChunks, state.options.limits.maxContentBytes);
+    ai.streamChunks = captured.value;
+    state.truncated ||= captured.truncated;
+  }
+
+  const visibleToolCalls = state.toolCalls
+    .filter((toolCall) => !state.options.exclude.toolNames.includes(toolCall.name))
+    .map((toolCall) => {
+      const record: Record<string, unknown> = {
+        id: toolCall.id,
+        name: toolCall.name,
+        startedAt: toolCall.startedAt,
+        finishedAt: toolCall.finishedAt,
+        durationMs: toolCall.durationMs,
+        status: toolCall.status,
+      };
+
+      if (toolCall.error !== undefined) {
+        record.error = toLoggableValue(toolCall.error);
+      }
+
+      if (state.capture.toolInputs && toolCall.input !== undefined) {
+        const captured = captureValue(toolCall.input, state.options.limits.maxContentBytes);
+        record.input = captured.value;
+        state.truncated ||= captured.truncated;
+      }
+
+      if (state.capture.toolOutputs && toolCall.output !== undefined) {
+        const captured = captureValue(toolCall.output, state.options.limits.maxContentBytes);
+        record.output = captured.value;
+        state.truncated ||= captured.truncated;
+      }
+
+      return record;
+    });
+
+  if (visibleToolCalls.length > 0) {
+    ai.toolCalls = visibleToolCalls;
+  }
+
+  if (state.error !== undefined) {
+    const { errorType, errorCode } = safeErrorSummary(state.error);
+    if (errorType) {
+      ai.errorType = errorType;
+    }
+    if (errorCode !== undefined) {
+      ai.errorCode = errorCode;
+    }
+  }
+
+  if (state.truncated) {
+    ai.truncated = true;
+  }
+
+  try {
+    const structured = state.logger.createStructuredLog(state.traceId, {
+      type: 'ai_trace',
+      ai,
+      events: state.events,
+    });
+    structured.emit({
+      message: 'ai_trace',
+      level: state.error === undefined ? 'info' : 'error',
+      ...(state.error === undefined ? {} : { error: state.error }),
+    });
+  } catch (error) {
+    console.warn('[Blyp] Failed to emit AI trace.', serializeHookError(error));
+  }
+}

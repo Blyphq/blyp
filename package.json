@@ -95,6 +95,11 @@
       "import": "./exports/frameworks/nuxt.mjs",
       "require": "./exports/frameworks/nuxt.js"
     },
+    "./ai/vercel": {
+      "types": "./types/ai/vercel.d.ts",
+      "import": "./exports/ai/vercel.mjs",
+      "require": "./exports/ai/vercel.js"
+    },
     "./client": {
       "types": "./types/client.d.ts",
       "import": "./exports/client.mjs",
@@ -203,6 +208,9 @@
       "nuxt": [
         "./types/frameworks/nuxt.d.ts"
       ],
+      "ai/vercel": [
+        "./types/ai/vercel.d.ts"
+      ],
       "standalone": [
         "./types/frameworks/standalone.d.ts"
       ],
@@ -243,6 +251,7 @@
     "@nestjs/platform-fastify": "^11.1.8",
     "@types/bun": "latest",
     "@types/express": "^5.0.3",
+    "ai": "^6.0.137",
     "elysia": "^1.4.27",
     "expo-network": "^55.0.8",
     "express": "^5.1.0",
@@ -261,6 +270,7 @@
     "@prisma/client": "^5 || ^6",
     "@sveltejs/kit": "^2",
     "@tanstack/react-start": "^1",
+    "ai": "^6",
     "astro": "^6",
     "drizzle-orm": "^0.36 || ^0.37 || ^0.38 || ^0.39 || ^0.40",
     "elysia": "^1.4.27",
@@ -294,6 +304,9 @@
       "optional": true
     },
     "@tanstack/react-start": {
+      "optional": true
+    },
+    "ai": {
       "optional": true
     },
     "astro": {

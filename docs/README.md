@@ -10,6 +10,7 @@ This document contains detailed usage, all framework integrations, configuration
 - [Structured request batches](#structured-request-batches)
 - [Errors](#errors)
 - [Client](#client)
+- [AI SDK tracing](#ai-sdk-tracing)
 - [Framework integrations](#framework-integrations)
 - [Database logging](#database-logging)
 - [Advanced configuration](#advanced-configuration)
@@ -204,6 +205,105 @@ npx expo install expo-network
 ```
 
 The Expo logger uses the runtime `fetch` implementation to send logs and reads connectivity metadata from `expo-network`. The `endpoint` must be an absolute `http://` or `https://` URL because Expo apps do not have a browser origin. Failed deliveries are queued in memory and retried by default `3` times with `5000ms` delay, with a default queue limit of `100`.
+
+---
+
+## AI SDK tracing
+
+Phase 1 supports the Vercel AI SDK only through language model middleware.
+
+Install the AI SDK in apps that use this entrypoint:
+
+```bash
+bun add ai
+```
+
+### Quick start
+
+```typescript
+import { generateText } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { blypModel } from '@blyp/core/ai/vercel';
+
+const model = blypModel(anthropic('claude-sonnet-4-5'), {
+  operation: 'support_chat',
+  metadata: {
+    team: 'support',
+  },
+});
+
+const result = await generateText({
+  model,
+  prompt: 'Write a refund reply for this customer',
+});
+```
+
+### Advanced middleware usage
+
+```typescript
+import { wrapLanguageModel } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { blypMiddleware } from '@blyp/core/ai/vercel';
+
+const model = wrapLanguageModel({
+  model: anthropic('claude-sonnet-4-5'),
+  middleware: blypMiddleware({
+    operation: 'support_chat',
+  }),
+});
+```
+
+### Hooks and context
+
+```typescript
+const model = blypModel(anthropic('claude-sonnet-4-5'), {
+  hooks: {
+    onStart(context) {
+      context.setMetadata({ route: 'refunds' });
+    },
+    onFinish(context) {
+      console.log(context.usage?.totalTokens);
+    },
+    onError(context) {
+      console.error(context.error);
+    },
+  },
+});
+```
+
+`BlypMiddlewareContext` includes the trace id, operation, provider, model, call type, logger, raw params, metadata, usage, finish reason, streamed/output text, tool call records, and helper methods for `setMetadata(...)` and `disableCapture(...)`.
+
+### Defaults and privacy
+
+- `operation` defaults to `ai.generate` for non-streaming calls and `ai.stream` for streaming calls.
+- The active request-scoped Blyp logger is used automatically when framework request context is active.
+- Outside request context, Blyp falls back to the root logger unless you pass `logger`.
+- Input, output, reasoning, tool payloads, and stream chunks are not captured unless you enable them.
+- `exclude.metadataPaths`, `exclude.toolNames`, and `exclude.providerOptions` run before Blyp writes the final structured record.
+- Content and event limits are capped. When Blyp truncates captured data, it keeps summary metrics and marks the trace as truncated.
+
+### Captured data
+
+Each invocation emits one structured `ai_trace` record through Blyp's normal structured logging pipeline. Successful traces log at `info`. Failed traces log at `error` and include recoverable `ai.errorType` and `ai.errorCode` fields when available.
+
+The normalized payload includes:
+
+- AI SDK provider and model id
+- operation name
+- `generate` vs `stream` call type
+- input/output/total token usage
+- finish reason
+- time to first chunk for streams
+- total duration
+- tokens per second when output token count is available
+- best-effort tool call events and tool results
+
+### Limitations
+
+- Phase 1 traces AI SDK model calls only.
+- Direct OpenAI SDK, Anthropic SDK, and OpenRouter SDK support are not included yet.
+- Tool call tracing is best-effort and only captures what AI SDK middleware surfaces.
+- Blyp does not install a separate AI sink; AI traces flow through the normal Blyp logger, connectors, and file or database destinations.
 
 ---
 

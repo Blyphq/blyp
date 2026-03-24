@@ -21,6 +21,8 @@ describe('Package type shims', () => {
     expect(packageJson.peerDependenciesMeta?.['@sveltejs/kit']?.optional).toBe(true);
     expect(packageJson.peerDependencies?.['@tanstack/react-start']).toBe('^1');
     expect(packageJson.peerDependenciesMeta?.['@tanstack/react-start']?.optional).toBe(true);
+    expect(packageJson.peerDependencies?.ai).toBe('^6');
+    expect(packageJson.peerDependenciesMeta?.ai?.optional).toBe(true);
     expect(packageJson.peerDependencies?.elysia).toBe('^1.4.27');
     expect(packageJson.peerDependenciesMeta?.elysia?.optional).toBe(true);
     expect(packageJson.peerDependencies?.['react-router']).toBe('^7');
@@ -47,6 +49,7 @@ describe('Package type shims', () => {
     expect(packageJson.exports['./otlp']?.types).toBe('./types/connectors/otlp.d.ts');
     expect(packageJson.exports['./sentry']?.types).toBe('./types/connectors/sentry.d.ts');
     expect(packageJson.exports['./workers']?.types).toBe('./types/workers.d.ts');
+    expect(packageJson.exports['./ai/vercel']?.types).toBe('./types/ai/vercel.d.ts');
     expect(packageJson.exports['./react-router']?.types).toBe('./types/frameworks/react-router.d.ts');
     expect(packageJson.exports['./astro']?.types).toBe('./types/frameworks/astro.d.ts');
     expect(packageJson.exports['./nitro']?.types).toBe('./types/frameworks/nitro.d.ts');
@@ -63,6 +66,8 @@ describe('Package type shims', () => {
     expect(packageJson.exports['./posthog']?.require).toBe('./exports/connectors/posthog.js');
     expect(packageJson.exports['./otlp']?.require).toBe('./exports/connectors/otlp.js');
     expect(packageJson.exports['./sentry']?.require).toBe('./exports/connectors/sentry.js');
+    expect(packageJson.exports['./ai/vercel']?.import).toBe('./exports/ai/vercel.mjs');
+    expect(packageJson.exports['./ai/vercel']?.require).toBe('./exports/ai/vercel.js');
     expect(packageJson.exports['./react-router']?.import).toBe('./exports/frameworks/react-router.mjs');
     expect(packageJson.exports['./astro']?.import).toBe('./exports/frameworks/astro.mjs');
     expect(packageJson.exports['./nitro']?.import).toBe('./exports/frameworks/nitro.mjs');
@@ -81,6 +86,7 @@ describe('Package type shims', () => {
     expect(fs.existsSync(path.join(repoRoot, 'types/connectors/otlp.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/connectors/sentry.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/workers.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(repoRoot, 'types/ai/vercel.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/client.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/expo.d.ts'))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/react-router.d.ts'))).toBe(true);
@@ -103,6 +109,7 @@ describe('Package type shims', () => {
     const otlpTypes = readRepoFile('types/connectors/otlp.d.ts');
     const sentryTypes = readRepoFile('types/connectors/sentry.d.ts');
     const workersTypes = readRepoFile('types/workers.d.ts');
+    const aiVercelTypes = readRepoFile('types/ai/vercel.d.ts');
 
     expect(clientTypes).toContain('createClientLogger');
     expect(clientTypes).toContain("from './frameworks/client'");
@@ -116,6 +123,7 @@ describe('Package type shims', () => {
     expect(sentryTypes).toContain('../../dist/connectors/sentry');
     expect(workersTypes).toContain('createWorkersLogger');
     expect(workersTypes).toContain("from './frameworks/workers'");
+    expect(aiVercelTypes).toContain('../../dist/ai/vercel');
     expect(clientTypes).not.toContain("../dist/client");
     expect(expoTypes).not.toContain("../dist/expo");
     expect(betterStackTypes).not.toContain('../../dist/betterstack');
