@@ -110,4 +110,17 @@ describe('Nuxt Integration', () => {
     expect(records.some((record) => record.groupId === 'checkout')).toBe(true);
     expect(records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')).toBe(false);
   });
+
+  it('returns 400 for malformed JSON client log payloads', async () => {
+    const nuxtLogger = createNuxtLogger({
+      logDir: tempDir,
+      pretty: false,
+    });
+
+    const response = await nuxtLogger.clientLogHandler(
+      createEvent('http://localhost/inngest', 'POST', '{"message":')
+    );
+
+    expect(response.status).toBe(400);
+  });
 });

@@ -159,6 +159,19 @@ describe('Nitro Integration', () => {
     expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
   });
 
+  it('returns 400 for malformed JSON client log payloads', async () => {
+    const nitroLogger = createNitroLogger({
+      logDir: tempDir,
+      pretty: false,
+    });
+
+    const response = await nitroLogger.clientLogHandler(
+      createEvent('http://localhost/inngest', 'POST', '{"message":')
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it('suppresses default request logs after structured emit and drops mixed root writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;

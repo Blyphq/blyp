@@ -27,6 +27,7 @@ import {
 } from '../shared';
 
 const warnedKeys = new Set<string>();
+const senderCache = new Map<string, DatabuddySender>();
 let testHooks: DatabuddyTestHooks = {};
 const warnOnce = createErrorOnceLogger(warnedKeys);
 
@@ -89,6 +90,25 @@ function createDefaultClient(
     ...(connector.batchSize !== undefined ? { batchSize: connector.batchSize } : {}),
     ...(connector.batchTimeout !== undefined ? { batchTimeout: connector.batchTimeout } : {}),
     ...(connector.maxQueueSize !== undefined ? { maxQueueSize: connector.maxQueueSize } : {}),
+  });
+}
+
+function getDatabuddySenderKey(
+  connector: ResolvedDatabuddyConnectorConfig
+): string {
+  return JSON.stringify({
+    enabled: connector.enabled,
+    mode: connector.mode,
+    apiKey: connector.apiKey ?? null,
+    websiteId: connector.websiteId ?? null,
+    namespace: connector.namespace ?? null,
+    source: connector.source ?? null,
+    apiUrl: connector.apiUrl ?? null,
+    debug: connector.debug,
+    enableBatching: connector.enableBatching,
+    batchSize: connector.batchSize ?? null,
+    batchTimeout: connector.batchTimeout ?? null,
+    maxQueueSize: connector.maxQueueSize ?? null,
   });
 }
 
@@ -246,6 +266,13 @@ export function createDatabuddySender(
   config: BlypConfig | ResolvedDatabuddyConnectorConfig | DatabuddyConnectorConfig
 ): DatabuddySender {
   const connector = resolveConnectorConfig(config);
+  const senderKey = getDatabuddySenderKey(connector);
+  const cached = senderCache.get(senderKey);
+
+  if (cached) {
+    return cached;
+  }
+
   const key = `${connector.apiUrl ?? 'default'}:${connector.mode}:${connector.apiKey ?? 'missing'}`;
   const client = connector.ready
     ? (testHooks.createClient?.(connector) ?? createDefaultClient(connector))
@@ -271,7 +298,7 @@ export function createDatabuddySender(
     );
   };
 
-  return {
+  const sender: DatabuddySender = {
     enabled: connector.enabled,
     ready: connector.ready,
     mode: connector.mode,
@@ -367,13 +394,19 @@ export function createDatabuddySender(
       }
     },
   };
+
+  senderCache.set(senderKey, sender);
+
+  return sender;
 }
 
 export function setDatabuddyTestHooks(hooks: DatabuddyTestHooks): void {
   testHooks = hooks;
+  senderCache.clear();
 }
 
 export function resetDatabuddyTestHooks(): void {
   testHooks = {};
+  senderCache.clear();
   warnedKeys.clear();
 }

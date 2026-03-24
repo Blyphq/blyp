@@ -96,7 +96,12 @@ export async function readNitroBody(event: NitroEventLike): Promise<unknown> {
   if (event.request) {
     const contentType = event.request.headers.get('content-type') ?? '';
     if (contentType.includes('application/json')) {
-      return await event.request.json();
+      const fallbackRequest = event.request.clone();
+      try {
+        return await event.request.json();
+      } catch {
+        return await fallbackRequest.text();
+      }
     }
 
     return await event.request.text();

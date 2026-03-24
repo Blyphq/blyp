@@ -263,6 +263,29 @@ describe('Databuddy Connector', () => {
       area: 'billing',
       blyp_manual: true,
     });
+    expect(runtime.initConfigs).toHaveLength(1);
+  });
+
+  it('reuses the Databuddy sender for repeated capture helper calls with the same config', () => {
+    const runtime = createFakeDatabuddyRuntime();
+    setDatabuddyTestHooks(runtime.hooks);
+
+    const config = {
+      connectors: {
+        databuddy: {
+          enabled: true,
+          apiKey: 'db_test_key',
+          websiteId: '25361306-ceb5-4328-b076-7075bf190530',
+        },
+      },
+    } as const;
+
+    captureDatabuddyException(new Error('first'), {}, config);
+    captureDatabuddyException(new Error('second'), {}, config);
+    captureDatabuddyException(new Error('third'), {}, config);
+
+    expect(runtime.initConfigs).toHaveLength(1);
+    expect(runtime.events).toHaveLength(3);
   });
 
   it('auto-captures createError exceptions and dedupes later HTTP logging behavior via manual mode check', () => {

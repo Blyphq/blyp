@@ -84,6 +84,37 @@ describe('React Router Integration', () => {
     expect(records.some((record) => (record.data as Record<string, unknown>)?.type === 'http_error')).toBe(true);
   });
 
+  it('preserves thrown error status codes in catch-path logging', async () => {
+    const reactRouterLogger = createReactRouterLogger({
+      logDir: tempDir,
+      pretty: false,
+    });
+
+    try {
+      await reactRouterLogger.middleware(
+        {
+          request: new Request('http://localhost/missing'),
+          context: {},
+        },
+        async () => {
+          const error = new Error('missing route') as Error & { status: number };
+          error.status = 404;
+          throw error;
+        }
+      );
+    } catch {}
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const errorRecord = records.find((record) => {
+      const data = record.data as Record<string, unknown> | undefined;
+      return data?.type === 'http_error' && data?.url === '/missing';
+    });
+
+    expect((errorRecord?.data as Record<string, unknown> | undefined)?.statusCode).toBe(404);
+    expect((errorRecord?.data as Record<string, unknown> | undefined)?.error).toBe('missing route');
+  });
+
   it('handles client ingestion and mounted-path validation', async () => {
     const reactRouterLogger = createReactRouterLogger({
       logDir: tempDir,
@@ -118,44 +149,46 @@ describe('React Router Integration', () => {
     console.warn = (...args: unknown[]) => {
       warnings.push(args);
     };
+    try {
+      const reactRouterLogger = createReactRouterLogger({
+        logDir: tempDir,
+        pretty: false,
+        customProps: () => ({ framework: 'react-router' }),
+      });
+      const context: Record<string, unknown> = {};
 
-    const reactRouterLogger = createReactRouterLogger({
-      logDir: tempDir,
-      pretty: false,
-      customProps: () => ({ framework: 'react-router' }),
-    });
-    const context: Record<string, unknown> = {};
+      const response = await reactRouterLogger.middleware(
+        {
+          request: new Request('http://localhost/structured', { method: 'POST' }),
+          context,
+        },
+        async () => {
+          const log = reactRouterLogger.getLogger(context);
+          const structured = log.createStructuredLog('checkout', { userId: 'user-1' });
+          structured.set({ cartItems: 3 });
+          structured.info('user logged in');
+          log.info('scoped-allowed');
+          rootLogger.info('root-ignored');
+          structured.emit({ status: 200 });
+          return new Response('ok', { status: 200 });
+        }
+      );
+      await waitForFileFlush();
 
-    const response = await reactRouterLogger.middleware(
-      {
-        request: new Request('http://localhost/structured', { method: 'POST' }),
-        context,
-      },
-      async () => {
-        const log = reactRouterLogger.getLogger(context);
-        const structured = log.createStructuredLog('checkout', { userId: 'user-1' });
-        structured.set({ cartItems: 3 });
-        structured.info('user logged in');
-        log.info('scoped-allowed');
-        rootLogger.info('root-ignored');
-        structured.emit({ status: 200 });
-        return new Response('ok', { status: 200 });
-      }
-    );
-    await waitForFileFlush();
+      expect(response.status).toBe(200);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const structuredRecord = records.find((record) => record.groupId === 'checkout');
 
-    expect(response.status).toBe(200);
-    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
-    const structuredRecord = records.find((record) => record.groupId === 'checkout');
-
-    expect(structuredRecord?.method).toBe('POST');
-    expect(structuredRecord?.path).toBe('/structured');
-    expect(structuredRecord?.framework).toBe('react-router');
-    expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
-    expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
-    expect(records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')).toBe(false);
-    expect(warnings).toHaveLength(1);
-    console.warn = originalWarn;
+      expect(structuredRecord?.method).toBe('POST');
+      expect(structuredRecord?.path).toBe('/structured');
+      expect(structuredRecord?.framework).toBe('react-router');
+      expect(records.some((record) => record.message === 'scoped-allowed')).toBe(true);
+      expect(records.some((record) => record.message === 'root-ignored')).toBe(false);
+      expect(records.some((record) => (record.data as Record<string, unknown>)?.url === '/structured')).toBe(false);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   it('flushes database logs before middleware resolves in database mode', async () => {

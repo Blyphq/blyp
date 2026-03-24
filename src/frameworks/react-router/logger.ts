@@ -64,6 +64,11 @@ function writeLoggerValue(context: ReactRouterContextStore, logger: BlypLogger):
   context[REACT_ROUTER_LOGGER_FALLBACK_KEY] = logger;
 }
 
+function resolveThrownStatusCode(error: unknown): number {
+  const errorLike = toErrorLike(error);
+  return errorLike?.status ?? errorLike?.statusCode ?? 500;
+}
+
 export function createReactRouterLogger(
   config: ReactRouterLoggerConfig = {}
 ): ReactRouterLoggerFactory {
@@ -145,14 +150,15 @@ export function createReactRouterLogger(
           return response;
         } catch (error) {
           if (!structuredLogEmitted && !shouldSkipErrorLogging(shared, path)) {
+            const statusCode = resolveThrownStatusCode(error);
             emitHttpErrorLog(
               shared.logger,
               shared.level,
               createRequestLike(args.request.method, args.request.url, args.request.headers),
               path,
-              500,
+              statusCode,
               Math.round(performance.now() - startTime),
-              toErrorLike(error, 500),
+              toErrorLike(error, statusCode),
               resolveAdditionalProps(shared, createContext(args, undefined, error)),
               { error }
             );
