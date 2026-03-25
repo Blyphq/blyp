@@ -12,12 +12,22 @@ import type {
 } from '../../core/config';
 import type { LogRecord } from '../../core/file-logger';
 import { serializeLogRecord } from '../../core/file-logger';
+import type {
+  ConnectorBatchDispatchTarget,
+  ConnectorDeliveryBinder,
+} from '../delivery/types';
+import {
+  CONNECTOR_BATCH_DISPATCH,
+  CONNECTOR_DELIVERY_BINDER,
+  type ConnectorDispatchResult,
+} from '../delivery/types';
 import { createErrorOnceLogger } from '../../shared/once';
 import { isAbsoluteHttpUrl } from '../../shared/validation';
 import type {
   OTLPLogSource,
   OTLPNormalizedRecord,
   OTLPRegistry,
+  OTLPSendOptions,
   OTLPSender,
   OTLPTestHooks,
   OTLPTransport,
@@ -158,7 +168,7 @@ function createDefaultTransport(
   const logger = provider.getLogger(`blyp-otlp:${connector.name}`);
 
   return {
-    emit(payload) {
+    emit(payload: OTLPNormalizedRecord) {
       logger.emit({
         body: payload.body,
         severityText: payload.severityText,
@@ -224,7 +234,7 @@ function createUnavailableSender(
     );
   };
 
-  return {
+  const sender = {
     name: senderName,
     enabled: connector?.enabled ?? false,
     ready: false,
@@ -232,13 +242,24 @@ function createUnavailableSender(
     serviceName: connector?.serviceName ?? 'blyp-app',
     endpoint: connector?.endpoint,
     status: 'missing',
-    send(_record, options = {}) {
+    send(_record: LogRecord, options: OTLPSendOptions = {}) {
       if (options.warnIfUnavailable) {
         emitUnavailableWarning();
       }
     },
     async flush() {},
-  };
+    [CONNECTOR_BATCH_DISPATCH]: {
+      dispatchKey: `otlp:${senderName}`,
+      dispatch: async () => ({
+        ok: false,
+        retryable: false,
+        error: `OTLP target "${senderName}" is unavailable.`,
+      }),
+    },
+    [CONNECTOR_DELIVERY_BINDER](_binder: ConnectorDeliveryBinder | null) {},
+  } as OTLPSender & ConnectorBatchDispatchTarget;
+
+  return sender;
 }
 
 function createSender(connector: ResolvedOTLPConnectorConfig): OTLPSender {
@@ -255,7 +276,27 @@ function createSender(connector: ResolvedOTLPConnectorConfig): OTLPSender {
     testHooks.createTransport?.(transportConnector) ??
     createDefaultTransport(transportConnector);
 
-  return {
+  let deliveryBinder: ConnectorDeliveryBinder | null = null;
+
+  const dispatchBatch = async (records: LogRecord[]): Promise<ConnectorDispatchResult> => {
+    try {
+      await Promise.all(records.map((record) => {
+        return Promise.resolve(transport.emit(normalizeOTLPRecord(record, connector, 'server')));
+      }));
+      if (transport.flush) {
+        await transport.flush();
+      }
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        retryable: true,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const sender = {
     name: connector.name,
     enabled: connector.enabled,
     ready: connector.ready,
@@ -263,7 +304,12 @@ function createSender(connector: ResolvedOTLPConnectorConfig): OTLPSender {
     serviceName: connector.serviceName,
     endpoint: connector.endpoint,
     status: connector.status,
-    send(record, options = {}) {
+    send(record: LogRecord, options: OTLPSendOptions = {}) {
+      if ((options.source ?? 'server') !== 'client' && deliveryBinder) {
+        deliveryBinder.enqueue('otlp', record, sender[CONNECTOR_BATCH_DISPATCH]!, connector.name);
+        return;
+      }
+
       const source = options.source ?? 'server';
       const normalized = normalizeOTLPRecord(record, connector, source);
 
@@ -299,7 +345,16 @@ function createSender(connector: ResolvedOTLPConnectorConfig): OTLPSender {
         );
       }
     },
-  };
+    [CONNECTOR_BATCH_DISPATCH]: {
+      dispatchKey: `otlp:${connector.name}`,
+      dispatch: (records) => dispatchBatch(records),
+    },
+    [CONNECTOR_DELIVERY_BINDER](binder: ConnectorDeliveryBinder | null) {
+      deliveryBinder = binder;
+    },
+  } as OTLPSender & ConnectorBatchDispatchTarget;
+
+  return sender;
 }
 
 export function createOTLPRegistry(

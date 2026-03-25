@@ -26,6 +26,8 @@ import {
 import {
   createOTLPRegistry,
 } from '../connectors/otlp/sender';
+import { ConnectorDeliveryManager } from '../connectors/delivery/manager';
+import type { ConnectorBatchDispatchTarget } from '../connectors/delivery/types';
 import type { BetterStackSender } from '../types/connectors/betterstack';
 import type { DatabuddySender } from '../types/connectors/databuddy';
 import type { PostHogSender } from '../types/connectors/posthog';
@@ -354,6 +356,7 @@ function maybeSendToOTLP(
 function createLoggerInstance(
   rootRawLogger: any,
   sink: BlypPrimarySink,
+  connectorDelivery: ConnectorDeliveryManager | null,
   betterstack: BetterStackSender,
   databuddy: DatabuddySender,
   posthog: PostHogSender,
@@ -480,6 +483,9 @@ function createLoggerInstance(
 
     flush: async () => {
       await sink.flush();
+      if (connectorDelivery) {
+        await connectorDelivery.flush();
+      }
       await Promise.allSettled([
         betterstack.flush(),
         databuddy.flush(),
@@ -491,6 +497,9 @@ function createLoggerInstance(
 
     shutdown: async () => {
       await sink.shutdown();
+      if (connectorDelivery) {
+        await connectorDelivery.shutdown();
+      }
       await Promise.allSettled([
         betterstack.flush(),
         databuddy.flush(),
@@ -514,6 +523,7 @@ function createLoggerInstance(
       return createLoggerInstance(
         rootRawLogger,
         sink,
+        connectorDelivery,
         betterstack,
         databuddy,
         posthog,
@@ -539,6 +549,7 @@ function createLoggerInstance(
         return createLoggerInstance(
           rootRawLogger,
           sink,
+          connectorDelivery,
           betterstack,
           databuddy,
           posthog,
@@ -576,9 +587,25 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   const posthog = createPostHogSender(resolvedConfig);
   const sentry = createSentrySender(resolvedConfig);
   const otlp = createOTLPRegistry(resolvedConfig);
+  const connectorDelivery = resolvedConfig.connectors.delivery.enabled
+    ? new ConnectorDeliveryManager(resolvedConfig.connectors.delivery)
+    : null;
+
+  if (connectorDelivery) {
+    connectorDelivery.bindTarget(betterstack as unknown as ConnectorBatchDispatchTarget);
+    connectorDelivery.bindTarget(databuddy as unknown as ConnectorBatchDispatchTarget);
+    connectorDelivery.bindTarget(posthog as unknown as ConnectorBatchDispatchTarget);
+    connectorDelivery.bindTarget(sentry as unknown as ConnectorBatchDispatchTarget);
+
+    for (const sender of otlp.getAutoForwardTargets()) {
+      connectorDelivery.bindTarget(sender as unknown as ConnectorBatchDispatchTarget);
+    }
+  }
+
   const instance = createLoggerInstance(
     rawLogger,
     sink,
+    connectorDelivery,
     betterstack,
     databuddy,
     posthog,

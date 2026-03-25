@@ -6,6 +6,15 @@ import type {
 } from '../../core/config';
 import type { LogRecord } from '../../core/file-logger';
 import { serializeLogRecord } from '../../core/file-logger';
+import type {
+  ConnectorBatchDispatchTarget,
+  ConnectorDeliveryBinder,
+} from '../delivery/types';
+import {
+  CONNECTOR_BATCH_DISPATCH,
+  CONNECTOR_DELIVERY_BINDER,
+  type ConnectorDispatchResult,
+} from '../delivery/types';
 import { normalizeLogValue } from '../../shared/log-value';
 import { createErrorOnceLogger } from '../../shared/once';
 import { hasNonEmptyString, isPlainObject } from '../../shared/validation';
@@ -262,6 +271,22 @@ function normalizeExceptionInput(
   };
 }
 
+function getResolvedFailureMessage(result: unknown): string | null {
+  if (!isPlainObject(result) || result.success !== false) {
+    return null;
+  }
+
+  if (hasNonEmptyString(result.error)) {
+    return result.error;
+  }
+
+  if (hasNonEmptyString(result.message)) {
+    return result.message;
+  }
+
+  return 'Databuddy SDK reported delivery failure.';
+}
+
 export function createDatabuddySender(
   config: BlypConfig | ResolvedDatabuddyConnectorConfig | DatabuddyConnectorConfig
 ): DatabuddySender {
@@ -298,7 +323,53 @@ export function createDatabuddySender(
     );
   };
 
-  const sender: DatabuddySender = {
+  let deliveryBinder: ConnectorDeliveryBinder | null = null;
+
+  const dispatchBatch = async (records: LogRecord[]): Promise<ConnectorDispatchResult> => {
+    if (!connector.ready || !client) {
+      return {
+        ok: false,
+        retryable: false,
+        error: 'Databuddy connector is not configured.',
+      };
+    }
+
+    try {
+      const trackResults = await Promise.all(records.map((record) => {
+        return Promise.resolve(client.track(createTrackEvent(record, 'server')));
+      }));
+      for (const result of trackResults) {
+        const failureMessage = getResolvedFailureMessage(result);
+        if (failureMessage) {
+          return {
+            ok: false,
+            retryable: true,
+            error: failureMessage,
+          };
+        }
+      }
+
+      const flushResult = await client.flush();
+      const flushFailure = getResolvedFailureMessage(flushResult);
+      if (flushFailure) {
+        return {
+          ok: false,
+          retryable: true,
+          error: flushFailure,
+        };
+      }
+
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        retryable: true,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const sender = {
     enabled: connector.enabled,
     ready: connector.ready,
     mode: connector.mode,
@@ -310,6 +381,11 @@ export function createDatabuddySender(
       return connector.ready && connector.mode === 'auto';
     },
     send(record, options = {}) {
+      if (options.source !== 'client' && deliveryBinder) {
+        deliveryBinder.enqueue('databuddy', record, sender[CONNECTOR_BATCH_DISPATCH]!);
+        return;
+      }
+
       if (!connector.ready || !client) {
         if (options.warnIfUnavailable) {
           emitUnavailableWarning();
@@ -393,7 +469,14 @@ export function createDatabuddySender(
         );
       }
     },
-  };
+    [CONNECTOR_BATCH_DISPATCH]: {
+      dispatchKey: 'databuddy',
+      dispatch: (records) => dispatchBatch(records),
+    },
+    [CONNECTOR_DELIVERY_BINDER](binder: ConnectorDeliveryBinder | null) {
+      deliveryBinder = binder;
+    },
+  } as DatabuddySender & ConnectorBatchDispatchTarget;
 
   senderCache.set(senderKey, sender);
 

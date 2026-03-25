@@ -1,13 +1,17 @@
 import fs from 'fs';
 import path from 'path';
+import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createError } from '../src/core/errors';
 import { resetConfigCache, resolveConfig } from '../src/core/config';
 import type { ResolvedDatabuddyConnectorConfig } from '../src/types/core/config';
 import {
+  createDatabuddySender,
   resetDatabuddyTestHooks,
   setDatabuddyTestHooks,
 } from '../src/connectors/databuddy/sender';
+import { ConnectorDeliveryManager } from '../src/connectors/delivery/manager';
+import { CONNECTOR_BATCH_DISPATCH } from '../src/connectors/delivery/types';
 import {
   captureDatabuddyException,
   createDatabuddyErrorTracker,
@@ -56,6 +60,107 @@ function createFakeDatabuddyRuntime() {
           flush() {
             flushCalls += 1;
             return Promise.resolve();
+          },
+        };
+      },
+    },
+  };
+}
+
+function readConnectorJobCount(filePath: string): number {
+  if (!fs.existsSync(filePath)) {
+    return 0;
+  }
+
+  try {
+    const db = new Database(filePath, { readonly: true });
+    try {
+      const row = db.query('select count(*) as count from connector_jobs').get() as {
+        count?: number;
+      } | null;
+      return Number(row?.count ?? 0);
+    } finally {
+      db.close();
+    }
+  } catch {
+    return 0;
+  }
+}
+
+async function waitForCondition(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs: number = 2000,
+  intervalMs: number = 25
+): Promise<void> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (await condition()) {
+      return;
+    }
+
+    await waitForFileFlush(intervalMs);
+  }
+
+  throw new Error(`Timed out waiting for condition after ${timeoutMs}ms.`);
+}
+
+function createQueuedDatabuddyRuntime() {
+  const initConfigs: Array<Record<string, unknown>> = [];
+  const deliveredEvents: Array<{
+    name: string;
+    properties?: Record<string, unknown>;
+    anonymousId?: string;
+    sessionId?: string;
+  }> = [];
+  const queuedEvents: Array<{
+    name: string;
+    properties?: Record<string, unknown>;
+    anonymousId?: string;
+    sessionId?: string;
+  }> = [];
+  let healthy = false;
+  let flushCalls = 0;
+
+  return {
+    initConfigs,
+    deliveredEvents,
+    recover() {
+      healthy = true;
+    },
+    get flushCalls() {
+      return flushCalls;
+    },
+    hooks: {
+      createClient: (config: ResolvedDatabuddyConnectorConfig) => {
+        initConfigs.push(config as unknown as Record<string, unknown>);
+
+        return {
+          track(event: {
+            name: string;
+            properties?: Record<string, unknown>;
+            anonymousId?: string;
+            sessionId?: string;
+          }) {
+            queuedEvents.push(event);
+            return { success: true };
+          },
+          flush() {
+            flushCalls += 1;
+
+            if (!healthy) {
+              queuedEvents.length = 0;
+              return Promise.resolve({
+                success: false,
+                error: 'temporary outage',
+              });
+            }
+
+            deliveredEvents.push(...queuedEvents.splice(0, queuedEvents.length));
+            return Promise.resolve({
+              success: true,
+              processed: deliveredEvents.length,
+            });
           },
         };
       },
@@ -475,6 +580,65 @@ describe('Databuddy Connector', () => {
     await logger.flush();
 
     expect(runtime.flushCalls).toBeGreaterThan(0);
+  });
+
+  it('persists queued Databuddy failures to SQLite and replays them after recovery when the SDK returns a resolved failure object', async () => {
+    const runtime = createQueuedDatabuddyRuntime();
+    setDatabuddyTestHooks(runtime.hooks);
+
+    const durableQueuePath = path.join(tempDir, '.blyp', 'connectors.sqlite');
+    const delivery = new ConnectorDeliveryManager({
+      enabled: true,
+      memoryBufferSize: 10,
+      durableQueuePath,
+      durableSpillStrategy: 'after-first-failure',
+      memoryBatchSize: 10,
+      sqliteWriteBatchSize: 10,
+      sqliteReadBatchSize: 10,
+      dispatchConcurrency: 1,
+      pollIntervalMs: 25,
+      overflowStrategy: 'drop-oldest',
+      durableReady: false,
+      retry: {
+        maxAttempts: 20,
+        initialBackoffMs: 50,
+        maxBackoffMs: 50,
+        multiplier: 2,
+        jitter: false,
+      },
+    });
+    const sender = createDatabuddySender({
+      enabled: true,
+      mode: 'auto',
+      apiKey: 'db_test_key',
+      websiteId: '25361306-ceb5-4328-b076-7075bf190530',
+    });
+
+    const dispatcher = sender[CONNECTOR_BATCH_DISPATCH];
+    expect(dispatcher).toBeDefined();
+
+    await waitForFileFlush(50);
+    delivery.enqueue('databuddy', {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: 'queued databuddy retry',
+    }, dispatcher!);
+
+    await waitForCondition(() => fs.existsSync(durableQueuePath), 1000);
+    await waitForCondition(async () => (await delivery.getDurableCountForTests()) === 1, 2000);
+    runtime.recover();
+    await delivery.flush();
+    await waitForCondition(() => runtime.deliveredEvents.length === 1, 2000);
+
+    expect(runtime.deliveredEvents[0]?.properties).toMatchObject({
+      message: 'queued databuddy retry',
+      blyp_source: 'server',
+    });
+    expect(runtime.flushCalls).toBeGreaterThanOrEqual(2);
+
+    expect(await delivery.getDurableCountForTests()).toBe(0);
+
+    await delivery.shutdown();
   });
 
   it('requires websiteId before Databuddy becomes ready', () => {

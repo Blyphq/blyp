@@ -78,6 +78,36 @@ describe('Configuration', () => {
       path: '/inngest',
     });
     expect(gitignore).toContain('logs');
+    expect(gitignore).toContain('.blyp');
+  });
+
+  it('resolves connector delivery defaults', () => {
+    process.chdir(tempDir);
+
+    const resolved = resolveConfig();
+
+    expect(resolved.connectors.delivery).toMatchObject({
+      enabled: false,
+      memoryBufferSize: 500,
+      durableSpillStrategy: 'after-first-failure',
+      memoryBatchSize: 25,
+      sqliteWriteBatchSize: 100,
+      sqliteReadBatchSize: 50,
+      dispatchConcurrency: 4,
+      pollIntervalMs: 1000,
+      overflowStrategy: 'drop-oldest',
+      durableReady: false,
+      retry: {
+        maxAttempts: 8,
+        initialBackoffMs: 500,
+        maxBackoffMs: 30000,
+        multiplier: 2,
+        jitter: true,
+      },
+    });
+    expect(resolved.connectors.delivery.durableQueuePath).toContain(
+      path.join('.blyp', 'connectors.sqlite')
+    );
   });
 
   it('loads executable database config and marks it ready', () => {

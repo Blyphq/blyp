@@ -13,6 +13,15 @@ import type {
 } from '../../core/config';
 import type { LogRecord } from '../../core/file-logger';
 import { serializeLogRecord } from '../../core/file-logger';
+import type {
+  ConnectorBatchDispatchTarget,
+  ConnectorDeliveryBinder,
+} from '../delivery/types';
+import {
+  CONNECTOR_BATCH_DISPATCH,
+  CONNECTOR_DELIVERY_BINDER,
+  type ConnectorDispatchResult,
+} from '../delivery/types';
 import { normalizeLogValue } from '../../shared/log-value';
 import { createErrorOnceLogger } from '../../shared/once';
 import { hasNonEmptyString, isPlainObject } from '../../shared/validation';
@@ -391,7 +400,35 @@ export function createPostHogSender(
     );
   };
 
-  return {
+  let deliveryBinder: ConnectorDeliveryBinder | null = null;
+
+  const dispatchBatch = async (records: LogRecord[]): Promise<ConnectorDispatchResult> => {
+    if (!ready || !transport) {
+      return {
+        ok: false,
+        retryable: false,
+        error: 'PostHog connector is not configured.',
+      };
+    }
+
+    try {
+      await Promise.all(records.map((record) => {
+        return Promise.resolve(transport.emit(normalizePostHogRecord(record, connector, 'server')));
+      }));
+      if (transport.flush) {
+        await transport.flush();
+      }
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        retryable: true,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const sender = {
     enabled: connector.enabled,
     ready,
     mode: connector.mode,
@@ -413,6 +450,11 @@ export function createPostHogSender(
     },
     send(record, options = {}) {
       const source = options.source ?? 'server';
+
+      if (source !== 'client' && deliveryBinder) {
+        deliveryBinder.enqueue('posthog', record, sender[CONNECTOR_BATCH_DISPATCH]!);
+        return;
+      }
 
       if (!ready || !transport) {
         if (options.warnIfUnavailable) {
@@ -501,7 +543,16 @@ export function createPostHogSender(
         );
       }
     },
-  };
+    [CONNECTOR_BATCH_DISPATCH]: {
+      dispatchKey: 'posthog',
+      dispatch: (records) => dispatchBatch(records),
+    },
+    [CONNECTOR_DELIVERY_BINDER](binder: ConnectorDeliveryBinder | null) {
+      deliveryBinder = binder;
+    },
+  } as PostHogSender & ConnectorBatchDispatchTarget;
+
+  return sender;
 }
 
 export function buildPostHogExceptionProperties(

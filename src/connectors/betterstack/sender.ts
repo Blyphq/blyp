@@ -7,6 +7,15 @@ import type {
 } from '../../core/config';
 import type { LogRecord } from '../../core/file-logger';
 import { serializeLogRecord } from '../../core/file-logger';
+import type {
+  ConnectorBatchDispatchTarget,
+  ConnectorDeliveryBinder,
+} from '../delivery/types';
+import {
+  CONNECTOR_BATCH_DISPATCH,
+  CONNECTOR_DELIVERY_BINDER,
+  type ConnectorDispatchResult,
+} from '../delivery/types';
 import { createErrorOnceLogger } from '../../shared/once';
 import { hasNonEmptyString, isAbsoluteHttpUrl, isPlainObject } from '../../shared/validation';
 import type {
@@ -368,7 +377,37 @@ export function createBetterStackSender(
     );
   };
 
-  return {
+  let deliveryBinder: ConnectorDeliveryBinder | null = null;
+
+  const dispatchBatch = async (records: LogRecord[]): Promise<ConnectorDispatchResult> => {
+    if (!connector.ready || !client) {
+      return {
+        ok: false,
+        retryable: false,
+        error: 'Better Stack connector is not configured.',
+      };
+    }
+
+    try {
+      await Promise.all(records.map((record) => {
+        return client.log(
+          record.message,
+          resolveBetterStackLevel(record.level),
+          buildContext(record, connector, 'server')
+        );
+      }));
+      await client.flush();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        retryable: true,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const sender = {
     enabled: connector.enabled,
     ready: connector.ready,
     mode: connector.mode,
@@ -391,6 +430,11 @@ export function createBetterStackSender(
       return errorTrackingReady;
     },
     send(record, options = {}) {
+      if (options.source !== 'client' && deliveryBinder) {
+        deliveryBinder.enqueue('betterstack', record, sender[CONNECTOR_BATCH_DISPATCH]!);
+        return;
+      }
+
       if (!connector.ready || !client) {
         if (options.warnIfUnavailable) {
           emitUnavailableWarning();
@@ -469,7 +513,16 @@ export function createBetterStackSender(
         );
       }
     },
-  };
+    [CONNECTOR_BATCH_DISPATCH]: {
+      dispatchKey: 'betterstack',
+      dispatch: (records) => dispatchBatch(records),
+    },
+    [CONNECTOR_DELIVERY_BINDER](binder: ConnectorDeliveryBinder | null) {
+      deliveryBinder = binder;
+    },
+  } as BetterStackSender & ConnectorBatchDispatchTarget;
+
+  return sender;
 }
 
 export function setBetterStackTestHooks(hooks: BetterStackTestHooks): void {

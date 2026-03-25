@@ -12,6 +12,8 @@ import type {
   BlypConnectorsConfig,
   ClientLoggingConfig,
   ConfigFileMatch,
+  ConnectorDeliveryConfig,
+  ConnectorRetryConfig,
   DatabuddyConnectorConfig,
   DatabaseDeliveryConfig,
   DatabaseLoggerConfig,
@@ -26,6 +28,8 @@ import type {
   ResolvedBetterStackErrorTrackingConfig,
   ResolvedBlypConfig,
   ResolvedBlypConnectorsConfig,
+  ResolvedConnectorDeliveryConfig,
+  ResolvedConnectorRetryConfig,
   ResolvedDatabuddyConnectorConfig,
   ResolvedDatabaseLoggerConfig,
   ResolvedOTLPConnectorConfig,
@@ -42,6 +46,8 @@ export type {
   BlypDestination,
   BlypConnectorsConfig,
   ClientLoggingConfig,
+  ConnectorDeliveryConfig,
+  ConnectorRetryConfig,
   DatabuddyConnectorConfig,
   DatabaseAdapterConfig,
   DatabaseAdapterKind,
@@ -58,6 +64,8 @@ export type {
   ResolvedBlypConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
+  ResolvedConnectorDeliveryConfig,
+  ResolvedConnectorRetryConfig,
   ResolvedDatabuddyConnectorConfig,
   ResolvedDatabaseDeliveryConfig,
   ResolvedDatabaseLoggerConfig,
@@ -108,6 +116,31 @@ export const DEFAULT_CLIENT_LOGGING_CONFIG: Required<ClientLoggingConfig> = {
   path: DEFAULT_CLIENT_LOG_ENDPOINT,
 };
 
+export const DEFAULT_CONNECTOR_RETRY_CONFIG: Required<ConnectorRetryConfig> = {
+  maxAttempts: 8,
+  initialBackoffMs: 500,
+  maxBackoffMs: 30_000,
+  multiplier: 2,
+  jitter: true,
+};
+
+export const DEFAULT_CONNECTOR_DELIVERY_CONFIG:
+Required<Omit<ConnectorDeliveryConfig, 'retry'>> & {
+  retry: Required<ConnectorRetryConfig>;
+} = {
+  enabled: false,
+  memoryBufferSize: 500,
+  durableQueuePath: resolve(process.cwd(), '.blyp', 'connectors.sqlite'),
+  durableSpillStrategy: 'after-first-failure',
+  memoryBatchSize: 25,
+  sqliteWriteBatchSize: 100,
+  sqliteReadBatchSize: 50,
+  dispatchConcurrency: 4,
+  pollIntervalMs: 1000,
+  overflowStrategy: 'drop-oldest',
+  retry: DEFAULT_CONNECTOR_RETRY_CONFIG,
+};
+
 export const DEFAULT_DATABASE_RETRY_CONFIG: Required<DatabaseRetryConfig> = {
   maxRetries: 1,
   backoffMs: 100,
@@ -131,7 +164,9 @@ export const DEFAULT_CONFIG: BlypConfig = {
   destination: 'file',
   file: DEFAULT_FILE_CONFIG,
   clientLogging: DEFAULT_CLIENT_LOGGING_CONFIG,
-  connectors: {},
+  connectors: {
+    delivery: DEFAULT_CONNECTOR_DELIVERY_CONFIG,
+  },
 };
 
 let cachedConfig: ResolvedBlypConfig | null = null;
@@ -184,7 +219,9 @@ function getBootstrapConfig(): BlypConfig {
       enabled: true,
       path: DEFAULT_CLIENT_LOG_ENDPOINT,
     },
-    connectors: {},
+    connectors: {
+      delivery: DEFAULT_CONNECTOR_DELIVERY_CONFIG,
+    },
   };
 }
 
@@ -226,7 +263,7 @@ function ensureLogsIgnored(cwd: string): void {
 
   if (!existsSync(gitignorePath)) {
     try {
-      writeFileSync(gitignorePath, 'logs\n');
+      writeFileSync(gitignorePath, 'logs\n.blyp\n');
     } catch (error) {
       console.error('[Blyp] Warning: Failed to create .gitignore:', error);
     }
@@ -235,12 +272,17 @@ function ensureLogsIgnored(cwd: string): void {
 
   try {
     const currentContent = readFileSync(gitignorePath, 'utf-8');
-    if (/^(?:\/?logs\/?)\s*$/m.test(currentContent)) {
+    const entriesToAdd = ['logs', '.blyp'].filter((entry) => {
+      const escaped = entry.replace('.', '\\.');
+      return !(new RegExp(`^(?:/?${escaped}/?)\\s*$`, 'm')).test(currentContent);
+    });
+
+    if (entriesToAdd.length === 0) {
       return;
     }
 
     const separator = currentContent.endsWith('\n') ? '' : '\n';
-    appendFileSync(gitignorePath, `${separator}logs\n`);
+    appendFileSync(gitignorePath, `${separator}${entriesToAdd.join('\n')}\n`);
   } catch (error) {
     console.error('[Blyp] Warning: Failed to update .gitignore:', error);
   }
@@ -484,6 +526,120 @@ function mergeClientLoggingConfig(
   };
 }
 
+function mergeConnectorRetryConfig(
+  base: ConnectorRetryConfig | undefined,
+  override: ConnectorRetryConfig | undefined
+): ResolvedConnectorRetryConfig {
+  return {
+    maxAttempts: Math.max(
+      1,
+      Math.floor(
+        override?.maxAttempts ??
+        base?.maxAttempts ??
+        DEFAULT_CONNECTOR_RETRY_CONFIG.maxAttempts
+      )
+    ),
+    initialBackoffMs: Math.max(
+      0,
+      Math.floor(
+        override?.initialBackoffMs ??
+        base?.initialBackoffMs ??
+        DEFAULT_CONNECTOR_RETRY_CONFIG.initialBackoffMs
+      )
+    ),
+    maxBackoffMs: Math.max(
+      0,
+      Math.floor(
+        override?.maxBackoffMs ??
+        base?.maxBackoffMs ??
+        DEFAULT_CONNECTOR_RETRY_CONFIG.maxBackoffMs
+      )
+    ),
+    multiplier: Math.max(
+      1,
+      override?.multiplier ??
+      base?.multiplier ??
+      DEFAULT_CONNECTOR_RETRY_CONFIG.multiplier
+    ),
+    jitter: override?.jitter ?? base?.jitter ?? DEFAULT_CONNECTOR_RETRY_CONFIG.jitter,
+  };
+}
+
+function mergeConnectorDeliveryConfig(
+  base: ConnectorDeliveryConfig | undefined,
+  override: ConnectorDeliveryConfig | undefined
+): ResolvedConnectorDeliveryConfig {
+  const durableQueuePath =
+    override?.durableQueuePath ??
+    base?.durableQueuePath ??
+    DEFAULT_CONNECTOR_DELIVERY_CONFIG.durableQueuePath;
+
+  return {
+    enabled: override?.enabled ?? base?.enabled ?? DEFAULT_CONNECTOR_DELIVERY_CONFIG.enabled,
+    memoryBufferSize: Math.max(
+      1,
+      Math.floor(
+        override?.memoryBufferSize ??
+        base?.memoryBufferSize ??
+        DEFAULT_CONNECTOR_DELIVERY_CONFIG.memoryBufferSize
+      )
+    ),
+    durableQueuePath: hasNonEmptyString(durableQueuePath)
+      ? durableQueuePath
+      : DEFAULT_CONNECTOR_DELIVERY_CONFIG.durableQueuePath,
+    durableSpillStrategy:
+      override?.durableSpillStrategy ??
+      base?.durableSpillStrategy ??
+      DEFAULT_CONNECTOR_DELIVERY_CONFIG.durableSpillStrategy,
+    memoryBatchSize: Math.max(
+      1,
+      Math.floor(
+        override?.memoryBatchSize ??
+        base?.memoryBatchSize ??
+        DEFAULT_CONNECTOR_DELIVERY_CONFIG.memoryBatchSize
+      )
+    ),
+    sqliteWriteBatchSize: Math.max(
+      1,
+      Math.floor(
+        override?.sqliteWriteBatchSize ??
+        base?.sqliteWriteBatchSize ??
+        DEFAULT_CONNECTOR_DELIVERY_CONFIG.sqliteWriteBatchSize
+      )
+    ),
+    sqliteReadBatchSize: Math.max(
+      1,
+      Math.floor(
+        override?.sqliteReadBatchSize ??
+        base?.sqliteReadBatchSize ??
+        DEFAULT_CONNECTOR_DELIVERY_CONFIG.sqliteReadBatchSize
+      )
+    ),
+    dispatchConcurrency: Math.max(
+      1,
+      Math.floor(
+        override?.dispatchConcurrency ??
+        base?.dispatchConcurrency ??
+        DEFAULT_CONNECTOR_DELIVERY_CONFIG.dispatchConcurrency
+      )
+    ),
+    pollIntervalMs: Math.max(
+      50,
+      Math.floor(
+        override?.pollIntervalMs ??
+        base?.pollIntervalMs ??
+        DEFAULT_CONNECTOR_DELIVERY_CONFIG.pollIntervalMs
+      )
+    ),
+    overflowStrategy:
+      override?.overflowStrategy ??
+      base?.overflowStrategy ??
+      DEFAULT_CONNECTOR_DELIVERY_CONFIG.overflowStrategy,
+    retry: mergeConnectorRetryConfig(base?.retry, override?.retry),
+    durableReady: false,
+  };
+}
+
 function mergeDatabaseLoggerConfig(
   base: DatabaseLoggerConfig | undefined,
   override: DatabaseLoggerConfig | undefined,
@@ -715,6 +871,7 @@ function mergeConnectorsConfig(
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
     sentry: mergeSentryConnectorConfig(base?.sentry, override?.sentry),
     otlp: mergeOTLPConnectorsConfig(base?.otlp, override?.otlp),
+    delivery: mergeConnectorDeliveryConfig(base?.delivery, override?.delivery),
   };
 }
 

@@ -6,6 +6,15 @@ import type {
 } from '../../core/config';
 import type { LogRecord } from '../../core/file-logger';
 import { serializeLogRecord } from '../../core/file-logger';
+import type {
+  ConnectorBatchDispatchTarget,
+  ConnectorDeliveryBinder,
+} from '../delivery/types';
+import {
+  CONNECTOR_BATCH_DISPATCH,
+  CONNECTOR_DELIVERY_BINDER,
+  type ConnectorDispatchResult,
+} from '../delivery/types';
 import { createErrorOnceLogger } from '../../shared/once';
 import { hasNonEmptyString, isPlainObject } from '../../shared/validation';
 import type {
@@ -262,7 +271,35 @@ export function createSentrySender(
     );
   };
 
-  return {
+  let deliveryBinder: ConnectorDeliveryBinder | null = null;
+
+  const dispatchBatch = async (records: LogRecord[]): Promise<ConnectorDispatchResult> => {
+    if (!ready) {
+      return {
+        ok: false,
+        retryable: false,
+        error: 'Sentry connector is not configured.',
+      };
+    }
+
+    try {
+      for (const record of records) {
+        const attributes = normalizeAttributes(record, 'server');
+        const logMethod = resolveLogMethod(module, record.level);
+        logMethod(record.message, attributes);
+      }
+      await module.flush(2000);
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        retryable: true,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const sender = {
     enabled: connector.enabled,
     ready,
     mode: connector.mode,
@@ -271,6 +308,11 @@ export function createSentrySender(
       return ready && connector.mode === 'auto';
     },
     send(record, options = {}) {
+      if ((options.source ?? 'server') !== 'client' && deliveryBinder) {
+        deliveryBinder.enqueue('sentry', record, sender[CONNECTOR_BATCH_DISPATCH]!);
+        return;
+      }
+
       if (!ready) {
         if (options.warnIfUnavailable) {
           emitUnavailableWarning();
@@ -323,7 +365,16 @@ export function createSentrySender(
         );
       }
     },
-  };
+    [CONNECTOR_BATCH_DISPATCH]: {
+      dispatchKey: 'sentry',
+      dispatch: (records) => dispatchBatch(records),
+    },
+    [CONNECTOR_DELIVERY_BINDER](binder: ConnectorDeliveryBinder | null) {
+      deliveryBinder = binder;
+    },
+  } as SentrySender & ConnectorBatchDispatchTarget;
+
+  return sender;
 }
 
 export function setSentryTestHooks(hooks: SentryTestHooks): void {

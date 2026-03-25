@@ -19,6 +19,7 @@
 - **PostHog connector** — Automatic or manual PostHog log forwarding for server, browser, and Expo flows
 - **Databuddy connector** — Automatic or manual Databuddy log forwarding and handled-error tracking for server, browser, and Expo flows
 - **OTLP connector** — Automatic or manual OpenTelemetry log forwarding for Grafana, Datadog, Honeycomb, and any OTLP-compatible backend
+- **Connector delivery queue** — Optional server-side memory + SQLite retry queue for connector delivery without Redis
 - **Standalone usage** — Use without any framework
 - **Structured file logging** — NDJSON with size-based rotation and gzip archives
 - **Database logging** — Serverless-friendly persistence with Prisma and Drizzle adapters for Postgres and MySQL
@@ -192,6 +193,40 @@ logger.info('app mounted');
 ```
 
 Expo uses the runtime `fetch` implementation for delivery and `expo-network` for connectivity metadata. Install `expo-network` in your app and use an absolute ingestion URL.
+
+### Durable connector retries
+
+Server-side connector delivery can be queued and retried with an internal Blyp-managed SQLite file. This is opt-in, uses at-least-once delivery semantics, and currently applies to server connector log forwarding only.
+
+```typescript
+import { createStandaloneLogger } from '@blyp/core/standalone';
+
+const logger = createStandaloneLogger({
+  connectors: {
+    betterstack: {
+      enabled: true,
+      sourceToken: process.env.BETTERSTACK_TOKEN,
+      ingestingHost: 'https://in.logs.betterstack.com',
+    },
+    delivery: {
+      enabled: true,
+      durableQueuePath: '.blyp/connectors.sqlite',
+      retry: {
+        maxAttempts: 8,
+        initialBackoffMs: 500,
+        maxBackoffMs: 30000,
+      },
+    },
+  },
+});
+```
+
+Notes:
+
+- Blyp stores the durable queue in its own SQLite file, not your app database.
+- Blyp uses an in-memory hot buffer first, then persists retryable connector failures to SQLite.
+- Older runtimes without built-in SQLite support fall back to memory-only retries with a warning.
+- Exception capture remains best-effort direct delivery in this first version.
 
 ### AI tracing
 

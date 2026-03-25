@@ -41,6 +41,51 @@ export interface ClientLoggingConfig {
   path?: string;
 }
 
+export interface ConnectorRetryConfig {
+  maxAttempts?: number;
+  initialBackoffMs?: number;
+  maxBackoffMs?: number;
+  multiplier?: number;
+  jitter?: boolean;
+}
+
+export interface ResolvedConnectorRetryConfig {
+  maxAttempts: number;
+  initialBackoffMs: number;
+  maxBackoffMs: number;
+  multiplier: number;
+  jitter: boolean;
+}
+
+export interface ConnectorDeliveryConfig {
+  enabled?: boolean;
+  memoryBufferSize?: number;
+  durableQueuePath?: string;
+  durableSpillStrategy?: 'after-first-failure';
+  memoryBatchSize?: number;
+  sqliteWriteBatchSize?: number;
+  sqliteReadBatchSize?: number;
+  dispatchConcurrency?: number;
+  pollIntervalMs?: number;
+  overflowStrategy?: 'drop-oldest' | 'drop-new';
+  retry?: ConnectorRetryConfig;
+}
+
+export interface ResolvedConnectorDeliveryConfig {
+  enabled: boolean;
+  memoryBufferSize: number;
+  durableQueuePath: string;
+  durableSpillStrategy: 'after-first-failure';
+  memoryBatchSize: number;
+  sqliteWriteBatchSize: number;
+  sqliteReadBatchSize: number;
+  dispatchConcurrency: number;
+  pollIntervalMs: number;
+  overflowStrategy: 'drop-oldest' | 'drop-new';
+  retry: ResolvedConnectorRetryConfig;
+  durableReady: boolean;
+}
+
 export interface PostHogConnectorConfig {
   enabled?: boolean;
   mode?: ConnectorMode;
@@ -189,6 +234,7 @@ export interface BlypConnectorsConfig {
   posthog?: PostHogConnectorConfig;
   sentry?: SentryConnectorConfig;
   otlp?: OTLPConnectorConfig[];
+  delivery?: ConnectorDeliveryConfig;
 }
 
 export interface BlypConfig {
@@ -208,6 +254,7 @@ export interface ResolvedBlypConnectorsConfig {
   posthog: ResolvedPostHogConnectorConfig;
   sentry: ResolvedSentryConnectorConfig;
   otlp: ResolvedOTLPConnectorConfig[];
+  delivery: ResolvedConnectorDeliveryConfig;
 }
 
 export interface ResolvedBlypConfig extends BlypConfig {
