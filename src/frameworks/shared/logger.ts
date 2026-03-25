@@ -98,6 +98,7 @@ export function resolveServerLogger<Ctx>(
     autoLogging = true,
     customProps,
     logErrors = true,
+    includePaths,
     ignorePaths,
     clientLogging,
     connectors,
@@ -116,6 +117,7 @@ export function resolveServerLogger<Ctx>(
     resolvedConfig.clientLogging
   );
   const ingestionPath = resolvedClientLogging?.path ?? DEFAULT_CLIENT_LOG_ENDPOINT;
+  const resolvedIncludePaths = includePaths;
   const resolvedIgnorePaths = resolvedClientLogging
     ? Array.from(new Set([...(ignorePaths ?? []), ingestionPath]))
     : ignorePaths;
@@ -135,10 +137,34 @@ export function resolveServerLogger<Ctx>(
     autoLogging,
     customProps,
     logErrors,
+    resolvedIncludePaths,
     resolvedIgnorePaths,
     resolvedClientLogging,
     ingestionPath,
   };
+}
+
+export function isIncludedPath(
+  path: string,
+  includePaths?: string[]
+): boolean {
+  if (!includePaths || includePaths.length === 0) {
+    return true;
+  }
+
+  return shouldIgnorePath(path, includePaths);
+}
+
+export function shouldSkipPath(
+  path: string,
+  includePaths?: string[],
+  ignorePaths?: string[]
+): boolean {
+  if (!isIncludedPath(path, includePaths)) {
+    return true;
+  }
+
+  return shouldIgnorePath(path, ignorePaths);
 }
 
 export function shouldSkipAutoLogging<Ctx>(
@@ -157,7 +183,7 @@ export function shouldSkipAutoLogging<Ctx>(
     return true;
   }
 
-  return shouldIgnorePath(path, config.resolvedIgnorePaths);
+  return shouldSkipPath(path, config.resolvedIncludePaths, config.resolvedIgnorePaths);
 }
 
 export function shouldSkipErrorLogging<Ctx>(
@@ -168,7 +194,7 @@ export function shouldSkipErrorLogging<Ctx>(
     return true;
   }
 
-  return shouldIgnorePath(path, config.resolvedIgnorePaths);
+  return shouldSkipPath(path, config.resolvedIncludePaths, config.resolvedIgnorePaths);
 }
 
 export function resolveAdditionalProps<Ctx>(

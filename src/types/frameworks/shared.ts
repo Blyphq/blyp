@@ -32,6 +32,7 @@ export interface ServerLoggerConfig<Ctx> {
   autoLogging?: boolean | { ignore?: (ctx: Ctx) => boolean };
   customProps?: (ctx: Ctx) => Record<string, unknown>;
   logErrors?: boolean;
+  includePaths?: string[];
   ignorePaths?: string[];
   clientLogging?: boolean | ClientLogIngestionConfig<Ctx>;
   connectors?: BlypConnectorsConfig;
@@ -219,6 +220,7 @@ export interface ResolvedServerLogger<Ctx> {
   autoLogging: ServerLoggerConfig<Ctx>['autoLogging'];
   customProps?: (ctx: Ctx) => Record<string, unknown>;
   logErrors: boolean;
+  resolvedIncludePaths?: string[];
   resolvedIgnorePaths?: string[];
   resolvedClientLogging: ClientLogIngestionConfig<Ctx> | null;
   ingestionPath: string;

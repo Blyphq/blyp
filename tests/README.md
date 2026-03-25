@@ -6,7 +6,7 @@ The test suite is split by concern instead of using one mixed catch-all file.
 
 - `runtime.test.ts` - Runtime detection checks
 - `colors.test.ts` - Color helper coverage
-- `path-matching.test.ts` - `ignorePaths` matcher coverage
+- `path-matching.test.ts` - `ignorePaths` and `includePaths` matcher coverage
 - `config.test.ts` - config precedence and bootstrapping
 - `error.test.ts` - application error registry and metadata coverage
 - `parse-error.test.ts` - client-side error hydration and response parsing coverage
@@ -86,4 +86,4 @@ The test suite covers:
 - Client logger sync behavior
 - NDJSON persistence and rotation
 - Config bootstrapping
-- `ignorePaths` matching
+- `ignorePaths` and `includePaths` matching

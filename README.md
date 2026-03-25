@@ -164,6 +164,19 @@ const app = new Elysia()
   .listen(3000);
 ```
 
+Framework HTTP loggers also support path filtering:
+
+```typescript
+import { createLogger } from '@blyp/core/express';
+
+app.use(createLogger({
+  includePaths: ['/api/**'],
+  ignorePaths: ['/api/internal/**'],
+}));
+```
+
+`includePaths` works as an allowlist for automatic `http_request` and `http_error` logs. It uses the same wildcard matching as `ignorePaths`. When both are configured, Blyp logs only included paths and then removes any path that also matches `ignorePaths`.
+
 For other frameworks, client logging, advanced configuration, and utilities, see [Full documentation](docs/README.md).
 
 ### Expo

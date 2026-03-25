@@ -73,6 +73,65 @@ describe('Hono Integration', () => {
     ).toBe(true);
   });
 
+  it('supports includePaths and applies ignorePaths after includePaths', async () => {
+    const app = new Hono();
+    app.use('*', createHonoLogger({
+      logDir: tempDir,
+      pretty: false,
+      includePaths: ['/api/**'],
+      ignorePaths: ['/api/internal/**'],
+    }));
+    app.onError(() => new Response('fail', { status: 500 }));
+    app.get('/api/hello', (context) => context.text('ok'));
+    app.get('/health', (context) => context.text('ok'));
+    app.get('/api/fail', () => {
+      throw new Error('hono-include-fail');
+    });
+    app.get('/other-fail', () => {
+      throw new Error('hono-non-include-fail');
+    });
+    app.get('/api/internal/stats', (context) => context.text('ok'));
+
+    await app.fetch(new Request('http://localhost/api/hello'));
+    await app.fetch(new Request('http://localhost/health'));
+    await app.fetch(new Request('http://localhost/api/fail'));
+    await app.fetch(new Request('http://localhost/other-fail'));
+    await app.fetch(new Request('http://localhost/api/internal/stats'));
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    expect(
+      records.some((record) => {
+        const data = record.data as Record<string, unknown> | undefined;
+        return data?.type === 'http_request' && data?.url === '/api/hello';
+      })
+    ).toBe(true);
+    expect(
+      records.some((record) => {
+        const data = record.data as Record<string, unknown> | undefined;
+        return data?.type === 'http_request' && data?.url === '/health';
+      })
+    ).toBe(false);
+    expect(
+      records.some((record) => {
+        const data = record.data as Record<string, unknown> | undefined;
+        return data?.type === 'http_error' && data?.url === '/api/fail';
+      })
+    ).toBe(true);
+    expect(
+      records.some((record) => {
+        const data = record.data as Record<string, unknown> | undefined;
+        return data?.type === 'http_error' && data?.url === '/other-fail';
+      })
+    ).toBe(false);
+    expect(
+      records.some((record) => {
+        const data = record.data as Record<string, unknown> | undefined;
+        return data?.url === '/api/internal/stats';
+      })
+    ).toBe(false);
+  });
+
   it('ingests client logs and rejects malformed payloads', async () => {
     const app = new Hono();
     app.use('*', createHonoLogger({

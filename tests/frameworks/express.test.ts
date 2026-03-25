@@ -93,6 +93,79 @@ describe('Express Integration', () => {
     }
   });
 
+  it('supports includePaths and applies ignorePaths after includePaths', async () => {
+    const app = express();
+    app.use(createExpressLogger({
+      logDir: tempDir,
+      pretty: false,
+      includePaths: ['/api/**'],
+      ignorePaths: ['/api/internal/**'],
+    }));
+    app.get('/api/hello', (_req, res) => {
+      res.status(200).send('ok');
+    });
+    app.get('/health', (_req, res) => {
+      res.status(200).send('ok');
+    });
+    app.get('/api/fail', () => {
+      throw new Error('express-include-fail');
+    });
+    app.get('/other-fail', () => {
+      throw new Error('express-non-include-fail');
+    });
+    app.get('/api/internal/stats', (_req, res) => {
+      res.status(200).send('ok');
+    });
+    app.use(createExpressErrorLogger());
+    app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
+      res.status(500).send(error.message);
+    });
+
+    const server = await listen(app as unknown as Parameters<typeof listen>[0]);
+    try {
+      await fetch(`${server.baseUrl}/api/hello`);
+      await fetch(`${server.baseUrl}/health`);
+      await fetch(`${server.baseUrl}/api/fail`);
+      await fetch(`${server.baseUrl}/other-fail`);
+      await fetch(`${server.baseUrl}/api/internal/stats`);
+      await waitForFileFlush();
+
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      expect(
+        records.some((record) => {
+          const data = record.data as Record<string, unknown> | undefined;
+          return data?.type === 'http_request' && data?.url === '/api/hello';
+        })
+      ).toBe(true);
+      expect(
+        records.some((record) => {
+          const data = record.data as Record<string, unknown> | undefined;
+          return data?.type === 'http_request' && data?.url === '/health';
+        })
+      ).toBe(false);
+      expect(
+        records.some((record) => {
+          const data = record.data as Record<string, unknown> | undefined;
+          return data?.type === 'http_error' && data?.url === '/api/fail';
+        })
+      ).toBe(true);
+      expect(
+        records.some((record) => {
+          const data = record.data as Record<string, unknown> | undefined;
+          return data?.type === 'http_error' && data?.url === '/other-fail';
+        })
+      ).toBe(false);
+      expect(
+        records.some((record) => {
+          const data = record.data as Record<string, unknown> | undefined;
+          return data?.url === '/api/internal/stats';
+        })
+      ).toBe(false);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('ingests client logs and rejects unauthorized payloads', async () => {
     const app = express();
     app.use(createExpressLogger({
