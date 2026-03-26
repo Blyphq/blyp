@@ -35,6 +35,10 @@ import type {
   ServerLoggerConfig,
 } from '../../types/frameworks/shared';
 import type { HttpErrorCaptureContext } from '../../types/frameworks/request-logger';
+import {
+  getActiveRequestTraceId,
+  setActiveRequestTraceId,
+} from './request-context';
 
 function buildVerboseLogMessage(
   method: string,
@@ -436,12 +440,25 @@ export async function handleClientLogIngestion<Ctx>(options: {
   }
 
   const clientMessage = sanitizeLogMessage(`[client] ${sanitizedPayload.message}`, redaction);
+  const serverTraceId = getActiveRequestTraceId();
+  const recordTraceId =
+    typeof sanitizedPayload.traceId === 'string' && sanitizedPayload.traceId.length > 0
+      ? sanitizedPayload.traceId
+      : serverTraceId;
 
-  if (sanitizedPayload.level === 'table') {
-    config.logger.table(clientMessage, structuredPayload);
-  } else {
-    const logMethod = getClientLogMethod(config.logger, sanitizedPayload.level);
-    logMethod(clientMessage, structuredPayload);
+  try {
+    if (recordTraceId) {
+      setActiveRequestTraceId(recordTraceId);
+    }
+
+    if (sanitizedPayload.level === 'table') {
+      config.logger.table(clientMessage, structuredPayload);
+    } else {
+      const logMethod = getClientLogMethod(config.logger, sanitizedPayload.level);
+      logMethod(clientMessage, structuredPayload);
+    }
+  } finally {
+    setActiveRequestTraceId(serverTraceId);
   }
 
   const headers: Record<string, string> = {};

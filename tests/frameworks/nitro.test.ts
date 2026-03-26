@@ -72,6 +72,7 @@ describe('Nitro Integration', () => {
 
     await runHooks(hooks, 'request', event);
     expect(event.context.blypLog).toBeDefined();
+    expect(event.context.blypTraceId).toMatch(/^trace_/);
     nitroLogger.getLogger(event).info('nitro-route');
     const response = new Response('ok', { status: 200 });
     await runHooks(hooks, 'beforeResponse', event, response);
@@ -86,6 +87,7 @@ describe('Nitro Integration', () => {
 
     expect(records.some((record) => record.message === 'nitro-route')).toBe(true);
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('nitro');
+    expect(requestRecord?.traceId).toBe(event.context.blypTraceId);
   });
 
   it('logs errors and supports ignorePaths', async () => {

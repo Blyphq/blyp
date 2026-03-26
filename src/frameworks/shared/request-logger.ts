@@ -6,6 +6,7 @@ import {
 } from '../../core/logger';
 import type { StructuredLog } from '../../core/structured-log';
 import {
+  getActiveRequestTraceId,
   markStructuredCollectorActive,
   markStructuredLogEmitted,
   setActiveRequestLogger,
@@ -27,7 +28,13 @@ export function createRequestScopedLogger(
     ): StructuredLog => {
       return createStructuredLogForLogger(requestScopedLogger, groupId, {
         initialFields: initial,
-        resolveDefaultFields: options.resolveStructuredFields,
+        resolveDefaultFields: () => {
+          const traceId = getActiveRequestTraceId();
+          return {
+            ...(options.resolveStructuredFields?.() ?? {}),
+            ...(traceId ? { traceId } : {}),
+          };
+        },
         onCreate: () => {
           markStructuredCollectorActive();
         },

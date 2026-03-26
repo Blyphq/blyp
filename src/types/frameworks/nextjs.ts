@@ -12,6 +12,7 @@ export interface NextJsRouteContext {
 
 export interface NextJsLoggerHelpers {
   log: BlypLogger;
+  traceId: string;
 }
 
 export interface NextJsLoggerContext {

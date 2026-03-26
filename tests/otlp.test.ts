@@ -150,6 +150,7 @@ describe('OTLP Connector', () => {
       'honeycomb',
     ]);
     expect(emitted[2]?.payload.attributes['blyp.group_id']).toBe('checkout');
+    expect(emitted[2]?.payload.attributes['blyp.trace_id']).toBeUndefined();
   });
 
   it('does not auto-forward regular Blyp logs in manual mode', () => {

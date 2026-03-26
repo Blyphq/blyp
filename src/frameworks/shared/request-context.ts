@@ -40,6 +40,17 @@ export function getActiveRequestLogger(): BlypLogger | undefined {
   return getRequestContextStore()?.activeLogger;
 }
 
+export function setActiveRequestTraceId(traceId: string | undefined): void {
+  const store = getRequestContextStore();
+  if (store) {
+    store.traceId = traceId;
+  }
+}
+
+export function getActiveRequestTraceId(): string | undefined {
+  return getRequestContextStore()?.traceId;
+}
+
 export function markStructuredCollectorActive(): void {
   const store = getRequestContextStore();
   if (store) {

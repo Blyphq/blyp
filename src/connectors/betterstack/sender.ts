@@ -129,6 +129,7 @@ function buildContext(
 ): Record<string, unknown> {
   const recordType = getRecordType(record);
   const groupId = getField<string>(record, 'groupId');
+  const traceId = getField<string>(record, 'traceId');
   const method = getField<string>(record, 'method');
   const path = getField<string>(record, 'path');
   const status = getField<number>(record, 'status');
@@ -147,6 +148,7 @@ function buildContext(
         source,
         ...(recordType ? { type: recordType } : {}),
         ...(groupId ? { group_id: groupId } : {}),
+        ...(traceId ? { trace_id: traceId } : {}),
         ...(record.caller ? { caller: record.caller } : {}),
         ...(duration !== undefined ? { duration_ms: duration } : {}),
         ...(record.bindings ? { bindings: record.bindings } : {}),

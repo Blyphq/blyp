@@ -4,7 +4,9 @@ import type {
   ExpressLoggerContext,
 } from '../../types/frameworks/express';
 import {
+  BLYP_TRACE_HEADER,
   buildAbsoluteUrl,
+  createRequestTraceId,
   createRequestScopedLogger,
   createRequestLike,
   enterRequestContext,
@@ -16,6 +18,7 @@ import {
   readNodeRequestBody,
   resolveAdditionalProps,
   resolveServerLogger,
+  setActiveRequestTraceId,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
   toErrorLike,
@@ -34,7 +37,11 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
 
   return (req, res, next) => {
     enterRequestContext();
+    const traceId = createRequestTraceId();
+    setActiveRequestTraceId(traceId);
     let structuredLogEmitted = false;
+    req.blypTraceId = traceId;
+    res.setHeader(BLYP_TRACE_HEADER, traceId);
 
     req.blypLog = createRequestScopedLogger(shared.logger, {
       resolveStructuredFields: () => ({

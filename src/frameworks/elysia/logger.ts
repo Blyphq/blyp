@@ -5,6 +5,8 @@ import type {
   ElysiaLoggerConfig,
 } from '../../types/frameworks/elysia';
 import {
+  BLYP_TRACE_HEADER,
+  createRequestTraceId,
   createRequestScopedLogger,
   createRequestLike,
   enterRequestContext,
@@ -17,6 +19,7 @@ import {
   resolveAdditionalProps,
   resolveRequestStatus,
   resolveServerLogger,
+  setActiveRequestTraceId,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
 } from '../shared';
@@ -28,11 +31,18 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
     .decorate('log', shared.logger)
     .derive({ as: 'scoped' }, (ctx) => {
       enterRequestContext();
+      const traceId = createRequestTraceId();
+      setActiveRequestTraceId(traceId);
       const requestContext = ctx as unknown as ElysiaContext & {
         blypStructuredLogEmitted?: boolean;
       };
 
       requestContext.blypStructuredLogEmitted = false;
+      requestContext.blypTraceId = traceId;
+      requestContext.set.headers = {
+        ...(requestContext.set.headers ?? {}),
+        [BLYP_TRACE_HEADER]: traceId,
+      };
 
       return {
         startTime: performance.now(),
@@ -142,7 +152,10 @@ export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
 
       return new Response(null, {
         status: result.status,
-        headers: result.headers,
+        headers: {
+          ...result.headers,
+          [BLYP_TRACE_HEADER]: requestContext.blypTraceId ?? createRequestTraceId(),
+        },
       });
     });
   }

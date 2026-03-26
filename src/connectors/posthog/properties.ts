@@ -15,6 +15,7 @@ export function buildPostHogRecordAttributes(
   const recordType = getRecordType(record);
   const caller = typeof record.caller === 'string' ? record.caller : undefined;
   const groupId = getField<string>(record, 'groupId');
+  const traceId = getField<string>(record, 'traceId');
   const method = getField<string>(record, 'method');
   const path = getField<string>(record, 'path');
   const status = getField<number>(record, 'status');
@@ -34,6 +35,7 @@ export function buildPostHogRecordAttributes(
     ['blyp.type', recordType],
     ['blyp.caller', caller],
     ['blyp.group_id', groupId],
+    ['blyp.trace_id', traceId],
     ['http.method', method],
     ['url.path', path],
     ['client.page_path', pagePath],

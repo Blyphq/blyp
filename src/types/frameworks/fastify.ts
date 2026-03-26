@@ -23,6 +23,7 @@ export type { HttpRequestLog };
 declare module 'fastify' {
   interface FastifyRequest {
     blypLog: BlypLogger;
+    blypTraceId?: string;
     blypStartTime?: number;
     blypError?: unknown;
     blypStructuredLogEmitted?: boolean;

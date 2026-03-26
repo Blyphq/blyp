@@ -247,6 +247,7 @@ describe('Better Stack Connector', () => {
       'boom',
       'structured_log',
     ]);
+    expect((runtime.logs[2]?.context as Record<string, unknown>)?.context).toBeDefined();
   });
 
   it('supports manual Better Stack-only loggers and structured loggers', () => {

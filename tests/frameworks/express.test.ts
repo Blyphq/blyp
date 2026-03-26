@@ -28,12 +28,14 @@ describe('Express Integration', () => {
 
   it('attaches blypLog to req and logs successful requests', async () => {
     const app = express();
+    let requestTraceId = '';
     app.use(createExpressLogger({
       logDir: tempDir,
       pretty: false,
       customProps: () => ({ framework: 'express' }),
     }));
     app.get('/hello', (req, res) => {
+      requestTraceId = req.blypTraceId ?? '';
       req.blypLog.info('express-route');
       res.status(200).send('ok');
     });
@@ -44,6 +46,9 @@ describe('Express Integration', () => {
       await waitForFileFlush();
 
       expect(response.status).toBe(200);
+      const traceId = response.headers.get('x-blyp-trace-id');
+      expect(requestTraceId).toBe(traceId);
+      expect(traceId).toMatch(/^trace_/);
       const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
       const requestRecord = records.find((record) => {
         const data = record.data as Record<string, unknown> | undefined;
@@ -52,6 +57,7 @@ describe('Express Integration', () => {
 
       expect(records.some((record) => record.message === 'express-route')).toBe(true);
       expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('express');
+      expect(requestRecord?.traceId).toBe(traceId);
     } finally {
       await server.close();
     }

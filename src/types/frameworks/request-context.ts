@@ -6,4 +6,5 @@ export interface BlypRequestContextStore {
   structuredLogEmitted: boolean;
   mixedLoggerWarningShown: boolean;
   activeLogger?: BlypLogger;
+  traceId?: string;
 }

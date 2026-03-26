@@ -7,6 +7,7 @@ import type {
 
 export interface AstroLocals {
   blypLog?: BlypLogger;
+  blypTraceId?: string;
   [key: string]: unknown;
 }
 

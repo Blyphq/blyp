@@ -23,12 +23,14 @@ describe('Hono Integration', () => {
 
   it('attaches blypLog to the request context and logs successful requests', async () => {
     const app = new Hono();
+    let requestTraceId = '';
     app.use('*', createHonoLogger({
       logDir: tempDir,
       pretty: false,
       customProps: () => ({ framework: 'hono' }),
     }));
     app.get('/hello', (context) => {
+      requestTraceId = String((context as any).get('blypTraceId') ?? '');
       ((context as any).get('blypLog') as { info(message: string): void }).info('hono-route');
       return context.text('ok');
     });
@@ -37,6 +39,9 @@ describe('Hono Integration', () => {
     await waitForFileFlush();
 
     expect(response.status).toBe(200);
+    const traceId = response.headers.get('x-blyp-trace-id');
+    expect(requestTraceId).toBe(traceId);
+    expect(traceId).toMatch(/^trace_/);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
@@ -45,6 +50,7 @@ describe('Hono Integration', () => {
 
     expect(records.some((record) => record.message === 'hono-route')).toBe(true);
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('hono');
+    expect(requestRecord?.traceId).toBe(traceId);
   });
 
   it('supports ignorePaths and error logging', async () => {

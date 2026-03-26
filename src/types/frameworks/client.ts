@@ -28,6 +28,7 @@ export interface ClientLoggerState {
   readonly pageId: string;
   readonly sessionId: string;
   readonly bindings: Record<string, unknown>;
+  readonly traceId?: string;
   readonly delivery?: {
     enqueue: (event: ClientLogEvent) => void;
   };
@@ -42,6 +43,7 @@ export interface ClientLoggerConfig {
   connector?: ClientConnectorRequest;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
   delivery?: RemoteDeliveryConfig;
+  traceId?: string;
 }
 
 export interface ClientLogger {
