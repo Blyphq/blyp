@@ -109,6 +109,41 @@ describe('Workers Integration', () => {
     expect((calls.info[0]?.[1] as Record<string, unknown>).service).toBe('worker-app');
   });
 
+  it('redacts sensitive headers and configured paths in worker logs', () => {
+    initWorkersLogger({
+      redact: {
+        paths: ['requestContext.**.raw'],
+      },
+      customProps: () => ({
+        requestContext: {
+          payment: {
+            raw: '4111 1111 1111 1111',
+          },
+        },
+      }),
+    });
+
+    const log = createWorkersLogger(
+      new Request('https://edge.example.test/api/private', {
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer sk-123456789012345678901234',
+          cookie: 'session=super-secret',
+          'x-api-key': 'abc123',
+          'x-request-id': 'req-123',
+        },
+      })
+    );
+
+    const payload = log.emit();
+
+    expect((payload.headers as Record<string, unknown>)?.authorization).toBe('[REDACTED]');
+    expect((payload.headers as Record<string, unknown>)?.cookie).toBe('[REDACTED]');
+    expect((payload.headers as Record<string, unknown>)?.['x-api-key']).toBe('[REDACTED]');
+    expect((payload.headers as Record<string, unknown>)?.['x-request-id']).toBe('req-123');
+    expect((payload.requestContext as Record<string, any>)?.payment?.raw).toBe('[REDACTED]');
+  });
+
   it('uses response and explicit status overrides when emitting', () => {
     const createdLog = createWorkersLogger(
       new Request('https://edge.example.test/items', { method: 'PUT' })

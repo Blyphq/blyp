@@ -41,6 +41,20 @@ export interface ClientLoggingConfig {
   path?: string;
 }
 
+export interface RedactionConfig {
+  keys?: string[];
+  paths?: string[];
+  patterns?: RegExp[];
+  disablePatternScanning?: boolean;
+}
+
+export interface ResolvedRedactionConfig {
+  keys: string[];
+  paths: string[];
+  patterns: RegExp[];
+  disablePatternScanning: boolean;
+}
+
 export interface ConnectorRetryConfig {
   maxAttempts?: number;
   initialBackoffMs?: number;
@@ -245,6 +259,7 @@ export interface BlypConfig {
   file?: LogFileConfig;
   database?: DatabaseLoggerConfig;
   clientLogging?: ClientLoggingConfig;
+  redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
 }
 
@@ -262,6 +277,7 @@ export interface ResolvedBlypConfig extends BlypConfig {
   file: Required<LogFileConfig>;
   database?: ResolvedDatabaseLoggerConfig;
   clientLogging: Required<ClientLoggingConfig>;
+  redact: ResolvedRedactionConfig;
   connectors: ResolvedBlypConnectorsConfig;
 }
 

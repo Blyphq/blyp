@@ -32,6 +32,7 @@ export interface HttpRequestLog {
   origin?: string;
   referer?: string;
   acceptLanguage?: string;
+  headers?: HeaderRecord;
   client?: {
     ip?: string;
     hostname?: string;

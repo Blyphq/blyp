@@ -5,6 +5,7 @@ import type { SentrySender } from '../connectors/sentry';
 import type { OTLPRegistry } from '../connectors/otlp';
 import type { BlypPrimarySink } from '../../core/primary-sink';
 import type { StructuredLog, StructuredLogPayload } from './structured-log';
+import type { ResolvedRedactionConfig } from './config';
 
 export interface BlypLogger {
   success: (message: unknown, ...args: unknown[]) => void;
@@ -31,6 +32,7 @@ export interface StructuredLogFactoryOptions {
   resolveDefaultFields?: () => Record<string, unknown>;
   onCreate?: () => void;
   onEmit?: (payload: StructuredLogPayload) => void;
+  redact?: ResolvedRedactionConfig;
 }
 
 export interface LoggerFactoryHandle {
@@ -40,6 +42,7 @@ export interface LoggerFactoryHandle {
   posthog: PostHogSender;
   sentry: SentrySender;
   otlp: OTLPRegistry;
+  redact: ResolvedRedactionConfig;
   sink: BlypPrimarySink;
   create: (source: InternalLoggerSource, bindings?: Record<string, unknown>) => BlypLogger;
   writeStructured: (

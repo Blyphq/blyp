@@ -12,6 +12,11 @@ import {
   type DeliveryAttemptResult,
 } from '../../shared/remote-delivery';
 import {
+  resolveRedactionConfig,
+  sanitizeLogMessage,
+  sanitizeLogValue,
+} from '../../shared/redaction';
+import {
   createErrorOnceLogger,
   createWarnOnceLogger,
 } from '../../shared/once';
@@ -32,6 +37,7 @@ const expoSessionId = createRandomId();
 const warnedMessages = new Set<string>();
 const warnOnce = createWarnOnceLogger(warnedMessages);
 const errorOnce = createErrorOnceLogger(warnedMessages);
+const runtimeRedaction = resolveRedactionConfig();
 
 function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
@@ -50,32 +56,33 @@ function emitLocalConsole(level: ExpoLogLevel, message: unknown, args: unknown[]
   }
 
   const normalizedArgs = args.map((entry) => normalizeLogValue(entry));
-  const text = serializeLogMessage(message);
+  const sanitizedArgs = normalizedArgs.map((entry) => sanitizeLogValue(entry, runtimeRedaction));
+  const text = sanitizeLogMessage(serializeLogMessage(message), runtimeRedaction);
 
   switch (level) {
     case 'table':
       console.log(text);
       if (normalizedArgs.length > 0 && typeof console.table === 'function') {
-        console.table(normalizedArgs[0]);
+        console.table(sanitizedArgs[0]);
       }
       return;
     case 'warning':
     case 'warn':
-      console.warn(text, ...normalizedArgs);
+      console.warn(text, ...sanitizedArgs);
       return;
     case 'error':
     case 'critical':
-      console.error(text, ...normalizedArgs);
+      console.error(text, ...sanitizedArgs);
       return;
     case 'debug':
-      console.debug(text, ...normalizedArgs);
+      console.debug(text, ...sanitizedArgs);
       return;
     case 'success':
-      console.log(text, ...normalizedArgs);
+      console.log(text, ...sanitizedArgs);
       return;
     case 'info':
     default:
-      console.info(text, ...normalizedArgs);
+      console.info(text, ...sanitizedArgs);
   }
 }
 
@@ -140,7 +147,7 @@ async function sendRemoteLog(
     const response = await fetch(config.endpoint, {
       method: 'POST',
       headers: resolveHeaders(config.headers),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(sanitizeLogValue(payload, runtimeRedaction)),
     });
 
     if (response.ok) {
@@ -260,10 +267,12 @@ function buildExpoLogger(
       source: 'client',
       id: createRandomId(),
       level: normalizeClientLogLevel(level),
-      message: serializeLogMessage(message),
+      message: sanitizeLogMessage(serializeLogMessage(message), runtimeRedaction),
       connector: resolvedConfig.connector,
-      data: normalizeClientPayloadData(message, args),
-      bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) as Record<string, unknown> : undefined,
+      data: sanitizeLogValue(normalizeClientPayloadData(message, args), runtimeRedaction),
+      bindings: Object.keys(state.bindings).length > 0
+        ? sanitizeLogValue(state.bindings, runtimeRedaction) as Record<string, unknown>
+        : undefined,
       clientTimestamp: new Date().toISOString(),
       page: {},
       browser: {},
@@ -274,10 +283,13 @@ function buildExpoLogger(
         pageId: state.pageId,
         sessionId: state.sessionId,
       },
-      metadata: normalizeMetadata(resolvedConfig.metadata),
+      metadata: sanitizeLogValue(
+        normalizeMetadata(resolvedConfig.metadata),
+        runtimeRedaction
+      ) as Record<string, unknown> | undefined,
     };
 
-    delivery?.enqueue(payload);
+    delivery?.enqueue(sanitizeLogValue(payload, runtimeRedaction) as ClientLogEvent);
   };
 
   return {

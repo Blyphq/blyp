@@ -4,6 +4,7 @@ import type {
   BlypDestination,
   DatabaseLoggerConfig,
   LogFileConfig,
+  RedactionConfig,
 } from '../core/config';
 import type { BlypLogger } from '../core/logger';
 import type { ClientLogEvent } from '../shared/client-log';
@@ -35,6 +36,7 @@ export interface ServerLoggerConfig<Ctx> {
   includePaths?: string[];
   ignorePaths?: string[];
   clientLogging?: boolean | ClientLogIngestionConfig<Ctx>;
+  redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
 }
 

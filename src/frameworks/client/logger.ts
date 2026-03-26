@@ -17,6 +17,11 @@ import {
   createRemoteDeliveryManager,
   type DeliveryAttemptResult,
 } from '../../shared/remote-delivery';
+import {
+  resolveRedactionConfig,
+  sanitizeLogMessage,
+  sanitizeLogValue,
+} from '../../shared/redaction';
 import { createErrorOnceLogger } from '../../shared/once';
 import type {
   ClientLogger,
@@ -26,6 +31,7 @@ import type {
 
 const warnedMessages = new Set<string>();
 const errorOnce = createErrorOnceLogger(warnedMessages);
+const runtimeRedaction = resolveRedactionConfig();
 
 function resolveHeaders(headers: Record<string, string> | undefined): Record<string, string> {
   return {
@@ -180,32 +186,33 @@ function emitLocalConsole(
   }
 
   const normalizedArgs = args.map((entry) => normalizeLogValue(entry));
-  const text = serializeLogMessage(message);
+  const sanitizedArgs = normalizedArgs.map((entry) => sanitizeLogValue(entry, runtimeRedaction));
+  const text = sanitizeLogMessage(serializeLogMessage(message), runtimeRedaction);
 
   switch (level) {
     case 'table':
       console.log(text);
       if (normalizedArgs.length > 0 && typeof console.table === 'function') {
-        console.table(normalizedArgs[0]);
+        console.table(sanitizedArgs[0]);
       }
       return;
     case 'warning':
     case 'warn':
-      console.warn(text, ...normalizedArgs);
+      console.warn(text, ...sanitizedArgs);
       return;
     case 'error':
     case 'critical':
-      console.error(text, ...normalizedArgs);
+      console.error(text, ...sanitizedArgs);
       return;
     case 'debug':
-      console.debug(text, ...normalizedArgs);
+      console.debug(text, ...sanitizedArgs);
       return;
     case 'success':
-      console.log(text, ...normalizedArgs);
+      console.log(text, ...sanitizedArgs);
       return;
     case 'info':
     default:
-      console.info(text, ...normalizedArgs);
+      console.info(text, ...sanitizedArgs);
   }
 }
 
@@ -264,9 +271,15 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
     }
 
     const normalizedLevel = normalizeClientLogLevel(level);
-    const normalizedMessage = serializeLogMessage(message);
-    const normalizedData = normalizeClientPayloadData(message, args);
-    const metadata = normalizeMetadata(resolvedConfig.metadata);
+    const normalizedMessage = sanitizeLogMessage(serializeLogMessage(message), runtimeRedaction);
+    const normalizedData = sanitizeLogValue(
+      normalizeClientPayloadData(message, args),
+      runtimeRedaction
+    );
+    const metadata = sanitizeLogValue(
+      normalizeMetadata(resolvedConfig.metadata),
+      runtimeRedaction
+    ) as Record<string, unknown> | undefined;
     const payload: ClientLogEvent = {
       type: 'client_log',
       source: 'client',
@@ -275,7 +288,9 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
       message: normalizedMessage,
       connector: resolvedConfig.connector,
       data: normalizedData,
-      bindings: Object.keys(state.bindings).length > 0 ? normalizeLogValue(state.bindings) as Record<string, unknown> : undefined,
+      bindings: Object.keys(state.bindings).length > 0
+        ? sanitizeLogValue(state.bindings, runtimeRedaction) as Record<string, unknown>
+        : undefined,
       clientTimestamp: new Date().toISOString(),
       page: getBrowserPageContext(),
       browser: getBrowserContext(),
@@ -286,7 +301,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
       metadata,
     };
 
-    delivery?.enqueue(payload);
+    delivery?.enqueue(sanitizeLogValue(payload, runtimeRedaction) as ClientLogEvent);
   };
 
   return {

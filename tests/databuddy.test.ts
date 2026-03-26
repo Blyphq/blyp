@@ -614,7 +614,7 @@ describe('Databuddy Connector', () => {
       websiteId: '25361306-ceb5-4328-b076-7075bf190530',
     });
 
-    const dispatcher = sender[CONNECTOR_BATCH_DISPATCH];
+    const dispatcher = (sender as unknown as Record<PropertyKey, unknown>)[CONNECTOR_BATCH_DISPATCH];
     expect(dispatcher).toBeDefined();
 
     await waitForFileFlush(50);
@@ -622,7 +622,7 @@ describe('Databuddy Connector', () => {
       timestamp: new Date().toISOString(),
       level: 'info',
       message: 'queued databuddy retry',
-    }, dispatcher!);
+    }, dispatcher as Parameters<typeof delivery.enqueue>[2]);
 
     await waitForCondition(() => fs.existsSync(durableQueuePath), 1000);
     await waitForCondition(async () => (await delivery.getDurableCountForTests()) === 1, 2000);

@@ -1,14 +1,17 @@
+import type { RedactionConfig, ResolvedRedactionConfig } from '../core/config';
 import type { HttpRequestLog } from './http';
 import type { StructuredLog } from '../core/structured-log';
 
 export interface WorkersLoggerConfig {
   env?: Record<string, unknown>;
   customProps?: (request: Request) => Record<string, unknown>;
+  redact?: RedactionConfig;
 }
 
 export interface WorkersLoggerState {
   env?: Record<string, unknown>;
   customProps?: (request: Request) => Record<string, unknown>;
+  redact?: ResolvedRedactionConfig;
 }
 
 export type WorkersConsoleMethod = 'debug' | 'info' | 'warn' | 'error' | 'log';

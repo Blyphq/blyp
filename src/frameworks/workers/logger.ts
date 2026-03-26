@@ -10,6 +10,11 @@ import {
   type RequestLike,
 } from '../shared/http';
 import { createStructuredLog } from '../../core/structured-log';
+import {
+  resolveRedactionConfig,
+  sanitizeLogMessage,
+  sanitizeLogValue,
+} from '../../shared/redaction';
 import type {
   WorkersConsoleMethod,
   WorkersEmitOptions,
@@ -22,33 +27,7 @@ import type {
 let workersLoggerState: WorkersLoggerState = {};
 
 function serializeMessage(message: unknown): string {
-  if (typeof message === 'string') {
-    return message;
-  }
-
-  if (message !== null && typeof message === 'object') {
-    try {
-      return JSON.stringify(message, (_key, value) => {
-        if (typeof value === 'function') {
-          return `[Function: ${value.name || 'anonymous'}]`;
-        }
-
-        if (value === undefined) {
-          return '[undefined]';
-        }
-
-        if (typeof value === 'symbol') {
-          return value.toString();
-        }
-
-        return value;
-      }, 2);
-    } catch {
-      return '[Object]';
-    }
-  }
-
-  return String(message);
+  return sanitizeLogMessage(message, workersLoggerState.redact ?? resolveRedactionConfig());
 }
 
 function normalizeStructuredData(message: unknown, args: unknown[]): unknown {
@@ -101,14 +80,18 @@ function writeStructuredConsole(
   message: string,
   payload: Record<string, unknown>
 ): void {
-  writeConsole(getConsoleMethod(level), message, payload);
+  writeConsole(
+    getConsoleMethod(level),
+    sanitizeLogMessage(message, workersLoggerState.redact ?? resolveRedactionConfig()),
+    sanitizeLogValue(payload, workersLoggerState.redact ?? resolveRedactionConfig())
+  );
 }
 
 function buildRequestMetadata(request: RequestLike, path: string): Record<string, unknown> {
   return {
     method: request.method,
     url: path,
-    ...buildClientDetails(request, path),
+    ...buildClientDetails(request, path, workersLoggerState.redact ?? resolveRedactionConfig()),
   };
 }
 
@@ -118,11 +101,11 @@ function createScopedPayload(
   fields: Record<string, unknown>,
   data: unknown
 ): Record<string, unknown> {
-  return {
+  return sanitizeLogValue({
     request: buildRequestMetadata(request, path),
     ...fields,
     ...(data === undefined ? {} : { data }),
-  };
+  }, workersLoggerState.redact ?? resolveRedactionConfig()) as Record<string, unknown>;
 }
 
 function emitScopedLog(
@@ -173,14 +156,18 @@ function createEmitPayload(
             details: errorLike.details,
           }
         : {}),
-    }
+    },
+    workersLoggerState.redact ?? resolveRedactionConfig()
   );
 }
 
 function createScopedFields(request: Request): Record<string, unknown> {
   return {
-    ...(workersLoggerState.env ?? {}),
-    ...(workersLoggerState.customProps?.(request) ?? {}),
+    ...(sanitizeLogValue(workersLoggerState.env ?? {}, workersLoggerState.redact ?? resolveRedactionConfig()) as Record<string, unknown>),
+    ...(sanitizeLogValue(
+      workersLoggerState.customProps?.(request) ?? {},
+      workersLoggerState.redact ?? resolveRedactionConfig()
+    ) as Record<string, unknown>),
   };
 }
 
@@ -188,6 +175,7 @@ export function initWorkersLogger(config: WorkersLoggerConfig = {}): void {
   workersLoggerState = {
     env: config.env ? { ...config.env } : undefined,
     customProps: config.customProps,
+    redact: resolveRedactionConfig(undefined, config.redact),
   };
 }
 
@@ -200,7 +188,7 @@ export function createWorkersLogger(request: Request): WorkersRequestLogger {
 
   const logger: WorkersRequestLogger = {
     set(extraFields) {
-      Object.assign(fields, extraFields);
+      Object.assign(fields, sanitizeLogValue(extraFields, workersLoggerState.redact ?? resolveRedactionConfig()));
       return logger;
     },
 
@@ -253,10 +241,10 @@ export function createWorkersLogger(request: Request): WorkersRequestLogger {
     },
 
     table(message, data) {
-      writeConsole('log', message, createScopedPayload(requestLike, path, fields, data));
+      writeConsole('log', serializeMessage(message), createScopedPayload(requestLike, path, fields, data));
 
       if (typeof console !== 'undefined' && typeof console.table === 'function' && data !== undefined) {
-        console.table(data);
+        console.table(sanitizeLogValue(data, workersLoggerState.redact ?? resolveRedactionConfig()));
       }
     },
 
@@ -278,6 +266,7 @@ export function createWorkersLogger(request: Request): WorkersRequestLogger {
             payload
           );
         },
+        redact: workersLoggerState.redact ?? resolveRedactionConfig(),
       });
     },
   };

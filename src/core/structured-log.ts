@@ -7,6 +7,11 @@ import type {
   StructuredLogLevel,
   StructuredLogPayload,
 } from '../types/core/structured-log';
+import {
+  resolveRedactionConfig,
+  sanitizeLogMessage,
+  sanitizeLogValue,
+} from '../shared/redaction';
 
 export type {
   CreateStructuredLogOptions,
@@ -17,40 +22,6 @@ export type {
   StructuredLogLevel,
   StructuredLogPayload,
 } from '../types/core/structured-log';
-
-function serializeMessage(message: unknown): string {
-  if (typeof message === 'string') {
-    return message;
-  }
-
-  if (message !== null && typeof message === 'object') {
-    try {
-      return JSON.stringify(
-        message,
-        (_key, value) => {
-          if (typeof value === 'function') {
-            return `[Function: ${value.name || 'anonymous'}]`;
-          }
-
-          if (value === undefined) {
-            return '[undefined]';
-          }
-
-          if (typeof value === 'symbol') {
-            return value.toString();
-          }
-
-          return value;
-        },
-        2
-      );
-    } catch {
-      return '[Object]';
-    }
-  }
-
-  return String(message);
-}
 
 function normalizeEventData(message: unknown, args: unknown[]): unknown {
   if (typeof message === 'string') {
@@ -182,8 +153,12 @@ export function createStructuredLog(
   groupId: string,
   options: CreateStructuredLogOptions
 ): StructuredLog<Record<string, unknown>> {
+  const redaction = options.redact ?? resolveRedactionConfig();
   const startedAt = performance.now();
-  const fields = { ...(options.initialFields ?? {}) };
+  const fields = sanitizeLogValue(
+    options.initialFields ?? {},
+    redaction
+  ) as Record<string, unknown>;
   const events: StructuredLogEvent[] = [];
   let emittedPayload: StructuredLogPayload<Record<string, unknown>> | undefined;
 
@@ -196,11 +171,11 @@ export function createStructuredLog(
   ): StructuredLog<Record<string, unknown>> => {
     events.push({
       level,
-      message: serializeMessage(message),
+      message: sanitizeLogMessage(message, redaction),
       timestamp: new Date().toISOString(),
       ...(normalizeEventData(message, args) === undefined
         ? {}
-        : { data: normalizeEventData(message, args) }),
+        : { data: sanitizeLogValue(normalizeEventData(message, args), redaction) }),
     });
 
     return structuredLog;
@@ -208,7 +183,7 @@ export function createStructuredLog(
 
   const structuredLog: StructuredLog<Record<string, unknown>> = {
     set<TNextFields extends Record<string, unknown>>(extraFields: TNextFields) {
-      Object.assign(fields, extraFields);
+      Object.assign(fields, sanitizeLogValue(extraFields, redaction));
       return structuredLog as StructuredLog<Record<string, unknown> & TNextFields>;
     },
 
@@ -249,11 +224,17 @@ export function createStructuredLog(
         return emittedPayload;
       }
 
-      const defaultFields = options.resolveDefaultFields?.() ?? {};
+      const defaultFields = sanitizeLogValue(
+        options.resolveDefaultFields?.() ?? {},
+        redaction
+      ) as Record<string, unknown>;
       const status = resolveEmitStatus(emitOptions);
-      const error = normalizeError(emitOptions.error, status);
+      const error = sanitizeLogValue(
+        normalizeError(emitOptions.error, status),
+        redaction
+      ) as StructuredLogError | undefined;
       const level = emitOptions.level ?? (error ? 'error' : 'info');
-      const payload: StructuredLogPayload<Record<string, unknown>> = {
+      const payload = sanitizeLogValue({
         ...defaultFields,
         ...fields,
         groupId,
@@ -263,9 +244,9 @@ export function createStructuredLog(
         ...(typeof status === 'number' ? { status } : {}),
         ...(events.length > 0 ? { events: [...events] } : {}),
         ...(error ? { error } : {}),
-      };
+      }, redaction) as StructuredLogPayload<Record<string, unknown>>;
 
-      options.write(payload, emitOptions.message ?? 'structured_log');
+      options.write(payload, sanitizeLogMessage(emitOptions.message ?? 'structured_log', redaction));
       emittedPayload = payload;
       options.onEmit?.(payload);
       return payload;

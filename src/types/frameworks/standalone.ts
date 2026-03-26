@@ -6,6 +6,7 @@ import type {
   DatabaseLoggerConfig,
   LogFileConfig,
   LogRotationConfig,
+  RedactionConfig,
 } from '../core/config';
 
 export type LogLevel = 'error' | 'critical' | 'warning' | 'info' | 'success' | 'debug' | 'table';
@@ -18,6 +19,7 @@ export interface StandaloneLoggerConfig {
   file?: LogFileConfig;
   database?: DatabaseLoggerConfig;
   clientLogging?: ClientLoggingConfig;
+  redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
 }
 
@@ -36,6 +38,7 @@ export type {
   DatabaseLoggerConfig,
   LogFileConfig,
   LogRotationConfig,
+  RedactionConfig,
 };
 
 export type RuntimeType = 'bun' | 'node';

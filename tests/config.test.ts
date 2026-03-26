@@ -110,6 +110,40 @@ describe('Configuration', () => {
     );
   });
 
+  it('resolves default redaction settings and merges runtime overrides', () => {
+    process.chdir(tempDir);
+    fs.writeFileSync(
+      path.join(tempDir, 'blyp.config.ts'),
+      [
+        'export default {',
+        '  redact: {',
+        '    keys: ["internal_secret"],',
+        '    paths: ["payment.**.raw"],',
+        '    patterns: [/MY_ORG_[A-Z0-9]{32}/],',
+        '    disablePatternScanning: false,',
+        '  },',
+        '};',
+      ].join('\n')
+    );
+
+    resetConfigCache();
+    const resolved = resolveConfig({
+      redact: {
+        keys: ['custom_token'],
+        paths: ['user.ssn'],
+        disablePatternScanning: true,
+      },
+    });
+
+    expect(resolved.redact.keys).toContain('password');
+    expect(resolved.redact.keys).toContain('internal_secret');
+    expect(resolved.redact.keys).toContain('custom_token');
+    expect(resolved.redact.paths).toContain('payment.**.raw');
+    expect(resolved.redact.paths).toContain('user.ssn');
+    expect(resolved.redact.patterns).toHaveLength(1);
+    expect(resolved.redact.disablePatternScanning).toBe(true);
+  });
+
   it('loads executable database config and marks it ready', () => {
     process.chdir(tempDir);
     fs.writeFileSync(

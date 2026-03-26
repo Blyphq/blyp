@@ -8,6 +8,7 @@ This document contains detailed usage, all framework integrations, configuration
 
 - [Basic logger usage](#basic-logger-usage)
 - [Structured request batches](#structured-request-batches)
+- [Automatic redaction](#automatic-redaction)
 - [Errors](#errors)
 - [Client](#client)
 - [AI SDK tracing](#ai-sdk-tracing)
@@ -96,6 +97,54 @@ const structuredLog = createStructuredLog<{
 Inside framework handlers, the imported `createStructuredLog(...)` binds to the active request-scoped logger automatically, so request metadata and framework `customProps` are merged into the final payload at emit time.
 
 Structured logs are written only when you call `.emit()`. In framework request handlers, a structured emit suppresses the default auto `http_request` / `http_error` record for that request. If you also call the root `logger` in the same request after starting a request-scoped structured log, Blyp warns once and ignores the root logger write.
+
+---
+
+## Automatic redaction
+
+Blyp redacts sensitive values at the source. Redaction runs before console output, file writes, database inserts, connector forwarding, client-log ingestion forwarding, and framework request logging.
+
+Default redacted keys:
+
+`password`, `passwd`, `pwd`, `secret`, `token`, `api_key`, `apikey`, `api_secret`, `authorization`, `auth`, `x-api-key`, `private_key`, `privatekey`, `access_token`, `refresh_token`, `client_secret`, `session`, `cookie`, `set-cookie`, `ssn`, `credit_card`, `card_number`, `cvv`, `cvc`, `otp`, `pin`
+
+Built-in pattern scanning also redacts:
+
+- Bearer tokens as `[REDACTED:bearer]`
+- JWTs as `[REDACTED:jwt]`
+- common API key formats as `[REDACTED:api_key]`
+- 16-digit Luhn-valid card numbers as `[REDACTED:card]`
+
+Configure extra redaction in `blyp.config.*`:
+
+```typescript
+export default {
+  redact: {
+    keys: ['my_custom_secret', 'internal_token'],
+    paths: ['user.ssn', 'payment.**.raw'],
+    patterns: [/MY_ORG_[A-Z0-9]{32}/],
+    disablePatternScanning: false,
+  },
+};
+```
+
+Example:
+
+```typescript
+logger.info('Authorization Bearer sk-12345678901234567890', {
+  user: { password: 'hunter2' },
+  payment: { raw: '4111 1111 1111 1111' },
+});
+```
+
+This writes redacted output only. Blyp never stores the original secret in its log sinks.
+
+Notes:
+
+- `redact.paths` supports exact dot paths, numeric array indexes, `*`, and `**`
+- `patterns` are runtime regexes, so prefer executable config such as `blyp.config.ts`
+- set `disablePatternScanning: true` only if you explicitly want key/path-only redaction
+- request headers `Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`, and `X-Auth-Token` are redacted by default
 
 ---
 

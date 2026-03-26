@@ -1,11 +1,13 @@
 import type { LogRecord } from './file-logger';
 import type { StructuredLogPayload } from './structured-log';
+import { normalizeError } from '../shared/log-value';
 import {
-  normalizeError,
-  normalizeLogValue,
-  serializeLogMessage,
-} from '../shared/log-value';
+  resolveRedactionConfig,
+  sanitizeLogMessage,
+  sanitizeLogValue,
+} from '../shared/redaction';
 import type { LogMethodName } from '../types/core/log-record';
+import type { ResolvedRedactionConfig } from '../types/core/config';
 
 export type { LogMethodName } from '../types/core/log-record';
 
@@ -93,7 +95,7 @@ export function getCallerLocation(): { file: string | null; line: number | null 
   return { file: null, line: null };
 }
 
-export const serializeMessage = serializeLogMessage;
+export const serializeMessage = sanitizeLogMessage;
 
 export function stripAnsi(value: string): string {
   return value.replace(/\u001b\[[0-9;]*m/g, '');
@@ -103,10 +105,11 @@ export function buildRecord(
   level: LogMethodName,
   message: unknown,
   args: unknown[],
-  bindings: Record<string, unknown>
+  bindings: Record<string, unknown>,
+  redaction: ResolvedRedactionConfig = resolveRedactionConfig()
 ): LogRecord {
   const { file, line } = getCallerLocation();
-  const serializedMessage = serializeMessage(message);
+  const serializedMessage = serializeMessage(message, redaction);
   const record: LogRecord = {
     timestamp: new Date().toISOString(),
     level: RECORD_LEVELS[level],
@@ -114,7 +117,7 @@ export function buildRecord(
   };
 
   if (message instanceof Error) {
-    record.error = normalizeError(message);
+    record.error = sanitizeLogValue(normalizeError(message), redaction);
   }
 
   if (file) {
@@ -122,13 +125,13 @@ export function buildRecord(
   }
 
   if (args.length === 1) {
-    record.data = normalizeLogValue(args[0]);
+    record.data = sanitizeLogValue(args[0], redaction);
   } else if (args.length > 1) {
-    record.data = normalizeLogValue(args);
+    record.data = sanitizeLogValue(args, redaction);
   }
 
   if (Object.keys(bindings).length > 0) {
-    record.bindings = normalizeLogValue(bindings) as Record<string, unknown>;
+    record.bindings = sanitizeLogValue(bindings, redaction) as Record<string, unknown>;
   }
 
   return record;
@@ -138,12 +141,13 @@ export function buildStructuredRecord(
   level: LogMethodName,
   message: string,
   payload: StructuredLogPayload,
-  bindings: Record<string, unknown>
+  bindings: Record<string, unknown>,
+  redaction: ResolvedRedactionConfig = resolveRedactionConfig()
 ): LogRecord {
   const { file, line } = getCallerLocation();
-  const normalizedPayload = normalizeLogValue(payload) as StructuredLogPayload;
+  const normalizedPayload = sanitizeLogValue(payload, redaction) as StructuredLogPayload;
   const record: LogRecord = {
-    message: stripAnsi(message),
+    message: stripAnsi(serializeMessage(message, redaction)),
     ...normalizedPayload,
   };
 
@@ -152,7 +156,7 @@ export function buildStructuredRecord(
   }
 
   if (Object.keys(bindings).length > 0) {
-    record.bindings = normalizeLogValue(bindings) as Record<string, unknown>;
+    record.bindings = sanitizeLogValue(bindings, redaction) as Record<string, unknown>;
   }
 
   record.level =

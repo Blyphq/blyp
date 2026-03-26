@@ -1,4 +1,9 @@
 import { getArrowForMethod, getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
+import {
+  resolveRedactionConfig,
+  sanitizeHeaders,
+} from '../../shared/redaction';
+import type { ResolvedRedactionConfig } from '../../types/core/config';
 import type {
   ErrorLike,
   HeaderRecord,
@@ -134,7 +139,8 @@ export function createRequestLike(
 
 export function buildClientDetails(
   request: RequestLike,
-  fallbackPath?: string
+  fallbackPath?: string,
+  redaction: ResolvedRedactionConfig = resolveRedactionConfig()
 ): Omit<HttpRequestLog, 'type' | 'method' | 'url' | 'statusCode' | 'responseTime' | 'error' | 'stack'> {
   const pathname = fallbackPath ?? extractPathname(request.url);
   const urlObject = (() => {
@@ -187,6 +193,7 @@ export function buildClientDetails(
     origin: getHeaderValue(request.headers, 'origin'),
     referer: getHeaderValue(request.headers, 'referer'),
     acceptLanguage: getHeaderValue(request.headers, 'accept-language'),
+    headers: sanitizeHeaders(request.headers, redaction),
     client: {
       ip: ipCandidates[0],
       hostname,
@@ -205,7 +212,8 @@ export function buildRequestLogData(
   path: string,
   statusCode: number,
   responseTime: number,
-  extra: Record<string, unknown> = {}
+  extra: Record<string, unknown> = {},
+  redaction: ResolvedRedactionConfig = resolveRedactionConfig()
 ): HttpRequestLog {
   return {
     type,
@@ -213,7 +221,7 @@ export function buildRequestLogData(
     url: path,
     statusCode,
     responseTime,
-    ...buildClientDetails(request, path),
+    ...buildClientDetails(request, path, redaction),
     ...extra,
   };
 }

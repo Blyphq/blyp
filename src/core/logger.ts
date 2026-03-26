@@ -1,11 +1,11 @@
 import pino from 'pino';
 import { shouldDropRootLogWrite } from '../frameworks/shared/request-context';
+import { sanitizeLogValue } from '../shared/redaction';
 import { type BlypConfig, resolveConfig } from './config';
 import {
   buildRecord,
   buildStructuredRecord,
   resolveStructuredWriteLevel,
-  serializeMessage,
 } from './log-record';
 import type { LogMethodName } from '../types/core/log-record';
 import { createPrimarySink } from './primary-sink';
@@ -33,6 +33,7 @@ import type { DatabuddySender } from '../types/connectors/databuddy';
 import type { PostHogSender } from '../types/connectors/posthog';
 import type { SentrySender } from '../types/connectors/sentry';
 import type { OTLPRegistry } from '../types/connectors/otlp';
+import type { ResolvedRedactionConfig } from '../types/core/config';
 import { runtime } from './runtime';
 import {
   createStructuredLog as createStructuredLogCollector,
@@ -228,6 +229,14 @@ export function getOtlpRegistry(logger: BlypLogger): OTLPRegistry {
   return getLoggerFactory(logger).otlp;
 }
 
+export function getRedactionConfig(logger: BlypLogger): ResolvedRedactionConfig {
+  try {
+    return getLoggerFactory(logger).redact;
+  } catch {
+    return resolveConfig().redact;
+  }
+}
+
 export function attachLoggerInternals<T extends BlypLogger>(target: T, source: BlypLogger): T {
   const factory = getLoggerFactory(source);
   Object.defineProperty(target, LOGGER_FACTORY, {
@@ -265,6 +274,7 @@ export function createStructuredLogForLogger(
     },
     onCreate: options.onCreate,
     onEmit: options.onEmit,
+    redact: options.redact ?? factory.redact,
   });
 }
 
@@ -362,6 +372,7 @@ function createLoggerInstance(
   posthog: PostHogSender,
   sentry: SentrySender,
   otlp: OTLPRegistry,
+  redact: ResolvedRedactionConfig,
   bindings: Record<string, unknown> = {},
   source: InternalLoggerSource = 'root'
 ): BlypLogger {
@@ -379,8 +390,8 @@ function createLoggerInstance(
       return;
     }
 
-    const record = buildRecord(level, message, args, bindings);
-    const consoleMessage = serializeMessage(message);
+    const record = buildRecord(level, message, args, bindings, redact);
+    const consoleMessage = record.message;
     const payload: Record<string, unknown> = {
       caller: record.caller,
     };
@@ -416,7 +427,7 @@ function createLoggerInstance(
     writeSource: InternalLoggerSource = 'structured-flush'
   ): void => {
     const level = resolveStructuredWriteLevel(payload.level);
-    const record = buildStructuredRecord(level, message, payload, bindings);
+    const record = buildStructuredRecord(level, message, payload, bindings, redact);
     const consoleMethod = CONSOLE_LEVELS[level];
     const boundLogger = rawLogger as Record<string, (payload: unknown, message: string) => void>;
     const logMethod =
@@ -428,9 +439,9 @@ function createLoggerInstance(
       rawLogger,
       {
         caller: record.caller,
-        ...payload,
+        ...record,
       },
-      message
+      record.message
     );
 
     if (writeSource !== 'root' || !shouldDropRootLogWrite()) {
@@ -476,7 +487,7 @@ function createLoggerInstance(
     table: (message: string, data?: unknown) => {
       if (data && typeof data === 'object' && runtime.env.get('NODE_ENV') !== 'production') {
         console.log('TABLE:', message);
-        console.table(data);
+        console.table(sanitizeLogValue(data, redact));
       }
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
@@ -529,6 +540,7 @@ function createLoggerInstance(
         posthog,
         sentry,
         otlp,
+        redact,
         mergedBindings,
         source
       );
@@ -541,6 +553,7 @@ function createLoggerInstance(
       posthog,
       sentry,
       otlp,
+      redact,
       sink,
       create: (
         nextSource: InternalLoggerSource,
@@ -555,6 +568,7 @@ function createLoggerInstance(
           posthog,
           sentry,
           otlp,
+          redact,
           nextBindings,
           nextSource
         );
@@ -610,7 +624,8 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
     databuddy,
     posthog,
     sentry,
-    otlp
+    otlp,
+    resolvedConfig.redact
   );
 
   if (config === undefined) {

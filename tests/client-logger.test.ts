@@ -193,6 +193,39 @@ describe('Client Logger', () => {
     expect((payload.browser as Record<string, unknown>)?.language).toBe('en-US');
   });
 
+  it('redacts local console arguments and remote payloads', async () => {
+    const fetchCalls: Array<{ body: string }> = [];
+    const infoCalls: unknown[][] = [];
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        fetchCalls.push({ body: String(init?.body ?? '') });
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }) as typeof fetch,
+    });
+    console.info = (...args: unknown[]) => {
+      infoCalls.push(args);
+    };
+
+    const logger = createClientLogger();
+    logger.info('Bearer sk-123456789012345678901234', {
+      password: 'hunter2',
+      nested: {
+        token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature',
+      },
+    });
+    await flushAsyncWork();
+
+    expect(String(infoCalls[0]?.[0] ?? '')).toContain('[REDACTED:bearer]');
+    expect((infoCalls[0]?.[1] as Record<string, any>)?.password).toBe('[REDACTED]');
+    expect((infoCalls[0]?.[1] as Record<string, any>)?.nested?.token).toBe('[REDACTED]');
+
+    const payload = JSON.parse(fetchCalls[0]!.body) as Record<string, any>;
+    expect(payload.message).toContain('[REDACTED:bearer]');
+    expect(payload.data.password).toBe('[REDACTED]');
+    expect(payload.data.nested.token).toBe('[REDACTED]');
+  });
+
   it('honors endpoint overrides', async () => {
     const fetchCalls: string[] = [];
 

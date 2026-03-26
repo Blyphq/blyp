@@ -3,6 +3,7 @@ import { createJiti } from 'jiti';
 import { dirname, resolve } from 'path';
 import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../shared/client-log';
 import { createWarnOnceLogger } from '../shared/once';
+import { resolveRedactionConfig } from '../shared/redaction';
 import { hasNonEmptyString, isAbsoluteHttpUrl } from '../shared/validation';
 import type {
   BetterStackConnectorConfig,
@@ -24,6 +25,7 @@ import type {
   OTLPConnectorConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
+  RedactionConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
   ResolvedBlypConfig,
@@ -34,6 +36,7 @@ import type {
   ResolvedDatabaseLoggerConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
+  ResolvedRedactionConfig,
   ResolvedSentryConnectorConfig,
   SentryConnectorConfig
 } from '../types/core/config';
@@ -61,6 +64,7 @@ export type {
   OTLPConnectorConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
+  RedactionConfig,
   ResolvedBlypConfig,
   ResolvedBetterStackConnectorConfig,
   ResolvedBetterStackErrorTrackingConfig,
@@ -72,6 +76,7 @@ export type {
   PostHogErrorTrackingConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
+  ResolvedRedactionConfig,
   ResolvedDatabaseRetryConfig,
   ResolvedPostHogErrorTrackingConfig,
   ResolvedSentryConnectorConfig,
@@ -115,6 +120,8 @@ export const DEFAULT_CLIENT_LOGGING_CONFIG: Required<ClientLoggingConfig> = {
   enabled: true,
   path: DEFAULT_CLIENT_LOG_ENDPOINT,
 };
+
+export const DEFAULT_REDACTION_CONFIG: ResolvedRedactionConfig = resolveRedactionConfig();
 
 export const DEFAULT_CONNECTOR_RETRY_CONFIG: Required<ConnectorRetryConfig> = {
   maxAttempts: 8,
@@ -164,6 +171,7 @@ export const DEFAULT_CONFIG: BlypConfig = {
   destination: 'file',
   file: DEFAULT_FILE_CONFIG,
   clientLogging: DEFAULT_CLIENT_LOGGING_CONFIG,
+  redact: DEFAULT_REDACTION_CONFIG,
   connectors: {
     delivery: DEFAULT_CONNECTOR_DELIVERY_CONFIG,
   },
@@ -219,6 +227,7 @@ function getBootstrapConfig(): BlypConfig {
       enabled: true,
       path: DEFAULT_CLIENT_LOG_ENDPOINT,
     },
+    redact: DEFAULT_REDACTION_CONFIG,
     connectors: {
       delivery: DEFAULT_CONNECTOR_DELIVERY_CONFIG,
     },
@@ -524,6 +533,13 @@ function mergeClientLoggingConfig(
     ...override,
     path: override?.path ?? base?.path ?? DEFAULT_CLIENT_LOGGING_CONFIG.path,
   };
+}
+
+function mergeRedactionConfig(
+  base: RedactionConfig | ResolvedRedactionConfig | undefined,
+  override: RedactionConfig | undefined
+): ResolvedRedactionConfig {
+  return resolveRedactionConfig(base, override);
 }
 
 function mergeConnectorRetryConfig(
@@ -887,6 +903,7 @@ export function mergeBlypConfig(
     file: mergeFileConfig(base.file, override.file),
     database: mergeDatabaseLoggerConfig(base.database, override.database, options.configFileType),
     clientLogging: mergeClientLoggingConfig(base.clientLogging, override.clientLogging),
+    redact: mergeRedactionConfig(base.redact, override.redact),
     connectors: mergeConnectorsConfig(base.connectors, override.connectors),
   };
 }

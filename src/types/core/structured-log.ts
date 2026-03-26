@@ -1,3 +1,5 @@
+import type { ResolvedRedactionConfig } from './config';
+
 export type StructuredLogLevel =
   | 'debug'
   | 'info'
@@ -72,4 +74,5 @@ export interface CreateStructuredLogOptions {
   write(payload: StructuredLogPayload<Record<string, unknown>>, message: string): void;
   onCreate?: () => void;
   onEmit?: (payload: StructuredLogPayload<Record<string, unknown>>) => void;
+  redact?: ResolvedRedactionConfig;
 }

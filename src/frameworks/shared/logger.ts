@@ -10,11 +10,16 @@ import {
   getDatabuddySender,
   getOtlpRegistry,
   getPostHogSender,
+  getRedactionConfig,
   getSentrySender,
   tryGetBetterStackSender,
   tryGetDatabuddySender,
   tryGetPostHogSender,
 } from '../../core/logger';
+import {
+  sanitizeLogMessage,
+  sanitizeLogValue,
+} from '../../shared/redaction';
 import {
   buildClientDetails,
   buildInfoLogMessage,
@@ -86,6 +91,7 @@ export function resolveServerLogger<Ctx>(
     ...(config.logDir !== undefined ? { logDir: config.logDir } : {}),
     ...(config.file !== undefined ? { file: config.file } : {}),
     ...(config.database !== undefined ? { database: config.database } : {}),
+    ...(config.redact !== undefined ? { redact: config.redact } : {}),
     ...(config.connectors !== undefined ? { connectors: config.connectors } : {}),
   });
   const {
@@ -219,7 +225,8 @@ export function emitHttpRequestLog(
     path,
     statusCode,
     responseTime,
-    additionalProps
+    additionalProps,
+    getRedactionConfig(logger)
   );
 
   if (level === 'info') {
@@ -266,7 +273,8 @@ export function emitHttpErrorLog(
       link: error?.link,
       details: error?.details,
       ...additionalProps,
-    }
+    },
+    getRedactionConfig(logger)
   );
 
   const message = level === 'info'
@@ -415,32 +423,36 @@ export async function handleClientLogIngestion<Ctx>(options: {
   const serverContext = config.resolvedClientLogging.enrich
     ? await config.resolvedClientLogging.enrich(ctx, payload)
     : undefined;
-  const structuredPayload: Record<string, unknown> = {
-    ...payload,
+  const redaction = getRedactionConfig(config.logger);
+  const sanitizedPayload = sanitizeLogValue(payload, redaction) as ClientLogEvent;
+  const structuredPayload = sanitizeLogValue({
+    ...sanitizedPayload,
     receivedAt: new Date().toISOString(),
-    delivery: buildClientDetails(request, deliveryPath ?? extractPathname(request.url)),
-  };
+    delivery: buildClientDetails(request, deliveryPath ?? extractPathname(request.url), redaction),
+  }, redaction) as Record<string, unknown>;
 
   if (serverContext !== undefined) {
-    structuredPayload.serverContext = serverContext;
+    structuredPayload.serverContext = sanitizeLogValue(serverContext, redaction);
   }
 
-  if (payload.level === 'table') {
-    config.logger.table(`[client] ${payload.message}`, structuredPayload);
+  const clientMessage = sanitizeLogMessage(`[client] ${sanitizedPayload.message}`, redaction);
+
+  if (sanitizedPayload.level === 'table') {
+    config.logger.table(clientMessage, structuredPayload);
   } else {
-    const logMethod = getClientLogMethod(config.logger, payload.level);
-    logMethod(`[client] ${payload.message}`, structuredPayload);
+    const logMethod = getClientLogMethod(config.logger, sanitizedPayload.level);
+    logMethod(clientMessage, structuredPayload);
   }
 
   const headers: Record<string, string> = {};
-  if (payload.connector === 'betterstack') {
+  if (sanitizedPayload.connector === 'betterstack') {
     headers['x-blyp-betterstack-status'] = config.betterstack.ready ? 'enabled' : 'missing';
 
     if (config.betterstack.ready) {
       const forwardedRecord = {
         timestamp: structuredPayload.receivedAt as string,
-        level: payload.level,
-        message: `[client] ${payload.message}`,
+        level: sanitizedPayload.level,
+        message: clientMessage,
         data: structuredPayload,
       };
 
@@ -449,38 +461,38 @@ export async function handleClientLogIngestion<Ctx>(options: {
       });
 
       if (
-        (payload.level === 'error' || payload.level === 'critical') &&
+        (sanitizedPayload.level === 'error' || sanitizedPayload.level === 'critical') &&
         config.betterstack.shouldAutoCaptureExceptions()
       ) {
         const clientErrorCandidate =
-          payload.data &&
-          typeof payload.data === 'object' &&
-          !Array.isArray(payload.data) &&
-          typeof (payload.data as Record<string, unknown>).message === 'string'
-            ? payload.data
-            : payload.message;
+          sanitizedPayload.data &&
+          typeof sanitizedPayload.data === 'object' &&
+          !Array.isArray(sanitizedPayload.data) &&
+          typeof (sanitizedPayload.data as Record<string, unknown>).message === 'string'
+            ? sanitizedPayload.data
+            : sanitizedPayload.message;
 
         config.betterstack.captureException(clientErrorCandidate, {
           source: 'client',
           warnIfUnavailable: true,
           context: {
-            sessionId: payload.session.sessionId,
-            pageUrl: payload.page.url,
-            pagePath: payload.page.pathname,
-            metadata: payload.metadata,
+            sessionId: sanitizedPayload.session.sessionId,
+            pageUrl: sanitizedPayload.page.url,
+            pagePath: sanitizedPayload.page.pathname,
+            metadata: sanitizedPayload.metadata,
             payload: structuredPayload,
           },
         });
       }
     }
-  } else if (payload.connector === 'databuddy') {
+  } else if (sanitizedPayload.connector === 'databuddy') {
     headers['x-blyp-databuddy-status'] = config.databuddy.ready ? 'enabled' : 'missing';
 
     if (config.databuddy.ready) {
       const forwardedRecord = {
         timestamp: structuredPayload.receivedAt as string,
-        level: payload.level,
-        message: `[client] ${payload.message}`,
+        level: sanitizedPayload.level,
+        message: clientMessage,
         data: structuredPayload,
       };
 
@@ -489,39 +501,39 @@ export async function handleClientLogIngestion<Ctx>(options: {
       });
 
       if (
-        (payload.level === 'error' || payload.level === 'critical') &&
+        (sanitizedPayload.level === 'error' || sanitizedPayload.level === 'critical') &&
         config.databuddy.shouldAutoCaptureExceptions()
       ) {
         const clientErrorCandidate =
-          payload.data &&
-          typeof payload.data === 'object' &&
-          !Array.isArray(payload.data) &&
-          typeof (payload.data as Record<string, unknown>).message === 'string'
-            ? payload.data
-            : payload.message;
+          sanitizedPayload.data &&
+          typeof sanitizedPayload.data === 'object' &&
+          !Array.isArray(sanitizedPayload.data) &&
+          typeof (sanitizedPayload.data as Record<string, unknown>).message === 'string'
+            ? sanitizedPayload.data
+            : sanitizedPayload.message;
 
         config.databuddy.captureException(clientErrorCandidate, {
           source: 'client',
           warnIfUnavailable: true,
-          sessionId: payload.session.sessionId,
+          sessionId: sanitizedPayload.session.sessionId,
           properties: {
-            page_url: payload.page.url,
-            page_path: payload.page.pathname,
-            client_runtime: payload.device?.runtime,
-            metadata: payload.metadata,
+            page_url: sanitizedPayload.page.url,
+            page_path: sanitizedPayload.page.pathname,
+            client_runtime: sanitizedPayload.device?.runtime,
+            metadata: sanitizedPayload.metadata,
             payload: structuredPayload,
           },
         });
       }
     }
-  } else if (payload.connector === 'posthog') {
+  } else if (sanitizedPayload.connector === 'posthog') {
     headers['x-blyp-posthog-status'] = config.posthog.ready ? 'enabled' : 'missing';
 
     if (config.posthog.ready) {
       const forwardedRecord = {
         timestamp: structuredPayload.receivedAt as string,
-        level: payload.level,
-        message: `[client] ${payload.message}`,
+        level: sanitizedPayload.level,
+        message: clientMessage,
         data: structuredPayload,
       };
 
@@ -530,7 +542,7 @@ export async function handleClientLogIngestion<Ctx>(options: {
       });
 
       if (
-        (payload.level === 'error' || payload.level === 'critical') &&
+        (sanitizedPayload.level === 'error' || sanitizedPayload.level === 'critical') &&
         config.posthog.shouldAutoCaptureExceptions()
       ) {
         const metadata = structuredPayload.metadata;
@@ -544,50 +556,50 @@ export async function handleClientLogIngestion<Ctx>(options: {
             : undefined;
 
         const clientErrorCandidate =
-          payload.data &&
-          typeof payload.data === 'object' &&
-          !Array.isArray(payload.data) &&
-          typeof (payload.data as Record<string, unknown>).message === 'string'
-            ? payload.data
-            : payload.message;
+          sanitizedPayload.data &&
+          typeof sanitizedPayload.data === 'object' &&
+          !Array.isArray(sanitizedPayload.data) &&
+          typeof (sanitizedPayload.data as Record<string, unknown>).message === 'string'
+            ? sanitizedPayload.data
+            : sanitizedPayload.message;
 
         config.posthog.captureException(clientErrorCandidate, {
           source: 'client',
           warnIfUnavailable: true,
           distinctId: posthogDistinctId,
           properties: buildPostHogExceptionProperties(forwardedRecord, 'client', {
-            $session_id: payload.session.sessionId,
-            $current_url: payload.page.url,
-            $request_path: payload.page.pathname,
-            'client.runtime': payload.device?.runtime,
-            'client.metadata': payload.metadata,
+            $session_id: sanitizedPayload.session.sessionId,
+            $current_url: sanitizedPayload.page.url,
+            $request_path: sanitizedPayload.page.pathname,
+            'client.runtime': sanitizedPayload.device?.runtime,
+            'client.metadata': sanitizedPayload.metadata,
           }),
         });
       }
     }
-  } else if (payload.connector === 'sentry') {
+  } else if (sanitizedPayload.connector === 'sentry') {
     headers['x-blyp-sentry-status'] = config.sentry.ready ? 'enabled' : 'missing';
 
     if (config.sentry.ready) {
       config.sentry.send({
         timestamp: structuredPayload.receivedAt as string,
-        level: payload.level,
-        message: `[client] ${payload.message}`,
+        level: sanitizedPayload.level,
+        message: clientMessage,
         data: structuredPayload,
       }, {
         source: 'client',
       });
     }
-  } else if (payload.connector?.type === 'otlp') {
-    const sender = config.otlp.get(payload.connector.name);
+  } else if (sanitizedPayload.connector?.type === 'otlp') {
+    const sender = config.otlp.get(sanitizedPayload.connector.name);
 
     headers['x-blyp-otlp-status'] = sender.ready ? 'enabled' : 'missing';
 
     if (sender.ready) {
       sender.send({
         timestamp: structuredPayload.receivedAt as string,
-        level: payload.level,
-        message: `[client] ${payload.message}`,
+        level: sanitizedPayload.level,
+        message: clientMessage,
         data: structuredPayload,
       }, {
         source: 'client',

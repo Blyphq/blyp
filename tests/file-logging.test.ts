@@ -93,6 +93,67 @@ describe('Structured File Logging', () => {
     expect(record?.data).toBeUndefined();
   });
 
+  it('redacts nested keys, wildcard paths, and sensitive patterns before writing', () => {
+    const logger = createStandaloneLogger({
+      pretty: false,
+      logDir: tempDir,
+      redact: {
+        paths: ['payment.**.raw'],
+      },
+    });
+
+    logger.info('auth Bearer sk-123456789012345678901234 happened', {
+      user: {
+        password: 'hunter2',
+      },
+      payment: {
+        nested: {
+          raw: '4111 1111 1111 1111',
+        },
+      },
+      token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature',
+    });
+
+    const [record] = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    expect(record?.message).toContain('[REDACTED:bearer]');
+    expect((record?.data as Record<string, any>)?.user?.password).toBe('[REDACTED]');
+    expect((record?.data as Record<string, any>)?.payment?.nested?.raw).toBe('[REDACTED]');
+    expect((record?.data as Record<string, any>)?.token).toBe('[REDACTED]');
+  });
+
+  it('redacts structured log fields and event payloads before emit', () => {
+    configureDefaultStandaloneLogger({
+      pretty: false,
+      logDir: tempDir,
+      redact: {
+        paths: ['user.profile.secretNote'],
+      },
+    });
+
+    createStructuredLog('checkout', {
+      api_key: 'sk-123456789012345678901234',
+    })
+      .set({
+        user: {
+          profile: {
+            secretNote: '4111 1111 1111 1111',
+          },
+        },
+      })
+      .info('jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature', {
+        credit_card: '4111 1111 1111 1111',
+      })
+      .emit({ status: 200 });
+
+    const [record] = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    expect(record?.api_key).toBe('[REDACTED]');
+    expect((record?.user as Record<string, any>)?.profile?.secretNote).toBe('[REDACTED]');
+    expect((record?.events as Array<Record<string, unknown>>)?.[0]?.message).toBe(
+      'jwt [REDACTED:jwt]'
+    );
+    expect(((record?.events as Array<Record<string, unknown>>)?.[0]?.data as Record<string, unknown>)?.credit_card).toBe('[REDACTED]');
+  });
+
   it('rotates combined logs by size and compresses archives', () => {
     const logger = createStandaloneLogger({
       pretty: false,

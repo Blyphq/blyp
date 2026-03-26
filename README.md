@@ -141,6 +141,34 @@ const app = new Elysia()
 
 Inside framework handlers, the imported `createStructuredLog(...)` automatically binds to the active request-scoped logger. Structured logs are emitted only when you call `.emit()`. In framework request loggers, a structured emit replaces that request's normal auto request log. If you mix a request-scoped structured logger with the root `logger` in the same request, Blyp warns once and ignores the root logger call.
 
+### Automatic redaction
+
+Blyp redacts sensitive values before they reach the console, files, database adapters, connectors, client ingestion, or framework request logs.
+
+Default redacted keys:
+
+`password`, `passwd`, `pwd`, `secret`, `token`, `api_key`, `apikey`, `api_secret`, `authorization`, `auth`, `x-api-key`, `private_key`, `privatekey`, `access_token`, `refresh_token`, `client_secret`, `session`, `cookie`, `set-cookie`, `ssn`, `credit_card`, `card_number`, `cvv`, `cvc`, `otp`, `pin`
+
+Blyp also scans string values for common secret patterns and replaces matches with typed markers such as `[REDACTED:bearer]`, `[REDACTED:jwt]`, `[REDACTED:api_key]`, and `[REDACTED:card]`.
+
+```ts
+export default {
+  redact: {
+    keys: ['my_custom_secret', 'internal_token'],
+    paths: ['user.ssn', 'payment.**.raw'],
+    patterns: [/MY_ORG_[A-Z0-9]{32}/],
+    disablePatternScanning: false,
+  },
+};
+```
+
+Notes:
+
+- `redact.paths` supports exact paths, `*`, and `**`
+- regex `patterns` require executable config such as `blyp.config.ts`
+- request headers such as `Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`, and `X-Auth-Token` are redacted by default
+- Blyp preserves keys and replaces values with `[REDACTED]` or a typed marker
+
 ### Errors
 
 ```typescript
