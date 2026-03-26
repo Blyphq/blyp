@@ -27,7 +27,9 @@ describe('Next.js Integration', () => {
       pretty: false,
       customProps: () => ({ framework: 'nextjs' }),
     });
-    const handler = nextLogger.withLogger(async (_request, _context, { log }) => {
+    let handlerTraceId = '';
+    const handler = nextLogger.withLogger(async (_request, _context, { log, traceId }) => {
+      handlerTraceId = traceId;
       log.info('next-route');
       return new Response('ok', { status: 200 });
     });
@@ -36,6 +38,9 @@ describe('Next.js Integration', () => {
     await waitForFileFlush();
 
     expect(response.status).toBe(200);
+    const traceId = response.headers.get('x-blyp-trace-id');
+    expect(handlerTraceId).toBe(traceId);
+    expect(traceId).toMatch(/^trace_/);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
@@ -44,6 +49,7 @@ describe('Next.js Integration', () => {
 
     expect(records.some((record) => record.message === 'next-route')).toBe(true);
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('nextjs');
+    expect(requestRecord?.traceId).toBe(traceId);
   });
 
   it('logs error responses and respects ignorePaths', async () => {
@@ -99,6 +105,42 @@ describe('Next.js Integration', () => {
     expect(mismatch.status).toBe(500);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
+  });
+
+  it('keeps the same trace id across next handler logs and explicit client logger handoff', async () => {
+    const nextLogger = createNextJsLogger({
+      logDir: tempDir,
+      pretty: false,
+    });
+
+    let handlerTraceId = '';
+    const handler = nextLogger.withLogger(async (_request, _context, { log, traceId }) => {
+      handlerTraceId = traceId;
+      log.info('next-trace-route');
+      return new Response('ok', { status: 200 });
+    });
+
+    const response = await handler(new Request('http://localhost/api/trace'), {});
+    const responseTraceId = response.headers.get('x-blyp-trace-id');
+    await nextLogger.clientLogHandler(
+      new Request('http://localhost/inngest', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createClientPayload({ traceId: responseTraceId ?? undefined })),
+      })
+    );
+    await waitForFileFlush();
+
+    expect(handlerTraceId).toBe(responseTraceId);
+    expect(responseTraceId).toMatch(/^trace_/);
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    expect(records.some((record) => record.message === 'next-trace-route' && record.traceId === responseTraceId)).toBe(true);
+    expect(
+      records.some((record) => record.message === '[client] frontend rendered' && record.traceId === responseTraceId)
+    ).toBe(true);
   });
 
   it('emits one structured request record and drops mixed root logger writes', async () => {

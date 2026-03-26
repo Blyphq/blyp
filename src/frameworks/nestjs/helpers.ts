@@ -164,6 +164,14 @@ export function attachNestRequestLogger(request: unknown, logger: unknown): void
   request.blypLog = logger;
 }
 
+export function attachNestRequestTraceId(request: unknown, traceId: string): void {
+  if (!isPlainObject(request)) {
+    return;
+  }
+
+  request.blypTraceId = traceId;
+}
+
 export function buildNestRequestLike(request: unknown) {
   const method = getNestRequestMethod(request);
   const headers = getNestRequestHeaders(request);

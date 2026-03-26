@@ -195,6 +195,7 @@ describe('PostHog Connector', () => {
       'structured_log',
     ]);
     expect(runtime.emitted[3]?.attributes['blyp.group_id']).toBe('checkout');
+    expect(runtime.emitted[3]?.attributes['blyp.trace_id']).toBeUndefined();
   });
 
   it('does not auto-forward regular Blyp logs in manual mode', () => {

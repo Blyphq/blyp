@@ -73,6 +73,7 @@ export interface DatabaseLogRow {
   message: string;
   caller: string | null;
   type: string | null;
+  traceId: string | null;
   groupId: string | null;
   method: string | null;
   path: string | null;

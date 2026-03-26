@@ -217,6 +217,7 @@ describe('Sentry Connector', () => {
       'boom',
       'structured_log',
     ]);
+    expect(fakeSentry.logCalls[2]?.attributes?.['blyp.trace_id']).toBeUndefined();
     expect(fakeSentry.logCalls[1]?.level).toBe('error');
     expect(fakeSentry.logCalls[2]?.level).toBe('error');
     expect(fakeSentry.exceptionCalls).toHaveLength(2);

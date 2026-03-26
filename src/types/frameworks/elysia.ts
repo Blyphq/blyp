@@ -10,6 +10,7 @@ export interface ElysiaContext {
   startTime?: number;
   request: Request;
   path: string;
+  blypTraceId?: string;
   params?: Record<string, string>;
   query?: Record<string, string>;
   headers: Record<string, string | undefined>;

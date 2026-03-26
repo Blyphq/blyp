@@ -28,6 +28,7 @@ describe('React Router Integration', () => {
       customProps: () => ({ framework: 'react-router' }),
     });
     const context: Record<string, unknown> = {};
+    let requestTraceId = '';
 
     const response = await reactRouterLogger.middleware(
       {
@@ -35,6 +36,7 @@ describe('React Router Integration', () => {
         context,
       },
       async () => {
+        requestTraceId = reactRouterLogger.getTraceId(context) ?? '';
         reactRouterLogger.getLogger(context).info('react-router-route');
         return new Response('ok', { status: 200 });
       }
@@ -42,6 +44,9 @@ describe('React Router Integration', () => {
     await waitForFileFlush();
 
     expect(response.status).toBe(200);
+    const traceId = response.headers.get('x-blyp-trace-id');
+    expect(requestTraceId).toBe(traceId);
+    expect(reactRouterLogger.getTraceId(context)).toBe(traceId ?? undefined);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
@@ -50,6 +55,7 @@ describe('React Router Integration', () => {
 
     expect(records.some((record) => record.message === 'react-router-route')).toBe(true);
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('react-router');
+    expect(requestRecord?.traceId).toBe(traceId);
   });
 
   it('logs errors and respects ignorePaths', async () => {

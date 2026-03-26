@@ -93,6 +93,7 @@ describe('Database logging', () => {
       message: 'boom',
       caller: 'app.ts:12',
       type: 'http_error',
+      traceId: 'trace_84f2',
       groupId: 'checkout',
       method: 'POST',
       path: '/orders',
@@ -106,6 +107,7 @@ describe('Database logging', () => {
 
     expect(row.message).toBe('boom');
     expect(row.type).toBe('http_error');
+    expect(row.traceId).toBe('trace_84f2');
     expect(row.groupId).toBe('checkout');
     expect(row.hasError).toBe(true);
     expect(row.timestamp).toBeInstanceOf(Date);
@@ -134,6 +136,7 @@ describe('Database logging', () => {
 
     expect(runtime.rows).toHaveLength(2);
     expect(runtime.rows.map((row) => row.message)).toEqual(['root-message', 'child-message']);
+    expect(runtime.rows.every((row) => row.traceId === null)).toBe(true);
     expect(runtime.rows[1]?.bindings).toMatchObject({ service: 'payments' });
     expect(fs.existsSync(path.join(tempDir, 'log.ndjson'))).toBe(false);
   });

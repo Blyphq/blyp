@@ -23,12 +23,14 @@ describe('Fastify Integration', () => {
 
   it('decorates requests with blypLog and logs successful requests', async () => {
     const app = Fastify();
+    let requestTraceId = '';
     await app.register(createFastifyLogger({
       logDir: tempDir,
       pretty: false,
       customProps: () => ({ framework: 'fastify' }),
     }));
     app.get('/hello', async (request) => {
+      requestTraceId = request.blypTraceId ?? '';
       request.blypLog.info('fastify-route');
       return { ok: true };
     });
@@ -40,6 +42,9 @@ describe('Fastify Integration', () => {
     await waitForFileFlush();
 
     expect(response.statusCode).toBe(200);
+    const traceId = response.headers['x-blyp-trace-id'];
+    expect(requestTraceId).toBe(traceId);
+    expect(traceId).toMatch(/^trace_/);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
@@ -48,6 +53,7 @@ describe('Fastify Integration', () => {
 
     expect(records.some((record) => record.message === 'fastify-route')).toBe(true);
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('fastify');
+    expect(requestRecord?.traceId).toBe(traceId);
     await app.close();
   });
 

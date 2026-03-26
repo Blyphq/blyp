@@ -8,6 +8,7 @@ import type {
 
 export interface HonoLoggerVariables {
   blypLog: BlypLogger;
+  blypTraceId?: string;
   blypStartTime?: number;
 }
 

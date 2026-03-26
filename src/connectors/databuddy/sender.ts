@@ -166,6 +166,7 @@ function buildRecordProperties(
 
   const caller = typeof record.caller === 'string' ? record.caller : undefined;
   const groupId = getField<string>(record, 'groupId');
+  const traceId = getField<string>(record, 'traceId');
   const method = getField<string>(record, 'method');
   const path = getField<string>(record, 'path');
   const status = getField<number>(record, 'status');
@@ -179,6 +180,7 @@ function buildRecordProperties(
     ['blyp_type', getRecordType(record)],
     ['caller', caller],
     ['group_id', groupId],
+    ['trace_id', traceId],
     ['method', method],
     ['path', path],
     ['page_path', pagePath],

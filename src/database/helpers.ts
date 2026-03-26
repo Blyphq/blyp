@@ -40,6 +40,7 @@ export function toDatabaseLogRow(record: LogRecord): DatabaseLogRow {
     message: record.message,
     caller: normalizeNullableString(record.caller),
     type: normalizeNullableString(record.type),
+    traceId: normalizeNullableString(record.traceId),
     groupId: normalizeNullableString(record.groupId),
     method: normalizeNullableString(record.method),
     path: normalizeNullableString(record.path),

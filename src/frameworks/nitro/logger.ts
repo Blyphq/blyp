@@ -9,6 +9,7 @@ import type {
 } from '../../types/frameworks/nitro';
 import { enterRequestContext } from '../shared/request-context';
 import {
+  createRequestTraceId,
   createRequestScopedLogger,
   emitHttpErrorLog,
   emitHttpRequestLog,
@@ -17,6 +18,7 @@ import {
   isErrorStatus,
   resolveAdditionalProps,
   resolveServerLogger,
+  setActiveRequestTraceId,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
   toErrorLike,
@@ -113,12 +115,21 @@ function buildFactory(shared: ReturnType<typeof resolveServerLogger<NitroLoggerC
       await nitroApp.hooks.hook('request', async (eventArg: unknown) => {
         const event = eventArg as NitroEventLike;
         enterRequestContext();
+        const traceId = createRequestTraceId();
+        setActiveRequestTraceId(traceId);
+        if (typeof event.node?.res === 'object' && event.node.res && 'setHeader' in event.node.res) {
+          (event.node.res as { setHeader?: (name: string, value: string) => void }).setHeader?.(
+            'x-blyp-trace-id',
+            traceId
+          );
+        }
         const path = getNitroPath(event);
         let state = setNitroState(event, {
           startTime: performance.now(),
           path,
           structuredLogEmitted: false,
         });
+        event.context.blypTraceId = traceId;
         const scopedLogger = createRequestScopedLogger(shared.logger, {
           resolveStructuredFields: () => ({
             method: getNitroMethod(event),
@@ -156,6 +167,10 @@ function buildFactory(shared: ReturnType<typeof resolveServerLogger<NitroLoggerC
       });
     },
     clientLogHandler: async (event: NitroEventLike) => {
+      enterRequestContext();
+      const traceId = createRequestTraceId();
+      setActiveRequestTraceId(traceId);
+      event.context.blypTraceId = traceId;
       const path = getNitroPath(event);
       if (path !== shared.ingestionPath) {
         return new Response(
@@ -164,7 +179,10 @@ function buildFactory(shared: ReturnType<typeof resolveServerLogger<NitroLoggerC
           }),
           {
             status: 500,
-            headers: { 'content-type': 'application/json' },
+            headers: {
+              'content-type': 'application/json',
+              'x-blyp-trace-id': traceId,
+            },
           }
         );
       }
@@ -184,7 +202,10 @@ function buildFactory(shared: ReturnType<typeof resolveServerLogger<NitroLoggerC
       await flushServerLoggerSafely(shared);
       return new Response(null, {
         status: result.status,
-        headers: result.headers,
+        headers: {
+          ...result.headers,
+          'x-blyp-trace-id': traceId,
+        },
       });
     },
   };

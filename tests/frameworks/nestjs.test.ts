@@ -30,13 +30,14 @@ import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 @Controller()
 class NestTestController {
   @Get('/hello')
-  hello(@Req() request: { blypLog?: { info(message: string): void } }) {
+  hello(@Req() request: { blypLog?: { info(message: string): void }; blypTraceId?: string }) {
     request.blypLog?.info('nest-request');
     logger.info('nest-route');
 
     return {
       ok: true,
       hasLogger: Boolean(request.blypLog),
+      traceId: request.blypTraceId,
     };
   }
 
@@ -133,7 +134,7 @@ describe('NestJS Integration', () => {
       await waitForFileFlush();
 
       expect(helloResponse.status).toBe(200);
-      expect(helloBody).toEqual({ ok: true, hasLogger: true });
+      expect(helloBody).toEqual({ ok: true, hasLogger: true, traceId: helloResponse.headers.get('x-blyp-trace-id') });
       expect(postResponse.status).toBe(201);
       expect(postBody).toEqual({
         ok: true,
@@ -154,6 +155,7 @@ describe('NestJS Integration', () => {
       expect(records.some((record) => record.message === 'nest-route')).toBe(true);
       expect(records.some((record) => record.message === 'nest-request')).toBe(true);
       expect(records.some((record) => record.message === 'nest-post')).toBe(true);
+      expect(helloRecord?.traceId).toBe(helloResponse.headers.get('x-blyp-trace-id'));
       expect((helloRecord?.data as Record<string, unknown>)?.adapter).toBe('express');
       expect((helloRecord?.data as Record<string, unknown>)?.controllerName).toBe('NestTestController');
       expect((helloRecord?.data as Record<string, unknown>)?.handlerName).toBe('hello');

@@ -1,13 +1,17 @@
 import { Inject, Injectable, type NestMiddleware } from '@nestjs/common';
 import {
+  BLYP_TRACE_HEADER,
+  createRequestTraceId,
   createRequestScopedLogger,
   handleClientLogIngestion,
   enterRequestContext,
   resolveAdditionalProps,
+  setActiveRequestTraceId,
 } from '../shared';
 import { BLYP_NEST_LOGGER } from './constants';
 import {
   attachNestRequestLogger,
+  attachNestRequestTraceId,
   buildNestRequestLike,
   createNestLoggerContext,
   getNestRequestMethod,
@@ -33,7 +37,13 @@ export class BlypNestMiddleware implements NestMiddleware {
     next: (error?: unknown) => void
   ): void {
     enterRequestContext();
+    const traceId = createRequestTraceId();
+    setActiveRequestTraceId(traceId);
     setNestStructuredLogEmitted(request, false);
+    attachNestRequestTraceId(request, traceId);
+    setNestResponseHeaders(response, {
+      [BLYP_TRACE_HEADER]: traceId,
+    });
     attachNestRequestLogger(
       request,
       createRequestScopedLogger(this.state.logger, {

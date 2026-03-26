@@ -284,6 +284,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
       type: 'client_log',
       source: 'client',
       id: createRandomId(),
+      traceId: state.traceId,
       level: normalizedLevel,
       message: normalizedMessage,
       connector: resolvedConfig.connector,
@@ -336,6 +337,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
           ...state.bindings,
           ...bindings,
         },
+        traceId: state.traceId,
         delivery,
       });
     },
@@ -347,6 +349,7 @@ export function createClientLogger(config: ClientLoggerConfig = {}): ClientLogge
     pageId: createRandomId(),
     sessionId: getClientSessionId(),
     bindings: {},
+    traceId: config.traceId,
   });
 }
 

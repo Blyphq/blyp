@@ -44,6 +44,8 @@ export interface ReactRouterLoggerFactory {
   clientLogHandler: (request: Request) => Promise<Response>;
   getLogger: (context: ReactRouterContextStore) => BlypLogger;
   setLogger: (context: ReactRouterContextStore, logger: BlypLogger) => void;
+  getTraceId: (context: ReactRouterContextStore) => string | undefined;
+  setTraceId: (context: ReactRouterContextStore, traceId: string) => void;
 }
 
 export type { HttpRequestLog };

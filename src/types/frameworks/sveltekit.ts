@@ -7,6 +7,7 @@ import type {
 
 export interface SvelteKitLocals {
   blypLog?: BlypLogger;
+  blypTraceId?: string;
   [key: string]: unknown;
 }
 

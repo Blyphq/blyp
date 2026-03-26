@@ -6,6 +6,7 @@ import {
   sanitizeLogMessage,
   sanitizeLogValue,
 } from '../shared/redaction';
+import { getActiveRequestTraceId } from '../frameworks/shared/request-context';
 import type { LogMethodName } from '../types/core/log-record';
 import type { ResolvedRedactionConfig } from '../types/core/config';
 
@@ -115,6 +116,7 @@ export function buildRecord(
     level: RECORD_LEVELS[level],
     message: stripAnsi(serializedMessage),
   };
+  const traceId = getActiveRequestTraceId();
 
   if (message instanceof Error) {
     record.error = sanitizeLogValue(normalizeError(message), redaction);
@@ -134,6 +136,10 @@ export function buildRecord(
     record.bindings = sanitizeLogValue(bindings, redaction) as Record<string, unknown>;
   }
 
+  if (traceId) {
+    record.traceId = traceId;
+  }
+
   return record;
 }
 
@@ -146,6 +152,7 @@ export function buildStructuredRecord(
 ): LogRecord {
   const { file, line } = getCallerLocation();
   const normalizedPayload = sanitizeLogValue(payload, redaction) as StructuredLogPayload;
+  const traceId = getActiveRequestTraceId();
   const record: LogRecord = {
     message: stripAnsi(serializeMessage(message, redaction)),
     ...normalizedPayload,
@@ -157,6 +164,10 @@ export function buildStructuredRecord(
 
   if (Object.keys(bindings).length > 0) {
     record.bindings = sanitizeLogValue(bindings, redaction) as Record<string, unknown>;
+  }
+
+  if (traceId && record.traceId === undefined) {
+    record.traceId = traceId;
   }
 
   record.level =

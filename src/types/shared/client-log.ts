@@ -47,6 +47,7 @@ export interface ClientLogEvent {
   type: 'client_log';
   source: 'client';
   id: string;
+  traceId?: string;
   level: ClientLogLevel;
   message: string;
   connector?: ClientConnectorRequest;

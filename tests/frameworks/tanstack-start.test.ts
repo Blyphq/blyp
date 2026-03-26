@@ -26,11 +26,14 @@ describe('TanStack Start Integration', () => {
       pretty: false,
       customProps: () => ({ framework: 'tanstack-start' }),
     });
+    let middlewareTraceId = '';
 
     const response = await tanstackLogger.requestMiddleware({
       request: new Request('http://localhost/posts'),
       context: {},
       next: async (options) => {
+        middlewareTraceId = String(options?.context?.blypTraceId ?? '');
+        expect(options?.context?.blypTraceId).toMatch(/^trace_/);
         (options?.context?.blypLog as { info(message: string): void }).info('tanstack-route');
         return new Response('ok', { status: 200 });
       },
@@ -38,6 +41,8 @@ describe('TanStack Start Integration', () => {
     await waitForFileFlush();
 
     expect(response.status).toBe(200);
+    const traceId = response.headers.get('x-blyp-trace-id');
+    expect(middlewareTraceId).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
@@ -46,6 +51,7 @@ describe('TanStack Start Integration', () => {
 
     expect(records.some((record) => record.message === 'tanstack-route')).toBe(true);
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('tanstack-start');
+    expect(requestRecord?.traceId).toBe(traceId);
   });
 
   it('logs failing responses and supports ignorePaths', async () => {

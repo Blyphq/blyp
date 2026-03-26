@@ -2,7 +2,9 @@ import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 import type { FastifyLoggerConfig } from '../../types/frameworks/fastify';
 import {
+  BLYP_TRACE_HEADER,
   buildAbsoluteUrl,
+  createRequestTraceId,
   createRequestScopedLogger,
   createRequestLike,
   enterRequestContext,
@@ -13,6 +15,7 @@ import {
   isErrorStatus,
   resolveAdditionalProps,
   resolveServerLogger,
+  setActiveRequestTraceId,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
   toErrorLike,
@@ -34,17 +37,24 @@ export function createFastifyLogger(
       },
     });
     fastify.decorateRequest('blypStartTime', undefined);
+    fastify.decorateRequest('blypTraceId', undefined);
     fastify.decorateRequest('blypError', undefined);
     fastify.decorateRequest('blypStructuredLogEmitted', undefined);
 
     fastify.addHook('onRequest', async (request) => {
       enterRequestContext();
+      const traceId = createRequestTraceId();
+      setActiveRequestTraceId(traceId);
       request.blypStartTime = performance.now();
+      request.blypTraceId = traceId;
       request.blypError = undefined;
       request.blypStructuredLogEmitted = false;
     });
 
-    fastify.addHook('preHandler', async (request) => {
+    fastify.addHook('preHandler', async (request, reply) => {
+      if (request.blypTraceId) {
+        reply.header(BLYP_TRACE_HEADER, request.blypTraceId);
+      }
       request.blypLog = createRequestScopedLogger(shared.logger, {
         resolveStructuredFields: () => ({
           method: request.method,
