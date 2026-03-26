@@ -83,6 +83,27 @@ describe('Fastify Integration', () => {
     await app.close();
   });
 
+  it('sets the trace header for failures before preHandler runs', async () => {
+    const app = Fastify();
+    await app.register(createFastifyLogger({
+      logDir: tempDir,
+      pretty: false,
+    }));
+    app.addHook('preValidation', async () => {
+      throw new Error('fastify-prevalidation-fail');
+    });
+    app.get('/prevalidation-boom', async () => ({ ok: true }));
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/prevalidation-boom',
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.headers['x-blyp-trace-id']).toMatch(/^trace_/);
+    await app.close();
+  });
+
   it('ingests client logs and rejects malformed payloads', async () => {
     const app = Fastify();
     await app.register(createFastifyLogger({

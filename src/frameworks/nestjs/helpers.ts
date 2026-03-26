@@ -170,6 +170,30 @@ export function attachNestRequestTraceId(request: unknown, traceId: string): voi
   }
 
   request.blypTraceId = traceId;
+
+  if (isPlainObject(request.raw)) {
+    request.raw.blypTraceId = traceId;
+  }
+}
+
+export function getNestRequestTraceId(request: unknown): string | undefined {
+  if (!isPlainObject(request)) {
+    return undefined;
+  }
+
+  if (typeof request.blypTraceId === 'string' && request.blypTraceId.length > 0) {
+    return request.blypTraceId;
+  }
+
+  if (
+    isPlainObject(request.raw) &&
+    typeof request.raw.blypTraceId === 'string' &&
+    request.raw.blypTraceId.length > 0
+  ) {
+    return request.raw.blypTraceId;
+  }
+
+  return undefined;
 }
 
 export function buildNestRequestLike(request: unknown) {

@@ -19,11 +19,13 @@ import {
 import { BLYP_NEST_LOGGER } from './constants';
 import {
   attachNestRequestLogger,
+  attachNestRequestTraceId,
   buildNestRequestLike,
   createNestLoggerContext,
   getNestStructuredLogEmitted,
   getNestRequestPath,
   getNestRequestStartTime,
+  getNestRequestTraceId,
   getNestResponseStatus,
   setNestRequestStartTime,
 } from './helpers';
@@ -52,6 +54,11 @@ export class BlypNestInterceptor implements NestInterceptor {
 
     if (!request.blypLog) {
       attachNestRequestLogger(request, this.state.logger);
+    }
+
+    const traceId = getNestRequestTraceId(request);
+    if (!request.blypTraceId && traceId) {
+      attachNestRequestTraceId(request, traceId);
     }
 
     if (getNestRequestStartTime(request) === undefined) {

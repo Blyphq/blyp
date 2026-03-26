@@ -41,20 +41,18 @@ export function createFastifyLogger(
     fastify.decorateRequest('blypError', undefined);
     fastify.decorateRequest('blypStructuredLogEmitted', undefined);
 
-    fastify.addHook('onRequest', async (request) => {
+    fastify.addHook('onRequest', async (request, reply) => {
       enterRequestContext();
       const traceId = createRequestTraceId();
       setActiveRequestTraceId(traceId);
       request.blypStartTime = performance.now();
       request.blypTraceId = traceId;
+      reply.header(BLYP_TRACE_HEADER, traceId);
       request.blypError = undefined;
       request.blypStructuredLogEmitted = false;
     });
 
-    fastify.addHook('preHandler', async (request, reply) => {
-      if (request.blypTraceId) {
-        reply.header(BLYP_TRACE_HEADER, request.blypTraceId);
-      }
+    fastify.addHook('preHandler', async (request) => {
       request.blypLog = createRequestScopedLogger(shared.logger, {
         resolveStructuredFields: () => ({
           method: request.method,

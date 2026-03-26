@@ -31,8 +31,8 @@ export function createRequestScopedLogger(
         resolveDefaultFields: () => {
           const traceId = getActiveRequestTraceId();
           return {
-            ...(traceId ? { traceId } : {}),
             ...(options.resolveStructuredFields?.() ?? {}),
+            ...(traceId ? { traceId } : {}),
           };
         },
         onCreate: () => {

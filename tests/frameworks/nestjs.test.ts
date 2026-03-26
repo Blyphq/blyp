@@ -174,6 +174,7 @@ describe('NestJS Integration', () => {
     try {
       const helloResponse = await fetch(`${app.baseUrl}/hello`);
       const helloBody = await helloResponse.json();
+      const traceId = helloResponse.headers.get('x-blyp-trace-id');
       const ingestionResponse = await fetch(`${app.baseUrl}/inngest`, {
         method: 'POST',
         headers: {
@@ -184,7 +185,8 @@ describe('NestJS Integration', () => {
       await waitForFileFlush();
 
       expect(helloResponse.status).toBe(200);
-      expect(helloBody).toEqual({ ok: true, hasLogger: true });
+      expect(traceId).toMatch(/^trace_/);
+      expect(helloBody).toEqual({ ok: true, hasLogger: true, traceId });
       expect(ingestionResponse.status).toBe(204);
 
       const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
@@ -198,6 +200,7 @@ describe('NestJS Integration', () => {
       });
 
       expect((helloRecord?.data as Record<string, unknown>)?.method).toBe('GET');
+      expect(helloRecord?.traceId).toBe(traceId);
       expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
       expect(duplicateIngestionRecord).toBeUndefined();
     } finally {

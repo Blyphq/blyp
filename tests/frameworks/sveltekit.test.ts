@@ -43,6 +43,7 @@ describe('SvelteKit Integration', () => {
 
     expect(response.status).toBe(200);
     const traceId = response.headers.get('x-blyp-trace-id');
+    expect(traceId).toMatch(/^trace_/);
     expect(event.locals.blypTraceId).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
