@@ -6,6 +6,7 @@ This document contains detailed usage, all framework integrations, configuration
 
 ## Table of contents
 
+- [Security](#security)
 - [Basic logger usage](#basic-logger-usage)
 - [Structured request batches](#structured-request-batches)
 - [Automatic redaction](#automatic-redaction)
@@ -25,6 +26,10 @@ This document contains detailed usage, all framework integrations, configuration
 - [Performance](#performance)
 
 ---
+
+## Security
+
+For responsible disclosure, scope, and maintainer response commitments, see [SECURITY.md](../SECURITY.md). Suspected vulnerabilities should be reported through GitHub's private advisory flow rather than public issues.
 
 ## Basic logger usage
 

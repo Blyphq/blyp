@@ -1,17 +1,14 @@
-name: Publish Package
+name: Security Audit
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - main
+  pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
-  publish:
+  audit:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,21 +22,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Type-check
-        run: bun run type-check
-
-      - name: Run tests
-        run: bun run test
-
       - name: Audit production dependencies
         run: bash .github/scripts/audit-production-deps.sh
-
-      - name: Publish package
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
