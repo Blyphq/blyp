@@ -1,0 +1,227 @@
+{
+  "metadata": {
+    "generatedAtUtc": "2026-03-26T14:31:50.656Z",
+    "gitSha": "82cb03e1a836e8ea3c66fdeffd35c87e9cb4f18b",
+    "bunVersion": "1.3.9",
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "AMD Ryzen 7 7445HS w/ Radeon 740M Graphics",
+    "cpuCount": 12,
+    "hostname": "pop-os",
+    "runnerType": "local"
+  },
+  "throughput": [
+    {
+      "id": "plain-throughput",
+      "name": "Baseline throughput",
+      "description": "Plain logger.info('message') with no connectors and no real I/O.",
+      "zeroIoValidated": true,
+      "zeroIoNotes": "Validated with internal no-op destination + sink and a real-I/O guard.",
+      "libraries": {
+        "blyp": {
+          "opsPerSecond": 84562.43327011631,
+          "avgNanoseconds": 11825.58213297526,
+          "minNanoseconds": 8851.191162109375,
+          "maxNanoseconds": 14461.739990234375,
+          "p75Nanoseconds": 13025.951904296875,
+          "p99Nanoseconds": 14205.940673828125,
+          "samples": 12
+        },
+        "pino": {
+          "opsPerSecond": 1672468.3729121615,
+          "avgNanoseconds": 597.9186310463763,
+          "minNanoseconds": 373.0390625,
+          "maxNanoseconds": 1483.2236328125,
+          "p75Nanoseconds": 639.889404296875,
+          "p99Nanoseconds": 1448.529296875,
+          "samples": 94
+        },
+        "winston": {
+          "opsPerSecond": 333778.0556509065,
+          "avgNanoseconds": 2996.00283203125,
+          "minNanoseconds": 2019.533935546875,
+          "maxNanoseconds": 4661.641845703125,
+          "p75Nanoseconds": 3120.186279296875,
+          "p99Nanoseconds": 4392.33837890625,
+          "samples": 15
+        }
+      },
+      "blypVsPinoRatio": 0.050561454338818486,
+      "blypVsPinoPercent": -94.94385456611815,
+      "passed": false
+    },
+    {
+      "id": "structured-throughput",
+      "name": "Structured log throughput",
+      "description": "Equivalent structured event emission with field accumulation and a final emit/log call.",
+      "zeroIoValidated": true,
+      "zeroIoNotes": "Validated with internal no-op destination and equivalent structured-object emission.",
+      "libraries": {
+        "blyp": {
+          "opsPerSecond": 24321.161038392067,
+          "avgNanoseconds": 41116.45815022787,
+          "minNanoseconds": 37240.8359375,
+          "maxNanoseconds": 58362.547119140625,
+          "p75Nanoseconds": 41749.1591796875,
+          "p99Nanoseconds": 44520.871826171875,
+          "samples": 12
+        },
+        "pino": {
+          "opsPerSecond": 796543.7468982245,
+          "avgNanoseconds": 1255.423828125,
+          "minNanoseconds": 1036.857666015625,
+          "maxNanoseconds": 1939.145751953125,
+          "p75Nanoseconds": 1315.27294921875,
+          "p99Nanoseconds": 1853.620849609375,
+          "samples": 54
+        },
+        "winston": {
+          "opsPerSecond": 257520.5126221,
+          "avgNanoseconds": 3883.185808454241,
+          "minNanoseconds": 3594.421875,
+          "maxNanoseconds": 4951.2060546875,
+          "p75Nanoseconds": 3846.603271484375,
+          "p99Nanoseconds": 4707.497314453125,
+          "samples": 14
+        }
+      },
+      "blypVsPinoRatio": 0.030533365095262766,
+      "blypVsPinoPercent": -96.94666349047372,
+      "passed": false
+    },
+    {
+      "id": "file-throughput",
+      "name": "File destination throughput",
+      "description": "Real NDJSON file logging to a temporary directory with steady-state append behavior.",
+      "zeroIoValidated": false,
+      "zeroIoNotes": "Not applicable: this scenario intentionally performs file I/O.",
+      "libraries": {
+        "blyp": {
+          "opsPerSecond": 45657.92785613225,
+          "avgNanoseconds": 21902.001403808594,
+          "minNanoseconds": 18327.73046875,
+          "maxNanoseconds": 29003.98046875,
+          "p75Nanoseconds": 26169.34912109375,
+          "p99Nanoseconds": 27645.1416015625,
+          "samples": 12
+        },
+        "pino": {
+          "opsPerSecond": 403309.20211063506,
+          "avgNanoseconds": 2479.4871893988716,
+          "minNanoseconds": 2280.227783203125,
+          "maxNanoseconds": 2980.968994140625,
+          "p75Nanoseconds": 2579.490234375,
+          "p99Nanoseconds": 2977.72802734375,
+          "samples": 36
+        },
+        "winston": {
+          "opsPerSecond": 17906466.401978932,
+          "avgNanoseconds": 55.845747427280514,
+          "minNanoseconds": 21.165283203125,
+          "maxNanoseconds": 426.67041015625,
+          "p75Nanoseconds": 77.345458984375,
+          "p99Nanoseconds": 122.227294921875,
+          "samples": 766
+        }
+      },
+      "blypVsPinoRatio": 0.1132082472137778,
+      "blypVsPinoPercent": -88.67917527862222,
+      "passed": false,
+      "bytesWritten": {
+        "blyp": 9536264,
+        "pino": 16384200,
+        "winston": 196980
+      }
+    }
+  ],
+  "memory": [
+    {
+      "id": "at-rest",
+      "name": "Heap at rest after logger creation",
+      "libraries": {
+        "blyp": {
+          "heapUsedBytes": 3675293,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        },
+        "pino": {
+          "heapUsedBytes": 3710621,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        },
+        "winston": {
+          "heapUsedBytes": 3663599,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        }
+      }
+    },
+    {
+      "id": "plain-burst",
+      "name": "Heap delta after plain logging burst",
+      "libraries": {
+        "blyp": {
+          "heapUsedBytes": 3679646,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        },
+        "pino": {
+          "heapUsedBytes": 3680725,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        },
+        "winston": {
+          "heapUsedBytes": 3691533,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        }
+      }
+    },
+    {
+      "id": "structured-burst",
+      "name": "Heap delta after structured logging burst",
+      "libraries": {
+        "blyp": {
+          "heapUsedBytes": 7018780,
+          "heapDeltaBytes": 3336210,
+          "gcAvailable": true
+        },
+        "pino": {
+          "heapUsedBytes": 3682589,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        },
+        "winston": {
+          "heapUsedBytes": 3094125,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        }
+      }
+    },
+    {
+      "id": "file-burst",
+      "name": "Heap delta after file logging burst",
+      "libraries": {
+        "blyp": {
+          "heapUsedBytes": 3674467,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        },
+        "pino": {
+          "heapUsedBytes": 3697163,
+          "heapDeltaBytes": 0,
+          "gcAvailable": true
+        },
+        "winston": {
+          "heapUsedBytes": 8272344,
+          "heapDeltaBytes": 4565763,
+          "gcAvailable": true
+        }
+      }
+    }
+  ],
+  "notes": [
+    "Pino is the primary baseline because Blyp builds on top of it.",
+    "Winston is included as the incumbent comparison."
+  ]
+}

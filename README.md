@@ -4,7 +4,7 @@
 
 > *The silent observer for your applications*
 
-**Blyp** is a high-performance, runtime-adaptive logger for standalone apps and modern TypeScript web frameworks. It combines Bun-friendly runtime detection, structured NDJSON file logging, browser-to-server log ingestion, and framework-specific HTTP logging helpers.
+**Blyp** is a performance-focused, runtime-adaptive logger for standalone apps and modern TypeScript web frameworks. It combines Bun-friendly runtime detection, structured NDJSON file logging, browser-to-server log ingestion, and framework-specific HTTP logging helpers.
 
 [![Bun](https://img.shields.io/badge/Bun-1.2+-000000?style=flat&logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org)
@@ -719,6 +719,29 @@ const logger = createExpoLogger({
 The browser and Expo OTLP flows still post to Blyp first. Blyp forwards to the named OTLP target only when that server connector is configured and ready.
 
 Log levels, HTTP request logging, and file logging (rotation, archives, reading stored logs) are documented in [docs](docs/README.md#file-logging).
+
+<!-- benchmarks:start -->
+## Performance Benchmarks
+
+Snapshot generated from `82cb03e1a836e8ea3c66fdeffd35c87e9cb4f18b` on 2026-03-26T14:31:50.656Z.
+
+Bun `1.3.9` on AMD Ryzen 7 7445HS w/ Radeon 740M Graphics (linux/x64).
+
+| Scenario | Blyp | Pino | Winston | Blyp vs Pino |
+|---|---:|---:|---:|---:|
+| Baseline throughput | 84,562 | 1,672,468 | 333,778 | -94.9% |
+| Structured log throughput | 24,321 | 796,544 | 257,521 | -96.9% |
+| File destination throughput | 45,658 | 403,309 | 17,906,466 | -88.7% |
+
+| Scenario | Blyp heap delta | Pino heap delta | Winston heap delta |
+|---|---:|---:|---:|
+| Heap at rest after logger creation | 0 | 0 | 0 |
+| Heap delta after plain logging burst | 0 | 0 | 0 |
+| Heap delta after structured logging burst | 3,336,210 | 0 | 0 |
+| Heap delta after file logging burst | 0 | 0 | 4,565,763 |
+
+Methodology: [benchmarks/README.md](benchmarks/README.md). Release benchmarking publishes fresh CI artifacts and updates the release notes section for traceability.
+<!-- benchmarks:end -->
 
 ## Testing
 

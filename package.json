@@ -262,6 +262,10 @@
     "test": "bun test tests/",
     "test:watch": "bun test tests/ --watch",
     "test:all": "bun test tests/",
+    "benchmark": "bun run benchmarks/run.ts",
+    "benchmark:json": "bun run benchmarks/run.ts --json-only",
+    "benchmark:report": "bun run benchmarks/report.ts",
+    "benchmark:update-docs": "bun run benchmarks/report.ts --update-docs",
     "build": "bun run build:js && bun run build:types",
     "build:js": "tsup",
     "build:types": "bun run tsc --project tsconfig.build.json",
@@ -285,9 +289,11 @@
     "fastify": "^5.6.1",
     "fastify-plugin": "^5.1.0",
     "hono": "^4.10.2",
+    "mitata": "^1.0.34",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "tsup": "^8.5.0"
+    "tsup": "^8.5.0",
+    "winston": "^3.18.3"
   },
   "peerDependencies": {
     "@databuddy/sdk": "^2",

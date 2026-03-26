@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -34,6 +34,43 @@ jobs:
 
       - name: Run tests
         run: bun run test
+
+      - name: Run benchmarks
+        run: bun run benchmark
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: |
+            benchmarks/results/latest.json
+            benchmarks/results/latest.md
+
+      - name: Update release benchmark section
+        if: github.event_name == 'release'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const release = context.payload.release;
+            const markerStart = '<!-- blyp-benchmarks:start -->';
+            const markerEnd = '<!-- blyp-benchmarks:end -->';
+            const benchmarkMarkdown = fs.readFileSync('benchmarks/results/latest.md', 'utf8');
+            const nextSection = `${markerStart}\n${benchmarkMarkdown}\n${markerEnd}`;
+            const currentBody = release.body || '';
+            const hasSection = currentBody.includes(markerStart) && currentBody.includes(markerEnd);
+            const body = hasSection
+              ? currentBody.replace(new RegExp(`${markerStart}[\\s\\S]*${markerEnd}`), nextSection)
+              : `${currentBody}\n\n${nextSection}`.trim();
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              body,
+            });
 
       - name: Publish package
         run: npm publish --access public

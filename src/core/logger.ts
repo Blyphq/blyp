@@ -1,4 +1,5 @@
 import pino from 'pino';
+import type { DestinationStream } from 'pino';
 import { loadOptionalModule } from './optional-module';
 import { shouldDropRootLogWrite } from '../frameworks/shared/request-context';
 import { sanitizeLogValue } from '../shared/redaction';
@@ -80,6 +81,12 @@ interface SentrySenderModule {
 
 interface OTLPSenderModule {
   createOTLPRegistry: (config: BlypConfig) => OTLPRegistry;
+}
+
+interface InternalBaseLoggerDependencies {
+  rawLogger?: ReturnType<typeof pino>;
+  sink?: BlypPrimarySink;
+  pinoDestination?: DestinationStream;
 }
 
 function isClientLogRecord(record: LogRecord): boolean {
@@ -313,7 +320,10 @@ function getConsoleDataPayload(data: unknown): { hidden: boolean; value?: unknow
   return { hidden: false, value: data };
 }
 
-function createPinoLogger(config: BlypConfig) {
+export function createInternalPinoLogger(
+  config: BlypConfig,
+  destination?: DestinationStream
+) {
   if (config.pretty) {
     const pinoPretty = require('pino-pretty');
     const pretty = pinoPretty.default({
@@ -345,7 +355,17 @@ function createPinoLogger(config: BlypConfig) {
         level: config.level,
         customLevels: CUSTOM_LEVELS,
       },
-      pretty
+      destination ?? pretty
+    );
+  }
+
+  if (destination) {
+    return pino(
+      {
+        level: config.level,
+        customLevels: CUSTOM_LEVELS,
+      },
+      destination
     );
   }
 
@@ -767,14 +787,24 @@ function createLoggerInstance(
 
 let loggerInstance: BlypLogger | null = null;
 
-export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
-  if (config === undefined && loggerInstance) {
+export function createInternalBaseLogger(
+  config?: Partial<BlypConfig>,
+  dependencies: InternalBaseLoggerDependencies = {}
+): BlypLogger {
+  const hasInternalDependencies =
+    dependencies.rawLogger !== undefined ||
+    dependencies.sink !== undefined ||
+    dependencies.pinoDestination !== undefined;
+
+  if (config === undefined && loggerInstance && !hasInternalDependencies) {
     return loggerInstance;
   }
 
   const resolvedConfig = resolveConfig(config);
-  const rawLogger = createPinoLogger(resolvedConfig);
-  const sink = createPrimarySink(resolvedConfig);
+  const rawLogger =
+    dependencies.rawLogger ??
+    createInternalPinoLogger(resolvedConfig, dependencies.pinoDestination);
+  const sink = dependencies.sink ?? createPrimarySink(resolvedConfig);
   const betterstack = createBetterStackSenderForConfig(resolvedConfig);
   const databuddy = createDatabuddySenderForConfig(resolvedConfig);
   const posthog = createPostHogSenderForConfig(resolvedConfig);
@@ -807,11 +837,15 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
     resolvedConfig.redact
   );
 
-  if (config === undefined) {
+  if (config === undefined && !hasInternalDependencies) {
     loggerInstance = instance;
   }
 
   return instance;
+}
+
+export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
+  return createInternalBaseLogger(config);
 }
 
 export const logger = createBaseLogger();
