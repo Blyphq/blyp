@@ -264,11 +264,11 @@ describe('package surface', () => {
     const packageJson = readPackageJson();
 
     expect(packageJson.dependencies).toEqual({
-      fflate: '^0.8.2',
-      jiti: '^2.4.2',
-      pino: '^9.0.0',
-      'pino-pretty': '^11.0.0',
-      zod: '^3.25.76',
+      fflate: '0.8.2',
+      jiti: '2.6.1',
+      pino: '9.14.0',
+      'pino-pretty': '11.3.0',
+      zod: '3.25.76',
     });
   });
 });
