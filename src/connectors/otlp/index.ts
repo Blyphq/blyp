@@ -12,6 +12,7 @@ import {
 } from '../../core/structured-log';
 import {
   createOTLPRegistry,
+  normalizeOTLPRecord,
 } from './sender';
 import type {
   OTLPLogger,
@@ -23,6 +24,7 @@ export type {
   OTLPLogger,
   OTLPLoggerConfig,
 } from '../../types/connectors/otlp';
+export { normalizeOTLPRecord } from './sender';
 
 function resolveSender(config: OTLPLoggerConfig = { name: '' }): OTLPSender {
   const registry = createOTLPRegistry(resolveConfig({

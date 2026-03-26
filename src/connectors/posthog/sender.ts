@@ -35,6 +35,10 @@ import type {
   PostHogTestHooks
 } from '../../types/connectors/posthog';
 import {
+  buildPostHogExceptionProperties,
+  buildPostHogRecordAttributes,
+} from './properties';
+import {
   getClientPageField,
   getClientSessionField,
   getField,
@@ -51,49 +55,6 @@ const warnOnce = createErrorOnceLogger(warnedKeys);
 function normalizeHost(host: string | undefined): string {
   const trimmed = (host || 'https://us.i.posthog.com').trim();
   return trimmed.replace(/\/+$/, '');
-}
-
-function buildRecordAttributes(
-  record: LogRecord,
-  source: PostHogSource
-): Record<string, unknown> {
-  const recordType = getRecordType(record);
-  const caller = typeof record.caller === 'string' ? record.caller : undefined;
-  const groupId = getField<string>(record, 'groupId');
-  const method = getField<string>(record, 'method');
-  const path = getField<string>(record, 'path');
-  const status = getField<number>(record, 'status');
-  const duration = getField<number>(record, 'duration');
-  const pagePath = getClientPageField(record, 'pathname');
-  const pageUrl = getClientPageField(record, 'url');
-  const sessionId = getClientSessionField(record, 'sessionId');
-  const pageId = getClientSessionField(record, 'pageId');
-
-  const attributes: Record<string, unknown> = {
-    'blyp.level': record.level,
-    'blyp.source': source,
-    'blyp.payload': serializeLogRecord(record),
-  };
-
-  const ifTruthy: Array<[string, unknown]> = [
-    ['blyp.type', recordType],
-    ['blyp.caller', caller],
-    ['blyp.group_id', groupId],
-    ['http.method', method],
-    ['url.path', path],
-    ['client.page_path', pagePath],
-    ['client.page_url', pageUrl],
-    ['client.session_id', sessionId],
-    ['client.page_id', pageId],
-  ];
-  const ifDefined: Array<[string, unknown]> = [
-    ['http.status_code', status],
-    ['blyp.duration_ms', duration],
-  ];
-  for (const [k, v] of ifTruthy) if (v) attributes[k] = v;
-  for (const [k, v] of ifDefined) if (v !== undefined) attributes[k] = v;
-
-  return attributes;
 }
 
 function normalizeExceptionProperties(value: unknown): Record<string, unknown> {
@@ -187,7 +148,7 @@ function createExceptionPropertiesFromRecord(
   record: LogRecord,
   source: PostHogSource
 ): Record<string, unknown> {
-  return buildRecordAttributes(record, source);
+  return buildPostHogExceptionProperties(record, source);
 }
 
 export function isPreviouslyCapturedPostHogError(value: unknown): boolean {
@@ -228,7 +189,7 @@ export function normalizePostHogRecord(
     body,
     severityText: severity.text,
     severityNumber: severity.number,
-    attributes: buildRecordAttributes(record, source),
+    attributes: buildPostHogRecordAttributes(record, source),
     resourceAttributes: {
       'service.name': connector.serviceName,
     },
@@ -553,17 +514,6 @@ export function createPostHogSender(
   } as PostHogSender & ConnectorBatchDispatchTarget;
 
   return sender;
-}
-
-export function buildPostHogExceptionProperties(
-  record: LogRecord,
-  source: PostHogSource,
-  properties: Record<string, unknown> = {}
-): Record<string, unknown> {
-  return {
-    ...createExceptionPropertiesFromRecord(record, source),
-    ...properties,
-  };
 }
 
 export function setPostHogTestHooks(hooks: PostHogTestHooks): void {

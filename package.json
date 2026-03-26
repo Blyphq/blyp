@@ -23,241 +23,236 @@
   "homepage": "https://github.com/Blyphq/blyp#readme",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
-  "types": "./types/index.d.ts",
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "standalone": [
+        "dist/frameworks/standalone/index.d.ts"
+      ],
+      "elysia": [
+        "dist/frameworks/elysia/index.d.ts"
+      ],
+      "hono": [
+        "dist/frameworks/hono/index.d.ts"
+      ],
+      "express": [
+        "dist/frameworks/express/index.d.ts"
+      ],
+      "fastify": [
+        "dist/frameworks/fastify/index.d.ts"
+      ],
+      "nestjs": [
+        "dist/frameworks/nestjs/index.d.ts"
+      ],
+      "nextjs": [
+        "dist/frameworks/nextjs/index.d.ts"
+      ],
+      "react-router": [
+        "dist/frameworks/react-router/index.d.ts"
+      ],
+      "tanstack-start": [
+        "dist/frameworks/tanstack-start/index.d.ts"
+      ],
+      "sveltekit": [
+        "dist/frameworks/sveltekit/index.d.ts"
+      ],
+      "astro": [
+        "dist/frameworks/astro/index.d.ts"
+      ],
+      "nitro": [
+        "dist/frameworks/nitro/index.d.ts"
+      ],
+      "nuxt": [
+        "dist/frameworks/nuxt/index.d.ts"
+      ],
+      "ai/vercel": [
+        "dist/ai/vercel/index.d.ts"
+      ],
+      "ai/openai": [
+        "dist/ai/openai/index.d.ts"
+      ],
+      "ai/anthropic": [
+        "dist/ai/anthropic/index.d.ts"
+      ],
+      "ai/shared": [
+        "dist/ai/shared/index.d.ts"
+      ],
+      "ai/fetch": [
+        "dist/ai/shared/fetch.d.ts"
+      ],
+      "client": [
+        "dist/frameworks/client/index.d.ts"
+      ],
+      "expo": [
+        "dist/frameworks/expo/index.d.ts"
+      ],
+      "database": [
+        "dist/database/index.d.ts"
+      ],
+      "betterstack": [
+        "dist/connectors/betterstack/index.d.ts"
+      ],
+      "databuddy": [
+        "dist/connectors/databuddy/index.d.ts"
+      ],
+      "posthog": [
+        "dist/connectors/posthog/index.d.ts"
+      ],
+      "otlp": [
+        "dist/connectors/otlp/index.d.ts"
+      ],
+      "sentry": [
+        "dist/connectors/sentry/index.d.ts"
+      ],
+      "workers": [
+        "dist/frameworks/workers/index.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
-      "types": "./types/index.d.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
     "./standalone": {
-      "types": "./types/frameworks/standalone.d.ts",
-      "import": "./exports/frameworks/standalone.mjs",
-      "require": "./exports/frameworks/standalone.js"
+      "types": "./dist/frameworks/standalone/index.d.ts",
+      "import": "./dist/standalone.mjs",
+      "require": "./dist/standalone.js"
     },
     "./elysia": {
-      "types": "./types/frameworks/elysia.d.ts",
-      "import": "./exports/frameworks/elysia.mjs",
-      "require": "./exports/frameworks/elysia.js"
+      "types": "./dist/frameworks/elysia/index.d.ts",
+      "import": "./dist/elysia.mjs",
+      "require": "./dist/elysia.js"
     },
     "./hono": {
-      "types": "./types/frameworks/hono.d.ts",
-      "import": "./exports/frameworks/hono.mjs",
-      "require": "./exports/frameworks/hono.js"
+      "types": "./dist/frameworks/hono/index.d.ts",
+      "import": "./dist/hono.mjs",
+      "require": "./dist/hono.js"
     },
     "./express": {
-      "types": "./types/frameworks/express.d.ts",
-      "import": "./exports/frameworks/express.mjs",
-      "require": "./exports/frameworks/express.js"
+      "types": "./dist/frameworks/express/index.d.ts",
+      "import": "./dist/express.mjs",
+      "require": "./dist/express.js"
     },
     "./fastify": {
-      "types": "./types/frameworks/fastify.d.ts",
-      "import": "./exports/frameworks/fastify.mjs",
-      "require": "./exports/frameworks/fastify.js"
+      "types": "./dist/frameworks/fastify/index.d.ts",
+      "import": "./dist/fastify.mjs",
+      "require": "./dist/fastify.js"
     },
     "./nestjs": {
-      "types": "./types/frameworks/nestjs.d.ts",
-      "import": "./exports/frameworks/nestjs.mjs",
-      "require": "./exports/frameworks/nestjs.js"
+      "types": "./dist/frameworks/nestjs/index.d.ts",
+      "import": "./dist/nestjs.mjs",
+      "require": "./dist/nestjs.js"
     },
     "./nextjs": {
-      "types": "./types/frameworks/nextjs.d.ts",
-      "import": "./exports/frameworks/nextjs.mjs",
-      "require": "./exports/frameworks/nextjs.js"
+      "types": "./dist/frameworks/nextjs/index.d.ts",
+      "import": "./dist/nextjs.mjs",
+      "require": "./dist/nextjs.js"
     },
     "./react-router": {
-      "types": "./types/frameworks/react-router.d.ts",
-      "import": "./exports/frameworks/react-router.mjs",
-      "require": "./exports/frameworks/react-router.js"
+      "types": "./dist/frameworks/react-router/index.d.ts",
+      "import": "./dist/react-router.mjs",
+      "require": "./dist/react-router.js"
     },
     "./tanstack-start": {
-      "types": "./types/frameworks/tanstack-start.d.ts",
-      "import": "./exports/frameworks/tanstack-start.mjs",
-      "require": "./exports/frameworks/tanstack-start.js"
+      "types": "./dist/frameworks/tanstack-start/index.d.ts",
+      "import": "./dist/tanstack-start.mjs",
+      "require": "./dist/tanstack-start.js"
     },
     "./sveltekit": {
-      "types": "./types/frameworks/sveltekit.d.ts",
-      "import": "./exports/frameworks/sveltekit.mjs",
-      "require": "./exports/frameworks/sveltekit.js"
+      "types": "./dist/frameworks/sveltekit/index.d.ts",
+      "import": "./dist/sveltekit.mjs",
+      "require": "./dist/sveltekit.js"
     },
     "./astro": {
-      "types": "./types/frameworks/astro.d.ts",
-      "import": "./exports/frameworks/astro.mjs",
-      "require": "./exports/frameworks/astro.js"
+      "types": "./dist/frameworks/astro/index.d.ts",
+      "import": "./dist/astro.mjs",
+      "require": "./dist/astro.js"
     },
     "./nitro": {
-      "types": "./types/frameworks/nitro.d.ts",
-      "import": "./exports/frameworks/nitro.mjs",
-      "require": "./exports/frameworks/nitro.js"
+      "types": "./dist/frameworks/nitro/index.d.ts",
+      "import": "./dist/nitro.mjs",
+      "require": "./dist/nitro.js"
     },
     "./nuxt": {
-      "types": "./types/frameworks/nuxt.d.ts",
-      "import": "./exports/frameworks/nuxt.mjs",
-      "require": "./exports/frameworks/nuxt.js"
+      "types": "./dist/frameworks/nuxt/index.d.ts",
+      "import": "./dist/nuxt.mjs",
+      "require": "./dist/nuxt.js"
     },
     "./ai/vercel": {
-      "types": "./types/ai/vercel.d.ts",
-      "import": "./exports/ai/vercel.mjs",
-      "require": "./exports/ai/vercel.js"
+      "types": "./dist/ai/vercel/index.d.ts",
+      "import": "./dist/ai/vercel.mjs",
+      "require": "./dist/ai/vercel.js"
     },
     "./ai/openai": {
-      "types": "./types/ai/openai.d.ts",
-      "import": "./exports/ai/openai.mjs",
-      "require": "./exports/ai/openai.js"
+      "types": "./dist/ai/openai/index.d.ts",
+      "import": "./dist/ai/openai.mjs",
+      "require": "./dist/ai/openai.js"
     },
     "./ai/anthropic": {
-      "types": "./types/ai/anthropic.d.ts",
-      "import": "./exports/ai/anthropic.mjs",
-      "require": "./exports/ai/anthropic.js"
+      "types": "./dist/ai/anthropic/index.d.ts",
+      "import": "./dist/ai/anthropic.mjs",
+      "require": "./dist/ai/anthropic.js"
     },
     "./ai/shared": {
-      "types": "./types/ai/shared.d.ts",
-      "import": "./exports/ai/shared.mjs",
-      "require": "./exports/ai/shared.js"
+      "types": "./dist/ai/shared/index.d.ts",
+      "import": "./dist/ai/shared.mjs",
+      "require": "./dist/ai/shared.js"
     },
     "./ai/fetch": {
-      "types": "./types/ai/fetch.d.ts",
-      "import": "./exports/ai/fetch.mjs",
-      "require": "./exports/ai/fetch.js"
+      "types": "./dist/ai/shared/fetch.d.ts",
+      "import": "./dist/ai/fetch.mjs",
+      "require": "./dist/ai/fetch.js"
     },
     "./client": {
-      "types": "./types/client.d.ts",
-      "import": "./exports/client.mjs",
-      "require": "./exports/client.js"
+      "types": "./dist/frameworks/client/index.d.ts",
+      "import": "./dist/client.mjs",
+      "require": "./dist/client.js"
     },
     "./expo": {
-      "types": "./types/expo.d.ts",
-      "import": "./exports/expo.mjs",
-      "require": "./exports/expo.js"
+      "types": "./dist/frameworks/expo/index.d.ts",
+      "import": "./dist/expo.mjs",
+      "require": "./dist/expo.js"
     },
     "./database": {
-      "types": "./types/database.d.ts",
-      "import": "./exports/database.mjs",
-      "require": "./exports/database.js"
+      "types": "./dist/database/index.d.ts",
+      "import": "./dist/database.mjs",
+      "require": "./dist/database.js"
     },
     "./betterstack": {
-      "types": "./types/connectors/betterstack.d.ts",
-      "import": "./exports/connectors/betterstack.mjs",
-      "require": "./exports/connectors/betterstack.js"
+      "types": "./dist/connectors/betterstack/index.d.ts",
+      "import": "./dist/connectors/betterstack.mjs",
+      "require": "./dist/connectors/betterstack.js"
     },
     "./databuddy": {
-      "types": "./types/connectors/databuddy.d.ts",
-      "import": "./exports/connectors/databuddy.mjs",
-      "require": "./exports/connectors/databuddy.js"
+      "types": "./dist/connectors/databuddy/index.d.ts",
+      "import": "./dist/connectors/databuddy.mjs",
+      "require": "./dist/connectors/databuddy.js"
     },
     "./posthog": {
-      "types": "./types/connectors/posthog.d.ts",
-      "import": "./exports/connectors/posthog.mjs",
-      "require": "./exports/connectors/posthog.js"
+      "types": "./dist/connectors/posthog/index.d.ts",
+      "import": "./dist/connectors/posthog.mjs",
+      "require": "./dist/connectors/posthog.js"
     },
     "./otlp": {
-      "types": "./types/connectors/otlp.d.ts",
-      "import": "./exports/connectors/otlp.mjs",
-      "require": "./exports/connectors/otlp.js"
+      "types": "./dist/connectors/otlp/index.d.ts",
+      "import": "./dist/connectors/otlp.mjs",
+      "require": "./dist/connectors/otlp.js"
     },
     "./sentry": {
-      "types": "./types/connectors/sentry.d.ts",
-      "import": "./exports/connectors/sentry.mjs",
-      "require": "./exports/connectors/sentry.js"
+      "types": "./dist/connectors/sentry/index.d.ts",
+      "import": "./dist/connectors/sentry.mjs",
+      "require": "./dist/connectors/sentry.js"
     },
     "./workers": {
-      "types": "./types/workers.d.ts",
-      "import": "./exports/workers.mjs",
-      "require": "./exports/workers.js"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      "client": [
-        "./types/client.d.ts"
-      ],
-      "expo": [
-        "./types/expo.d.ts"
-      ],
-      "database": [
-        "./types/database.d.ts"
-      ],
-      "betterstack": [
-        "./types/connectors/betterstack.d.ts"
-      ],
-      "databuddy": [
-        "./types/connectors/databuddy.d.ts"
-      ],
-      "posthog": [
-        "./types/connectors/posthog.d.ts"
-      ],
-      "otlp": [
-        "./types/connectors/otlp.d.ts"
-      ],
-      "sentry": [
-        "./types/connectors/sentry.d.ts"
-      ],
-      "elysia": [
-        "./types/frameworks/elysia.d.ts"
-      ],
-      "hono": [
-        "./types/frameworks/hono.d.ts"
-      ],
-      "express": [
-        "./types/frameworks/express.d.ts"
-      ],
-      "fastify": [
-        "./types/frameworks/fastify.d.ts"
-      ],
-      "nestjs": [
-        "./types/frameworks/nestjs.d.ts"
-      ],
-      "nextjs": [
-        "./types/frameworks/nextjs.d.ts"
-      ],
-      "react-router": [
-        "./types/frameworks/react-router.d.ts"
-      ],
-      "tanstack-start": [
-        "./types/frameworks/tanstack-start.d.ts"
-      ],
-      "sveltekit": [
-        "./types/frameworks/sveltekit.d.ts"
-      ],
-      "astro": [
-        "./types/frameworks/astro.d.ts"
-      ],
-      "nitro": [
-        "./types/frameworks/nitro.d.ts"
-      ],
-      "nuxt": [
-        "./types/frameworks/nuxt.d.ts"
-      ],
-      "ai/vercel": [
-        "./types/ai/vercel.d.ts"
-      ],
-      "ai/openai": [
-        "./types/ai/openai.d.ts"
-      ],
-      "ai/anthropic": [
-        "./types/ai/anthropic.d.ts"
-      ],
-      "ai/shared": [
-        "./types/ai/shared.d.ts"
-      ],
-      "ai/fetch": [
-        "./types/ai/fetch.d.ts"
-      ],
-      "standalone": [
-        "./types/frameworks/standalone.d.ts"
-      ],
-      "workers": [
-        "./types/workers.d.ts"
-      ],
-      "*": [
-        "./types/index.d.ts"
-      ]
+      "types": "./dist/frameworks/workers/index.d.ts",
+      "import": "./dist/workers.mjs",
+      "require": "./dist/workers.js"
     }
   },
   "files": [
     "dist",
-    "exports",
-    "types",
     "README.md"
   ],
   "publishConfig": {
@@ -295,11 +290,18 @@
     "tsup": "^8.5.0"
   },
   "peerDependencies": {
+    "@databuddy/sdk": "^2",
+    "@logtail/node": "^0.5",
     "@nestjs/common": "^10 || ^11",
     "@nestjs/core": "^10 || ^11",
     "@nestjs/platform-express": "^10 || ^11",
     "@nestjs/platform-fastify": "^10 || ^11",
+    "@opentelemetry/api-logs": "^0.206",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.206",
+    "@opentelemetry/resources": "^2",
+    "@opentelemetry/sdk-logs": "^0.206",
     "@prisma/client": "^5 || ^6",
+    "@sentry/node": "^10",
     "@sveltejs/kit": "^2",
     "@tanstack/react-start": "^1",
     "ai": "^6",
@@ -312,11 +314,18 @@
     "next": "^15",
     "nitropack": "^2",
     "nuxt": "^4",
+    "posthog-node": "^5",
     "react-router": "^7",
     "rxjs": "^7",
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
+    "@databuddy/sdk": {
+      "optional": true
+    },
+    "@logtail/node": {
+      "optional": true
+    },
     "@nestjs/common": {
       "optional": true
     },
@@ -329,7 +338,22 @@
     "@nestjs/platform-fastify": {
       "optional": true
     },
+    "@opentelemetry/api-logs": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-logs-otlp-http": {
+      "optional": true
+    },
+    "@opentelemetry/resources": {
+      "optional": true
+    },
+    "@opentelemetry/sdk-logs": {
+      "optional": true
+    },
     "@prisma/client": {
+      "optional": true
+    },
+    "@sentry/node": {
       "optional": true
     },
     "@sveltejs/kit": {
@@ -368,6 +392,9 @@
     "nuxt": {
       "optional": true
     },
+    "posthog-node": {
+      "optional": true
+    },
     "react-router": {
       "optional": true
     },
@@ -376,18 +403,10 @@
     }
   },
   "dependencies": {
-    "@databuddy/sdk": "^2.0.0",
-    "@logtail/node": "^0.5.8",
-    "@opentelemetry/api-logs": "^0.206.0",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.206.0",
-    "@opentelemetry/resources": "^2.1.0",
-    "@opentelemetry/sdk-logs": "^0.206.0",
-    "@sentry/node": "^10.14.0",
     "fflate": "^0.8.2",
     "jiti": "^2.4.2",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
-    "posthog-node": "^5.28.1",
     "zod": "^3.25.76"
   }
 }

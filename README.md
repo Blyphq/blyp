@@ -30,12 +30,11 @@
 
 ```
 blyp/
-├── exports/
-│   ├── client.js              # Public client entry shim
+├── dist/                      # Published JS and declaration output
 │   ├── connectors/
-│   │   └── posthog.js         # Public connector entry shims
+│   │   └── posthog.js         # Public connector build output
 │   └── frameworks/
-│       └── elysia.js          # Public framework entry shims
+│       └── elysia.js          # Public framework build output
 ├── index.ts                   # Main source export bridge
 ├── src/
 │   ├── core/                  # Logger runtime and file logging internals
@@ -48,12 +47,6 @@ blyp/
 │       │   └── posthog.ts     # Connector-specific source types
 │       └── frameworks/
 │           └── elysia.ts      # Framework-specific source types
-├── types/
-│   ├── index.d.ts             # Public type entry shim
-│   ├── connectors/
-│   │   └── posthog.d.ts       # Public connector type shims
-│   └── frameworks/
-│       └── elysia.d.ts        # Public framework type shims
 ├── tests/
 │   ├── frameworks/            # One test file per server integration
 │   ├── helpers/               # Shared test utilities
@@ -397,6 +390,12 @@ blyp logs init --adapter drizzle --dialect mysql
 
 Use `connectors.betterstack` when you want Blyp logs forwarded into Better Stack through `@logtail/node`:
 
+Install the optional peer dependencies for this connector when you enable it:
+
+```bash
+bun add @logtail/node @sentry/node
+```
+
 ```typescript
 export default {
   connectors: {
@@ -465,6 +464,12 @@ The browser and Expo connector flow still posts to Blyp first. Blyp forwards to 
 
 Use `blyp.config.ts` when you want to read the PostHog project key from the environment:
 
+Install the optional peer dependencies for this connector when you enable it:
+
+```bash
+bun add posthog-node @opentelemetry/api-logs @opentelemetry/exporter-logs-otlp-http @opentelemetry/resources @opentelemetry/sdk-logs
+```
+
 ```typescript
 export default {
   connectors: {
@@ -521,6 +526,12 @@ The client and Expo connector flow still posts to Blyp first. Blyp forwards to P
 
 Use `connectors.databuddy` when you want Blyp logs and handled errors forwarded into Databuddy:
 
+Install the optional peer dependency for this connector when you enable it:
+
+```bash
+bun add @databuddy/sdk
+```
+
 ```typescript
 export default {
   connectors: {
@@ -572,6 +583,12 @@ Client `error` and `critical` logs requested through the Databuddy connector are
 ### Sentry
 
 Use `connectors.sentry` when you want Blyp logs forwarded into Sentry Logs:
+
+Install the optional peer dependency for this connector when you enable it:
+
+```bash
+bun add @sentry/node
+```
 
 ```typescript
 export default {
@@ -626,6 +643,12 @@ The browser and Expo Sentry flow still posts to Blyp first. Blyp forwards to Sen
 ### OTLP
 
 Use `connectors.otlp` when you want to send logs to named OTLP-compatible backends such as Grafana Cloud, Datadog, Honeycomb, or a self-hosted OpenTelemetry Collector:
+
+Install the optional peer dependencies for this connector when you enable it:
+
+```bash
+bun add @opentelemetry/api-logs @opentelemetry/exporter-logs-otlp-http @opentelemetry/resources @opentelemetry/sdk-logs
+```
 
 ```typescript
 export default {

@@ -3,7 +3,7 @@ import type { ClientLogEvent } from '../../shared/client-log';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
-import { buildPostHogExceptionProperties } from '../../connectors/posthog/sender';
+import { buildPostHogExceptionProperties } from '../../connectors/posthog/properties';
 import {
   createBaseLogger,
   getBetterStackSender,

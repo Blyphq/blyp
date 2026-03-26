@@ -4,201 +4,271 @@ import { describe, expect, it } from 'bun:test';
 
 const repoRoot = path.resolve(import.meta.dir, '..');
 
-function readRepoFile(relativePath: string): string {
-  return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+function readPackageJson(): {
+  types?: string;
+  files?: string[];
+  exports?: Record<string, { types?: string; import?: string; require?: string }>;
+  typesVersions?: Record<string, unknown>;
+  peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  dependencies?: Record<string, string>;
+} {
+  return JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 }
 
-describe('Package type shims', () => {
-  it('declares optional peer dependencies for framework-specific entrypoints', () => {
-    const packageJson = JSON.parse(readRepoFile('package.json')) as {
-      peerDependencies?: Record<string, string>;
-      peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+describe('package surface', () => {
+  it('publishes dist directly and removes shim directories', () => {
+    const packageJson = readPackageJson();
+
+    expect(packageJson.types).toBe('./dist/index.d.ts');
+    expect(packageJson.files).toEqual(['dist', 'README.md']);
+    expect(fs.existsSync(path.join(repoRoot, 'exports'))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, 'types'))).toBe(false);
+  });
+
+  it('keeps a typesVersions fallback for legacy TypeScript module resolution', () => {
+    const packageJson = readPackageJson();
+
+    expect(packageJson.typesVersions).toEqual({
+      '*': {
+        standalone: ['dist/frameworks/standalone/index.d.ts'],
+        elysia: ['dist/frameworks/elysia/index.d.ts'],
+        hono: ['dist/frameworks/hono/index.d.ts'],
+        express: ['dist/frameworks/express/index.d.ts'],
+        fastify: ['dist/frameworks/fastify/index.d.ts'],
+        nestjs: ['dist/frameworks/nestjs/index.d.ts'],
+        nextjs: ['dist/frameworks/nextjs/index.d.ts'],
+        'react-router': ['dist/frameworks/react-router/index.d.ts'],
+        'tanstack-start': ['dist/frameworks/tanstack-start/index.d.ts'],
+        sveltekit: ['dist/frameworks/sveltekit/index.d.ts'],
+        astro: ['dist/frameworks/astro/index.d.ts'],
+        nitro: ['dist/frameworks/nitro/index.d.ts'],
+        nuxt: ['dist/frameworks/nuxt/index.d.ts'],
+        'ai/vercel': ['dist/ai/vercel/index.d.ts'],
+        'ai/openai': ['dist/ai/openai/index.d.ts'],
+        'ai/anthropic': ['dist/ai/anthropic/index.d.ts'],
+        'ai/shared': ['dist/ai/shared/index.d.ts'],
+        'ai/fetch': ['dist/ai/shared/fetch.d.ts'],
+        client: ['dist/frameworks/client/index.d.ts'],
+        expo: ['dist/frameworks/expo/index.d.ts'],
+        database: ['dist/database/index.d.ts'],
+        betterstack: ['dist/connectors/betterstack/index.d.ts'],
+        databuddy: ['dist/connectors/databuddy/index.d.ts'],
+        posthog: ['dist/connectors/posthog/index.d.ts'],
+        otlp: ['dist/connectors/otlp/index.d.ts'],
+        sentry: ['dist/connectors/sentry/index.d.ts'],
+        workers: ['dist/frameworks/workers/index.d.ts'],
+      },
+    });
+  });
+
+  it('points package exports directly at built dist files', () => {
+    const packageJson = readPackageJson();
+    const expectedExports: Record<string, { types: string; import: string; require: string }> = {
+      '.': {
+        types: './dist/index.d.ts',
+        import: './dist/index.mjs',
+        require: './dist/index.js',
+      },
+      './standalone': {
+        types: './dist/frameworks/standalone/index.d.ts',
+        import: './dist/standalone.mjs',
+        require: './dist/standalone.js',
+      },
+      './elysia': {
+        types: './dist/frameworks/elysia/index.d.ts',
+        import: './dist/elysia.mjs',
+        require: './dist/elysia.js',
+      },
+      './hono': {
+        types: './dist/frameworks/hono/index.d.ts',
+        import: './dist/hono.mjs',
+        require: './dist/hono.js',
+      },
+      './express': {
+        types: './dist/frameworks/express/index.d.ts',
+        import: './dist/express.mjs',
+        require: './dist/express.js',
+      },
+      './fastify': {
+        types: './dist/frameworks/fastify/index.d.ts',
+        import: './dist/fastify.mjs',
+        require: './dist/fastify.js',
+      },
+      './nestjs': {
+        types: './dist/frameworks/nestjs/index.d.ts',
+        import: './dist/nestjs.mjs',
+        require: './dist/nestjs.js',
+      },
+      './nextjs': {
+        types: './dist/frameworks/nextjs/index.d.ts',
+        import: './dist/nextjs.mjs',
+        require: './dist/nextjs.js',
+      },
+      './react-router': {
+        types: './dist/frameworks/react-router/index.d.ts',
+        import: './dist/react-router.mjs',
+        require: './dist/react-router.js',
+      },
+      './tanstack-start': {
+        types: './dist/frameworks/tanstack-start/index.d.ts',
+        import: './dist/tanstack-start.mjs',
+        require: './dist/tanstack-start.js',
+      },
+      './sveltekit': {
+        types: './dist/frameworks/sveltekit/index.d.ts',
+        import: './dist/sveltekit.mjs',
+        require: './dist/sveltekit.js',
+      },
+      './astro': {
+        types: './dist/frameworks/astro/index.d.ts',
+        import: './dist/astro.mjs',
+        require: './dist/astro.js',
+      },
+      './nitro': {
+        types: './dist/frameworks/nitro/index.d.ts',
+        import: './dist/nitro.mjs',
+        require: './dist/nitro.js',
+      },
+      './nuxt': {
+        types: './dist/frameworks/nuxt/index.d.ts',
+        import: './dist/nuxt.mjs',
+        require: './dist/nuxt.js',
+      },
+      './ai/vercel': {
+        types: './dist/ai/vercel/index.d.ts',
+        import: './dist/ai/vercel.mjs',
+        require: './dist/ai/vercel.js',
+      },
+      './ai/openai': {
+        types: './dist/ai/openai/index.d.ts',
+        import: './dist/ai/openai.mjs',
+        require: './dist/ai/openai.js',
+      },
+      './ai/anthropic': {
+        types: './dist/ai/anthropic/index.d.ts',
+        import: './dist/ai/anthropic.mjs',
+        require: './dist/ai/anthropic.js',
+      },
+      './ai/shared': {
+        types: './dist/ai/shared/index.d.ts',
+        import: './dist/ai/shared.mjs',
+        require: './dist/ai/shared.js',
+      },
+      './ai/fetch': {
+        types: './dist/ai/shared/fetch.d.ts',
+        import: './dist/ai/fetch.mjs',
+        require: './dist/ai/fetch.js',
+      },
+      './client': {
+        types: './dist/frameworks/client/index.d.ts',
+        import: './dist/client.mjs',
+        require: './dist/client.js',
+      },
+      './expo': {
+        types: './dist/frameworks/expo/index.d.ts',
+        import: './dist/expo.mjs',
+        require: './dist/expo.js',
+      },
+      './database': {
+        types: './dist/database/index.d.ts',
+        import: './dist/database.mjs',
+        require: './dist/database.js',
+      },
+      './betterstack': {
+        types: './dist/connectors/betterstack/index.d.ts',
+        import: './dist/connectors/betterstack.mjs',
+        require: './dist/connectors/betterstack.js',
+      },
+      './databuddy': {
+        types: './dist/connectors/databuddy/index.d.ts',
+        import: './dist/connectors/databuddy.mjs',
+        require: './dist/connectors/databuddy.js',
+      },
+      './posthog': {
+        types: './dist/connectors/posthog/index.d.ts',
+        import: './dist/connectors/posthog.mjs',
+        require: './dist/connectors/posthog.js',
+      },
+      './otlp': {
+        types: './dist/connectors/otlp/index.d.ts',
+        import: './dist/connectors/otlp.mjs',
+        require: './dist/connectors/otlp.js',
+      },
+      './sentry': {
+        types: './dist/connectors/sentry/index.d.ts',
+        import: './dist/connectors/sentry.mjs',
+        require: './dist/connectors/sentry.js',
+      },
+      './workers': {
+        types: './dist/frameworks/workers/index.d.ts',
+        import: './dist/workers.mjs',
+        require: './dist/workers.js',
+      },
     };
 
-    expect(packageJson.peerDependencies?.next).toBe('^15');
-    expect(packageJson.peerDependenciesMeta?.next?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.['@sveltejs/kit']).toBe('^2');
-    expect(packageJson.peerDependenciesMeta?.['@sveltejs/kit']?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.['@tanstack/react-start']).toBe('^1');
-    expect(packageJson.peerDependenciesMeta?.['@tanstack/react-start']?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.ai).toBe('^6');
-    expect(packageJson.peerDependenciesMeta?.ai?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.elysia).toBe('^1.4.27');
-    expect(packageJson.peerDependenciesMeta?.elysia?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.['react-router']).toBe('^7');
-    expect(packageJson.peerDependenciesMeta?.['react-router']?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.astro).toBe('^6');
-    expect(packageJson.peerDependenciesMeta?.astro?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.nitropack).toBe('^2');
-    expect(packageJson.peerDependenciesMeta?.nitropack?.optional).toBe(true);
-    expect(packageJson.peerDependencies?.nuxt).toBe('^4');
-    expect(packageJson.peerDependenciesMeta?.nuxt?.optional).toBe(true);
+    expect(packageJson.exports).toEqual(expectedExports);
+    expect(packageJson.exports?.['./connectors/posthog']).toBeUndefined();
+    expect(packageJson.exports?.['./connectors/sentry']).toBeUndefined();
   });
 
-  it('points public exports at shipped declaration files', () => {
-    const packageJson = JSON.parse(readRepoFile('package.json')) as {
-      exports: Record<string, { types?: string; import?: string; require?: string }>;
-    };
+  it('declares framework and connector integrations as optional peers', () => {
+    const packageJson = readPackageJson();
 
-    expect(packageJson.exports['./client']?.types).toBe('./types/client.d.ts');
-    expect(packageJson.exports['./expo']?.types).toBe('./types/expo.d.ts');
-    expect(packageJson.exports['./database']?.types).toBe('./types/database.d.ts');
-    expect(packageJson.exports['./betterstack']?.types).toBe('./types/connectors/betterstack.d.ts');
-    expect(packageJson.exports['./databuddy']?.types).toBe('./types/connectors/databuddy.d.ts');
-    expect(packageJson.exports['./posthog']?.types).toBe('./types/connectors/posthog.d.ts');
-    expect(packageJson.exports['./otlp']?.types).toBe('./types/connectors/otlp.d.ts');
-    expect(packageJson.exports['./sentry']?.types).toBe('./types/connectors/sentry.d.ts');
-    expect(packageJson.exports['./workers']?.types).toBe('./types/workers.d.ts');
-    expect(packageJson.exports['./ai/vercel']?.types).toBe('./types/ai/vercel.d.ts');
-    expect(packageJson.exports['./ai/openai']?.types).toBe('./types/ai/openai.d.ts');
-    expect(packageJson.exports['./ai/anthropic']?.types).toBe('./types/ai/anthropic.d.ts');
-    expect(packageJson.exports['./ai/shared']?.types).toBe('./types/ai/shared.d.ts');
-    expect(packageJson.exports['./ai/fetch']?.types).toBe('./types/ai/fetch.d.ts');
-    expect(packageJson.exports['./react-router']?.types).toBe('./types/frameworks/react-router.d.ts');
-    expect(packageJson.exports['./astro']?.types).toBe('./types/frameworks/astro.d.ts');
-    expect(packageJson.exports['./nitro']?.types).toBe('./types/frameworks/nitro.d.ts');
-    expect(packageJson.exports['./nuxt']?.types).toBe('./types/frameworks/nuxt.d.ts');
-    expect(packageJson.exports['./betterstack']?.import).toBe('./exports/connectors/betterstack.mjs');
-    expect(packageJson.exports['./database']?.import).toBe('./exports/database.mjs');
-    expect(packageJson.exports['./databuddy']?.import).toBe('./exports/connectors/databuddy.mjs');
-    expect(packageJson.exports['./posthog']?.import).toBe('./exports/connectors/posthog.mjs');
-    expect(packageJson.exports['./otlp']?.import).toBe('./exports/connectors/otlp.mjs');
-    expect(packageJson.exports['./sentry']?.import).toBe('./exports/connectors/sentry.mjs');
-    expect(packageJson.exports['./betterstack']?.require).toBe('./exports/connectors/betterstack.js');
-    expect(packageJson.exports['./database']?.require).toBe('./exports/database.js');
-    expect(packageJson.exports['./databuddy']?.require).toBe('./exports/connectors/databuddy.js');
-    expect(packageJson.exports['./posthog']?.require).toBe('./exports/connectors/posthog.js');
-    expect(packageJson.exports['./otlp']?.require).toBe('./exports/connectors/otlp.js');
-    expect(packageJson.exports['./sentry']?.require).toBe('./exports/connectors/sentry.js');
-    expect(packageJson.exports['./ai/vercel']?.import).toBe('./exports/ai/vercel.mjs');
-    expect(packageJson.exports['./ai/openai']?.import).toBe('./exports/ai/openai.mjs');
-    expect(packageJson.exports['./ai/anthropic']?.import).toBe('./exports/ai/anthropic.mjs');
-    expect(packageJson.exports['./ai/shared']?.import).toBe('./exports/ai/shared.mjs');
-    expect(packageJson.exports['./ai/fetch']?.import).toBe('./exports/ai/fetch.mjs');
-    expect(packageJson.exports['./ai/vercel']?.require).toBe('./exports/ai/vercel.js');
-    expect(packageJson.exports['./ai/openai']?.require).toBe('./exports/ai/openai.js');
-    expect(packageJson.exports['./ai/anthropic']?.require).toBe('./exports/ai/anthropic.js');
-    expect(packageJson.exports['./ai/shared']?.require).toBe('./exports/ai/shared.js');
-    expect(packageJson.exports['./ai/fetch']?.require).toBe('./exports/ai/fetch.js');
-    expect(packageJson.exports['./react-router']?.import).toBe('./exports/frameworks/react-router.mjs');
-    expect(packageJson.exports['./astro']?.import).toBe('./exports/frameworks/astro.mjs');
-    expect(packageJson.exports['./nitro']?.import).toBe('./exports/frameworks/nitro.mjs');
-    expect(packageJson.exports['./nuxt']?.import).toBe('./exports/frameworks/nuxt.mjs');
-    expect(packageJson.exports['./react-router']?.require).toBe('./exports/frameworks/react-router.js');
-    expect(packageJson.exports['./astro']?.require).toBe('./exports/frameworks/astro.js');
-    expect(packageJson.exports['./nitro']?.require).toBe('./exports/frameworks/nitro.js');
-    expect(packageJson.exports['./nuxt']?.require).toBe('./exports/frameworks/nuxt.js');
+    const optionalPeers = [
+      '@databuddy/sdk',
+      '@logtail/node',
+      '@nestjs/common',
+      '@nestjs/core',
+      '@nestjs/platform-express',
+      '@nestjs/platform-fastify',
+      '@opentelemetry/api-logs',
+      '@opentelemetry/exporter-logs-otlp-http',
+      '@opentelemetry/resources',
+      '@opentelemetry/sdk-logs',
+      '@prisma/client',
+      '@sentry/node',
+      '@sveltejs/kit',
+      '@tanstack/react-start',
+      'ai',
+      'astro',
+      'drizzle-orm',
+      'elysia',
+      'express',
+      'fastify',
+      'hono',
+      'next',
+      'nitropack',
+      'nuxt',
+      'posthog-node',
+      'react-router',
+      'rxjs',
+    ] as const;
 
-    expect(fs.existsSync(path.join(repoRoot, 'types/client.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/expo.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/database.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/connectors/betterstack.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/connectors/databuddy.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/connectors/posthog.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/connectors/otlp.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/connectors/sentry.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/workers.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/ai/vercel.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/ai/openai.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/ai/anthropic.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/ai/shared.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/ai/fetch.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/client.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/expo.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/react-router.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/astro.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/nitro.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/nuxt.d.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/posthog.d.ts'))).toBe(false);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/otlp.d.ts'))).toBe(false);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/sentry.d.ts'))).toBe(false);
-    expect(fs.existsSync(path.join(repoRoot, 'types/frameworks/workers.d.ts'))).toBe(true);
+    for (const dependency of optionalPeers) {
+      expect(packageJson.peerDependencies?.[dependency]).toBeDefined();
+      expect(packageJson.peerDependenciesMeta?.[dependency]?.optional).toBe(true);
+    }
+
+    expect(packageJson.peerDependencies?.['@databuddy/sdk']).toBe('^2');
+    expect(packageJson.peerDependencies?.['@logtail/node']).toBe('^0.5');
+    expect(packageJson.peerDependencies?.['@opentelemetry/api-logs']).toBe('^0.206');
+    expect(packageJson.peerDependencies?.['@opentelemetry/exporter-logs-otlp-http']).toBe('^0.206');
+    expect(packageJson.peerDependencies?.['@opentelemetry/resources']).toBe('^2');
+    expect(packageJson.peerDependencies?.['@opentelemetry/sdk-logs']).toBe('^0.206');
+    expect(packageJson.peerDependencies?.['@sentry/node']).toBe('^10');
+    expect(packageJson.peerDependencies?.['posthog-node']).toBe('^5');
   });
 
-  it('keeps public client and expo declarations as direct shims and moves connector declarations under types/connectors', () => {
-    const clientTypes = readRepoFile('types/client.d.ts');
-    const expoTypes = readRepoFile('types/expo.d.ts');
-    const databaseTypes = readRepoFile('types/database.d.ts');
-    const betterStackTypes = readRepoFile('types/connectors/betterstack.d.ts');
-    const databuddyTypes = readRepoFile('types/connectors/databuddy.d.ts');
-    const posthogTypes = readRepoFile('types/connectors/posthog.d.ts');
-    const otlpTypes = readRepoFile('types/connectors/otlp.d.ts');
-    const sentryTypes = readRepoFile('types/connectors/sentry.d.ts');
-    const workersTypes = readRepoFile('types/workers.d.ts');
-    const aiVercelTypes = readRepoFile('types/ai/vercel.d.ts');
-    const aiOpenAITypes = readRepoFile('types/ai/openai.d.ts');
-    const aiAnthropicTypes = readRepoFile('types/ai/anthropic.d.ts');
-    const aiSharedTypes = readRepoFile('types/ai/shared.d.ts');
-    const aiFetchTypes = readRepoFile('types/ai/fetch.d.ts');
+  it('keeps only the core runtime dependencies installed by default', () => {
+    const packageJson = readPackageJson();
 
-    expect(clientTypes).toContain('createClientLogger');
-    expect(clientTypes).toContain("from './frameworks/client'");
-    expect(expoTypes).toContain('createExpoLogger');
-    expect(expoTypes).toContain("from './frameworks/expo'");
-    expect(databaseTypes).toContain('../dist/database');
-    expect(betterStackTypes).toContain('../../dist/connectors/betterstack');
-    expect(databuddyTypes).toContain('../../dist/connectors/databuddy');
-    expect(posthogTypes).toContain('../../dist/connectors/posthog');
-    expect(otlpTypes).toContain('../../dist/connectors/otlp');
-    expect(sentryTypes).toContain('../../dist/connectors/sentry');
-    expect(workersTypes).toContain('createWorkersLogger');
-    expect(workersTypes).toContain("from './frameworks/workers'");
-    expect(aiVercelTypes).toContain('../../dist/ai/vercel');
-    expect(aiOpenAITypes).toContain('../../dist/ai/openai');
-    expect(aiAnthropicTypes).toContain('../../dist/ai/anthropic');
-    expect(aiSharedTypes).toContain('../../dist/ai/shared');
-    expect(aiFetchTypes).toContain('../../dist/ai/fetch');
-    expect(clientTypes).not.toContain("../dist/client");
-    expect(expoTypes).not.toContain("../dist/expo");
-    expect(betterStackTypes).not.toContain('../../dist/betterstack');
-    expect(databuddyTypes).not.toContain('../../dist/databuddy');
-    expect(posthogTypes).not.toContain('../../dist/posthog');
-    expect(otlpTypes).not.toContain('../../dist/otlp');
-    expect(sentryTypes).not.toContain('../../dist/sentry');
-    expect(workersTypes).not.toContain("../dist/workers");
-  });
-
-  it('points framework declaration shims at dist/frameworks entrypoints', () => {
-    const elysiaTypes = readRepoFile('types/frameworks/elysia.d.ts');
-    const expressTypes = readRepoFile('types/frameworks/express.d.ts');
-    const fastifyTypes = readRepoFile('types/frameworks/fastify.d.ts');
-    const honoTypes = readRepoFile('types/frameworks/hono.d.ts');
-    const nestjsTypes = readRepoFile('types/frameworks/nestjs.d.ts');
-    const nextjsTypes = readRepoFile('types/frameworks/nextjs.d.ts');
-    const reactRouterTypes = readRepoFile('types/frameworks/react-router.d.ts');
-    const standaloneTypes = readRepoFile('types/frameworks/standalone.d.ts');
-    const sveltekitTypes = readRepoFile('types/frameworks/sveltekit.d.ts');
-    const tanstackStartTypes = readRepoFile('types/frameworks/tanstack-start.d.ts');
-    const astroTypes = readRepoFile('types/frameworks/astro.d.ts');
-    const nitroTypes = readRepoFile('types/frameworks/nitro.d.ts');
-    const nuxtTypes = readRepoFile('types/frameworks/nuxt.d.ts');
-
-    expect(elysiaTypes).toContain('../../dist/frameworks/elysia');
-    expect(expressTypes).toContain('../../dist/frameworks/express');
-    expect(fastifyTypes).toContain('../../dist/frameworks/fastify');
-    expect(honoTypes).toContain('../../dist/frameworks/hono');
-    expect(nestjsTypes).toContain('../../dist/frameworks/nestjs');
-    expect(nextjsTypes).toContain('../../dist/frameworks/nextjs');
-    expect(reactRouterTypes).toContain('../../dist/frameworks/react-router');
-    expect(standaloneTypes).toContain('../../dist/frameworks/standalone');
-    expect(sveltekitTypes).toContain('../../dist/frameworks/sveltekit');
-    expect(tanstackStartTypes).toContain('../../dist/frameworks/tanstack-start');
-    expect(astroTypes).toContain('../../dist/frameworks/astro');
-    expect(nitroTypes).toContain('../../dist/frameworks/nitro');
-    expect(nuxtTypes).toContain('../../dist/frameworks/nuxt');
-
-    expect(elysiaTypes).not.toContain('../../dist/elysia');
-    expect(expressTypes).not.toContain('../../dist/express');
-    expect(fastifyTypes).not.toContain('../../dist/fastify');
-    expect(honoTypes).not.toContain('../../dist/hono');
-    expect(nestjsTypes).not.toContain('../../dist/nestjs');
-    expect(nextjsTypes).not.toContain('../../dist/nextjs');
-    expect(reactRouterTypes).not.toContain('../../dist/react-router');
-    expect(standaloneTypes).not.toContain('../../dist/standalone');
-    expect(sveltekitTypes).not.toContain('../../dist/sveltekit');
-    expect(tanstackStartTypes).not.toContain('../../dist/tanstack-start');
-    expect(astroTypes).not.toContain('../../dist/astro');
-    expect(nitroTypes).not.toContain('../../dist/nitro');
-    expect(nuxtTypes).not.toContain('../../dist/nuxt');
+    expect(packageJson.dependencies).toEqual({
+      fflate: '^0.8.2',
+      jiti: '^2.4.2',
+      pino: '^9.0.0',
+      'pino-pretty': '^11.0.0',
+      zod: '^3.25.76',
+    });
   });
 });
