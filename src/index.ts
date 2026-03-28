@@ -168,6 +168,14 @@ export {
   resolveConfig,
   resetConfigCache,
 } from './core/config';
+export {
+  clearConnectorDeadLetters,
+  connectorQueueExists,
+  getConnectorDeliveryStatusSummary,
+  getConnectorQueuePath,
+  listConnectorDeadLetters,
+  retryConnectorDeadLetters,
+} from './connectors/delivery/studio-queue';
 export type {
   BlypConnectorsConfig,
   ClientLoggingConfig,
@@ -208,6 +216,11 @@ export type {
   ResolvedOTLPConnectorConfig,
   SentryConnectorConfig,
 } from './core/config';
+export type {
+  ConnectorDeliveryStatusRecord,
+  DeadLetterListResult,
+  DurableConnectorDeadLetterRecord,
+} from './connectors/delivery/types';
 export { readLogFile, formatLogRecord } from './core/log-reader';
 export type { ReadLogFileOptions } from './core/log-reader';
 export type { LogRecord } from './core/file-logger';

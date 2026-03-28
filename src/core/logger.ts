@@ -1,5 +1,6 @@
 import pino from 'pino';
 import { loadOptionalModule } from './optional-module';
+import { loadPinoPretty } from './pino-pretty-loader';
 import { shouldDropRootLogWrite } from '../frameworks/shared/request-context';
 import { sanitizeLogValue } from '../shared/redaction';
 import { type BlypConfig, resolveConfig } from './config';
@@ -315,8 +316,8 @@ function getConsoleDataPayload(data: unknown): { hidden: boolean; value?: unknow
 
 function createPinoLogger(config: BlypConfig) {
   if (config.pretty) {
-    const pinoPretty = require('pino-pretty');
-    const pretty = pinoPretty.default({
+    const pinoPretty = loadPinoPretty();
+    const pretty = pinoPretty({
       colorize: true,
       translateTime: 'SYS:HH:MM:ss',
       ignore: 'pid,hostname,caller',

@@ -81,6 +81,36 @@ export interface DurableQueueRescheduleInput {
   lastError?: string;
 }
 
+export interface DurableConnectorDeadLetterRecord {
+  id: string;
+  connectorType: QueuedConnectorType;
+  connectorTarget?: string;
+  operation: 'send';
+  payloadJson: string;
+  attemptCount: number;
+  maxAttempts: number;
+  lastError?: string;
+  firstEnqueuedAt: number;
+  deadLetteredAt: number;
+  lastAttemptAt: number;
+}
+
+export interface ConnectorDeliveryStatusRecord {
+  connectorType: QueuedConnectorType;
+  connectorTarget?: string;
+  pendingCount: number;
+  deadLetterCount: number;
+  lastSuccessAt?: number;
+  lastFailureAt?: number;
+  lastError?: string;
+  updatedAt?: number;
+}
+
+export interface DeadLetterListResult {
+  items: DurableConnectorDeadLetterRecord[];
+  total: number;
+}
+
 export interface ConnectorDeliveryBinder {
   enqueue(
     connectorType: QueuedConnectorType,

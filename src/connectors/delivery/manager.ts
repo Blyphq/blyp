@@ -1,17 +1,18 @@
-import { Worker } from 'node:worker_threads';
 import { createWarnOnceLogger } from '../../shared/once';
 import { createRandomId } from '../../shared/client-log';
 import type { LogRecord } from '../../core/file-logger';
 import type { ResolvedConnectorDeliveryConfig } from '../../types/core/config';
 import { computeConnectorRetryDelay } from './backoff';
-import { buildSQLiteWorkerSource } from './sqlite-worker';
+import { SQLiteWorkerClient } from './sqlite-client';
 import {
   CONNECTOR_BATCH_DISPATCH,
   CONNECTOR_DELIVERY_BINDER,
   type ConnectorBatchDispatcher,
   type ConnectorBatchDispatchTarget,
+  type ConnectorDeliveryStatusRecord,
   type ConnectorDeliveryBinder,
   type ConnectorDeliveryJob,
+  type DurableConnectorDeadLetterRecord,
   type ConnectorDispatchFailure,
   type DurableConnectorJobRecord,
   type DurableQueueRescheduleInput,
@@ -50,80 +51,20 @@ function safeParseEnvelope(value: string): SerializedConnectorJobEnvelope | null
   }
 }
 
-class SQLiteWorkerClient {
-  private readonly worker: Worker;
+function dedupeConnectorStatusItems(batch: ConnectorDeliveryJob[]) {
+  const deduped = new Map<string, { connectorType: QueuedConnectorType; connectorTarget?: string }>();
 
-  private readonly pending = new Map<
-    number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
-  >();
-
-  private nextId = 1;
-
-  constructor(private readonly path: string) {
-    this.worker = new Worker(buildSQLiteWorkerSource(), { eval: true });
-    this.worker.on('message', (message: { id: number; ok: boolean; result?: unknown; error?: string }) => {
-      const entry = this.pending.get(message.id);
-      if (!entry) {
-        return;
-      }
-
-      this.pending.delete(message.id);
-
-      if (message.ok) {
-        entry.resolve(message.result);
-        return;
-      }
-
-      entry.reject(new Error(message.error ?? 'SQLite worker request failed.'));
-    });
-    this.worker.on('error', (error) => {
-      for (const entry of this.pending.values()) {
-        entry.reject(error instanceof Error ? error : new Error(String(error)));
-      }
-      this.pending.clear();
-    });
-  }
-
-  private request<TResult>(type: string, payload: Record<string, unknown> = {}): Promise<TResult> {
-    const id = this.nextId++;
-    return new Promise<TResult>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
-      this.worker.postMessage({ id, type, payload });
-    });
-  }
-
-  async init(): Promise<void> {
-    await this.request('init', { path: this.path });
-  }
-
-  async insert(jobs: DurableConnectorJobRecord[]): Promise<void> {
-    await this.request('insert', { jobs });
-  }
-
-  async claimDue(limit: number, now: number): Promise<DurableConnectorJobRecord[]> {
-    return this.request('claimDue', { limit, now });
-  }
-
-  async ack(ids: string[]): Promise<void> {
-    await this.request('ack', { ids });
-  }
-
-  async reschedule(items: DurableQueueRescheduleInput[], now: number): Promise<void> {
-    await this.request('reschedule', { items, now });
-  }
-
-  async count(): Promise<number> {
-    return this.request('count');
-  }
-
-  async shutdown(): Promise<void> {
-    try {
-      await this.request('shutdown');
-    } finally {
-      await this.worker.terminate();
+  for (const job of batch) {
+    const key = `${job.connectorType}:${job.connectorTarget ?? ''}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, {
+        connectorType: job.connectorType,
+        connectorTarget: job.connectorTarget,
+      });
     }
   }
+
+  return [...deduped.values()];
 }
 
 export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
@@ -248,6 +189,25 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
     return this.durableClient.count();
   }
 
+  async getStatusSummaryForTests(): Promise<ConnectorDeliveryStatusRecord[]> {
+    await this.durableInitPromise?.catch(() => {});
+    if (!this.durableReady || !this.durableClient) {
+      return [];
+    }
+
+    return this.durableClient.getStatusSummary();
+  }
+
+  async listDeadLettersForTests(): Promise<DurableConnectorDeadLetterRecord[]> {
+    await this.durableInitPromise?.catch(() => {});
+    if (!this.durableReady || !this.durableClient) {
+      return [];
+    }
+
+    const result = await this.durableClient.listDeadLetters({ limit: 1000, offset: 0 });
+    return result.items;
+  }
+
   private async initializeDurableQueue(): Promise<void> {
     try {
       const client = new SQLiteWorkerClient(this.config.durableQueuePath);
@@ -337,6 +297,7 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
 
   private async dispatchMemoryBatch(batch: ConnectorDeliveryJob[]): Promise<void> {
     const dispatcher = batch[0]!.dispatcher;
+    const now = Date.now();
     const result = await dispatcher.dispatch(
       batch.map((job) => job.record),
       { source: 'server', target: batch[0]!.connectorTarget }
@@ -349,31 +310,53 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
     });
 
     if (result.ok) {
+      await this.recordSuccessfulDispatch(batch, now);
       return;
     }
 
-    this.handleRetryableFailure(batch, result, false);
+    await this.handleRetryableFailure(batch, result, false, now);
   }
 
-  private handleRetryableFailure(
+  private async handleRetryableFailure(
     batch: ConnectorDeliveryJob[],
     failure: ConnectorDispatchFailure,
-    fromDurable: boolean
-  ): void {
-    const now = Date.now();
-    const ackIds: string[] = [];
+    fromDurable: boolean,
+    now: number
+  ): Promise<void> {
     const durableReschedules: DurableQueueRescheduleInput[] = [];
+    const durableDeadLetters: DurableConnectorDeadLetterRecord[] = [];
+
+    await this.recordFailedDispatch(batch, failure, now);
 
     for (const job of batch) {
       const attemptCount = job.attemptCount + 1;
       if (!failure.retryable || attemptCount >= job.maxAttempts) {
-        if (fromDurable) {
-          ackIds.push(job.id);
-        }
+        durableDeadLetters.push({
+          id: job.id,
+          connectorType: job.connectorType,
+          connectorTarget: job.connectorTarget,
+          operation: 'send',
+          payloadJson: safeStringifyEnvelope({
+            jobId: job.id,
+            connectorType: job.connectorType,
+            connectorTarget: job.connectorTarget,
+            source: job.source,
+            record: job.record,
+            createdAt: job.createdAt,
+          }),
+          attemptCount,
+          maxAttempts: job.maxAttempts,
+          lastError: failure.error,
+          firstEnqueuedAt: job.createdAt,
+          deadLetteredAt: now,
+          lastAttemptAt: now,
+        });
 
         this.warnOnce(
           `connector-drop:${job.connectorType}:${job.connectorTarget ?? 'default'}:${job.id}`,
-          `[Blyp] Warning: Dropped ${job.connectorType} connector job after ${attemptCount} failed attempt(s). ${failure.error ?? 'Connector delivery failed.'}`
+          fromDurable && this.durableReady
+            ? `[Blyp] Warning: Dead-lettered ${job.connectorType} connector job after ${attemptCount} failed attempt(s). ${failure.error ?? 'Connector delivery failed.'}`
+            : `[Blyp] Warning: Dropped ${job.connectorType} connector job after ${attemptCount} failed attempt(s). ${failure.error ?? 'Connector delivery failed.'}`
         );
         continue;
       }
@@ -401,14 +384,18 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
       });
     }
 
-    if (ackIds.length > 0) {
-      void this.durableClient?.ack(ackIds).catch((error) => {
-        this.warnOnce('connector-ack-failure', '[Blyp] Warning: Failed to acknowledge connector queue jobs.', error);
+    if (durableDeadLetters.length > 0) {
+      await this.durableClient?.deadLetter(durableDeadLetters).catch((error) => {
+        this.warnOnce(
+          'connector-dead-letter-failure',
+          '[Blyp] Warning: Failed to persist dead-lettered connector queue jobs.',
+          error
+        );
       });
     }
 
     if (durableReschedules.length > 0) {
-      void this.durableClient?.reschedule(durableReschedules, now).catch((error) => {
+      await this.durableClient?.reschedule(durableReschedules, now).catch((error) => {
         this.warnOnce(
           'connector-reschedule-failure',
           '[Blyp] Warning: Failed to reschedule durable connector queue jobs.',
@@ -416,6 +403,51 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
         );
       });
     }
+  }
+
+  private async recordSuccessfulDispatch(batch: ConnectorDeliveryJob[], now: number): Promise<void> {
+    if (!this.durableReady || !this.durableClient || batch.length === 0) {
+      return;
+    }
+
+    const items = dedupeConnectorStatusItems(batch).map((item) => ({
+      connectorType: item.connectorType,
+      connectorTarget: item.connectorTarget,
+      timestamp: now,
+    }));
+
+    await this.durableClient.markSuccess(items).catch((error) => {
+      this.warnOnce(
+        'connector-status-success-failure',
+        '[Blyp] Warning: Failed to record connector delivery success state.',
+        error
+      );
+    });
+  }
+
+  private async recordFailedDispatch(
+    batch: ConnectorDeliveryJob[],
+    failure: ConnectorDispatchFailure,
+    now: number
+  ): Promise<void> {
+    if (!this.durableReady || !this.durableClient || batch.length === 0) {
+      return;
+    }
+
+    const items = dedupeConnectorStatusItems(batch).map((item) => ({
+      connectorType: item.connectorType,
+      connectorTarget: item.connectorTarget,
+      timestamp: now,
+      lastError: failure.error,
+    }));
+
+    await this.durableClient.markFailure(items).catch((error) => {
+      this.warnOnce(
+        'connector-status-failure-failure',
+        '[Blyp] Warning: Failed to record connector delivery failure state.',
+        error
+      );
+    });
   }
 
   private stageDurableJob(
@@ -556,11 +588,12 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
           });
 
           if (result.ok) {
+            await this.recordSuccessfulDispatch(batch, Date.now());
             await this.durableClient.ack(batch.map((job) => job.id));
             continue;
           }
 
-          this.handleRetryableFailure(batch, result, true);
+          await this.handleRetryableFailure(batch, result, true, Date.now());
         }
       }
     } finally {

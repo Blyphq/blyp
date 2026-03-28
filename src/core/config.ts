@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { createJiti } from 'jiti';
 import { dirname, resolve } from 'path';
+import { getDefaultConnectorQueuePath } from '../connectors/delivery/queue-path';
 import { DEFAULT_CLIENT_LOG_ENDPOINT } from '../shared/client-log';
 import { createWarnOnceLogger } from '../shared/once';
 import { resolveRedactionConfig } from '../shared/redaction';
@@ -137,7 +138,7 @@ Required<Omit<ConnectorDeliveryConfig, 'retry'>> & {
 } = {
   enabled: false,
   memoryBufferSize: 500,
-  durableQueuePath: resolve(process.cwd(), '.blyp', 'connectors.sqlite'),
+  durableQueuePath: getDefaultConnectorQueuePath(),
   durableSpillStrategy: 'after-first-failure',
   memoryBatchSize: 25,
   sqliteWriteBatchSize: 100,

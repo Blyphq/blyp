@@ -106,7 +106,7 @@ describe('Configuration', () => {
       },
     });
     expect(resolved.connectors.delivery.durableQueuePath).toContain(
-      path.join('.blyp', 'connectors.sqlite')
+      path.join('.blyp', 'queue.db')
     );
   });
 
