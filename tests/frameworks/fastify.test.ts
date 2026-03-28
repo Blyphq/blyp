@@ -43,6 +43,9 @@ describe('Fastify Integration', () => {
 
     expect(response.statusCode).toBe(200);
     const traceId = response.headers['x-blyp-trace-id'];
+    if (typeof traceId !== 'string') {
+      throw new Error('missing x-blyp-trace-id header');
+    }
     expect(requestTraceId).toBe(traceId);
     expect(traceId).toMatch(/^trace_/);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));

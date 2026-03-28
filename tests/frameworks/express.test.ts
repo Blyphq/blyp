@@ -47,6 +47,9 @@ describe('Express Integration', () => {
 
       expect(response.status).toBe(200);
       const traceId = response.headers.get('x-blyp-trace-id');
+      if (traceId === null) {
+        throw new Error('missing x-blyp-trace-id header');
+      }
       expect(requestTraceId).toBe(traceId);
       expect(traceId).toMatch(/^trace_/);
       const records = readJsonLines(path.join(tempDir, 'log.ndjson'));

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createAstroLogger } from '../../src/frameworks/astro';
+import type { AstroMiddlewareContext } from '../../src/types/frameworks/astro';
 import { resetConfigCache } from '../../src/core/config';
 import { createDrizzleDatabaseAdapter } from '../../src/database';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
@@ -21,7 +22,7 @@ describe('Astro Integration', () => {
     resetConfigCache();
   });
 
-  function createContext(url: string, method: string = 'GET') {
+  function createContext(url: string, method: string = 'GET'): AstroMiddlewareContext {
     return {
       request: new Request(url, { method }),
       url: new URL(url),
@@ -44,6 +45,9 @@ describe('Astro Integration', () => {
 
     expect(response.status).toBe(200);
     const traceId = response.headers.get('x-blyp-trace-id');
+    if (traceId === null) {
+      throw new Error('missing x-blyp-trace-id header');
+    }
     expect(context.locals.blypTraceId).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {

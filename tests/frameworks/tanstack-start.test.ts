@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createTanStackStartLogger } from '../../src/frameworks/tanstack-start';
+import type { TanStackStartMiddlewareContext } from '../../src/types/frameworks/tanstack-start';
 import { resetConfigCache } from '../../src/core/config';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
@@ -27,11 +28,12 @@ describe('TanStack Start Integration', () => {
       customProps: () => ({ framework: 'tanstack-start' }),
     });
     let middlewareTraceId = '';
+    type MiddlewareOptions = Parameters<TanStackStartMiddlewareContext['next']>[0];
 
     const response = await tanstackLogger.requestMiddleware({
       request: new Request('http://localhost/posts'),
       context: {},
-      next: async (options) => {
+      next: async (options?: MiddlewareOptions) => {
         middlewareTraceId = String(options?.context?.blypTraceId ?? '');
         expect(options?.context?.blypTraceId).toMatch(/^trace_/);
         (options?.context?.blypLog as { info(message: string): void }).info('tanstack-route');
@@ -42,6 +44,9 @@ describe('TanStack Start Integration', () => {
 
     expect(response.status).toBe(200);
     const traceId = response.headers.get('x-blyp-trace-id');
+    if (traceId === null) {
+      throw new Error('missing x-blyp-trace-id header');
+    }
     expect(middlewareTraceId).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
