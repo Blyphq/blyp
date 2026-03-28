@@ -39,6 +39,9 @@ describe('Next.js Integration', () => {
 
     expect(response.status).toBe(200);
     const traceId = response.headers.get('x-blyp-trace-id');
+    if (traceId === null) {
+      throw new Error('missing x-blyp-trace-id header');
+    }
     expect(handlerTraceId).toBe(traceId);
     expect(traceId).toMatch(/^trace_/);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
@@ -122,13 +125,16 @@ describe('Next.js Integration', () => {
 
     const response = await handler(new Request('http://localhost/api/trace'), {});
     const responseTraceId = response.headers.get('x-blyp-trace-id');
+    if (responseTraceId === null) {
+      throw new Error('missing x-blyp-trace-id header');
+    }
     await nextLogger.clientLogHandler(
       new Request('http://localhost/inngest', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
         },
-        body: JSON.stringify(createClientPayload({ traceId: responseTraceId ?? undefined })),
+        body: JSON.stringify(createClientPayload({ traceId: responseTraceId })),
       })
     );
     await waitForFileFlush();

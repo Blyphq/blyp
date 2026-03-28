@@ -3,6 +3,7 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createStructuredLog } from '../../src';
 import { createElysiaLogger } from '../../src/frameworks/elysia';
+import type { ElysiaContext } from '../../src/types/frameworks/elysia';
 import { resetConfigCache } from '../../src/core/config';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
@@ -31,7 +32,7 @@ describe('Elysia Integration', () => {
       customProps: () => ({ framework: 'elysia' }),
     });
 
-    app.get('/hello', ({ log }) => {
+    app.get('/hello', ({ log }: { log: { info(message: string): void } }) => {
       log.info('elysia-route');
       return 'ok';
     });
@@ -77,7 +78,7 @@ describe('Elysia Integration', () => {
       pretty: false,
     });
 
-    enabledApp.get('/boom', ({ set }) => {
+    enabledApp.get('/boom', ({ set }: Pick<ElysiaContext, 'set'>) => {
       set.status = 500;
       return 'fail';
     });
@@ -99,7 +100,7 @@ describe('Elysia Integration', () => {
       logErrors: false,
     });
 
-    disabledApp.get('/boom', ({ set }) => {
+    disabledApp.get('/boom', ({ set }: Pick<ElysiaContext, 'set'>) => {
       set.status = 500;
       return 'fail';
     });
@@ -192,7 +193,7 @@ describe('Elysia Integration', () => {
       customProps: () => ({ framework: 'elysia' }),
     });
 
-    app.post('/structured', ({ log }) => {
+    app.post('/structured', ({ log }: { log: { info(message: string): void } }) => {
       const structured = createStructuredLog<{
         userId: string;
       }>('checkout', { userId: 'user-1' });

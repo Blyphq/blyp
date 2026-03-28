@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createSvelteKitLogger } from '../../src/frameworks/sveltekit';
+import type { SvelteKitRequestEvent } from '../../src/types/frameworks/sveltekit';
 import { resetConfigCache } from '../../src/core/config';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
@@ -26,7 +27,7 @@ describe('SvelteKit Integration', () => {
       pretty: false,
       customProps: () => ({ framework: 'sveltekit' }),
     });
-    const event = {
+    const event: SvelteKitRequestEvent = {
       request: new Request('http://localhost/posts'),
       url: new URL('http://localhost/posts'),
       locals: {},
@@ -43,6 +44,9 @@ describe('SvelteKit Integration', () => {
 
     expect(response.status).toBe(200);
     const traceId = response.headers.get('x-blyp-trace-id');
+    if (traceId === null) {
+      throw new Error('missing x-blyp-trace-id header');
+    }
     expect(traceId).toMatch(/^trace_/);
     expect(event.locals.blypTraceId).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));

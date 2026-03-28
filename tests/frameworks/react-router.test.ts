@@ -45,8 +45,11 @@ describe('React Router Integration', () => {
 
     expect(response.status).toBe(200);
     const traceId = response.headers.get('x-blyp-trace-id');
+    if (traceId === null) {
+      throw new Error('missing x-blyp-trace-id header');
+    }
     expect(requestTraceId).toBe(traceId);
-    expect(reactRouterLogger.getTraceId(context)).toBe(traceId ?? undefined);
+    expect(reactRouterLogger.getTraceId(context)).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
