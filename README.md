@@ -64,6 +64,10 @@ npx expo install expo-network
 
 Also: `npm install @blyp/core` | `yarn add @blyp/core` | `pnpm add @blyp/core`
 
+## Stability
+
+Blyp publishes a production stability contract in [STABILITY.md](./STABILITY.md). The core logger API, framework adapters, and connector APIs are Stable. Studio UI and CLI commands are Beta. Internal APIs and unexported symbols are Unstable.
+
 ## Usage
 
 ### Basic logger
