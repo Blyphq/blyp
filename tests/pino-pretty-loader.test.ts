@@ -4,8 +4,8 @@ import path from 'path';
 import { beforeAll, describe, expect, it } from 'bun:test';
 
 const repoRoot = path.resolve(import.meta.dir, '..');
-const distExpressEsm = path.join(repoRoot, 'dist', 'express.mjs');
-const distExpressCjs = path.join(repoRoot, 'dist', 'express.js');
+let builtExpressEsmPath = '';
+let builtExpressCjsPath = '';
 
 function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
   if (!stream) {
@@ -40,19 +40,21 @@ async function runNode(args: string[]): Promise<{
 }
 
 function ensureBuildArtifacts(): void {
-  const cleanResult = Bun.spawnSync(['bun', 'run', 'clean'], {
-    cwd: repoRoot,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-
-  if (cleanResult.exitCode !== 0) {
-    const stdout = cleanResult.stdout ? new TextDecoder().decode(cleanResult.stdout) : '';
-    const stderr = cleanResult.stderr ? new TextDecoder().decode(cleanResult.stderr) : '';
-    throw new Error(`clean failed\n${stdout}\n${stderr}`);
-  }
-
-  const buildResult = Bun.spawnSync(['bun', 'run', 'build:js'], {
+  const tempOutDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blyp-dist-'));
+  const tsupBin = path.join(repoRoot, 'node_modules', '.bin', 'tsup');
+  const buildResult = Bun.spawnSync([
+    tsupBin,
+    'src/frameworks/express/index.ts',
+    '--format',
+    'esm,cjs',
+    '--platform',
+    'node',
+    '--target',
+    'es2020',
+    '--out-dir',
+    tempOutDir,
+    '--silent',
+  ], {
     cwd: repoRoot,
     stdout: 'pipe',
     stderr: 'pipe',
@@ -63,6 +65,9 @@ function ensureBuildArtifacts(): void {
     const stderr = buildResult.stderr ? new TextDecoder().decode(buildResult.stderr) : '';
     throw new Error(`build:js failed\n${stdout}\n${stderr}`);
   }
+
+  builtExpressEsmPath = path.join(tempOutDir, 'index.mjs');
+  builtExpressCjsPath = path.join(tempOutDir, 'index.js');
 }
 
 function makeMissingModuleHook(): string {
@@ -93,7 +98,7 @@ describe('pino-pretty loading', () => {
 
   it('loads the built ESM express entrypoint in Node with pretty logging enabled', async () => {
     const script = [
-      `const mod = await import('file://${escapeForJavaScriptLiteral(distExpressEsm)}');`,
+      `const mod = await import('file://${escapeForJavaScriptLiteral(builtExpressEsmPath)}');`,
       'mod.createLogger({ pretty: true, file: { enabled: false } });',
       'process.exit(0);',
     ].join('\n');
@@ -106,7 +111,7 @@ describe('pino-pretty loading', () => {
 
   it('loads the built CJS express entrypoint in Node with pretty logging enabled', async () => {
     const script = [
-      `const mod = require('${escapeForJavaScriptLiteral(distExpressCjs)}');`,
+      `const mod = require('${escapeForJavaScriptLiteral(builtExpressCjsPath)}');`,
       'mod.createLogger({ pretty: true, file: { enabled: false } });',
       'process.exit(0);',
     ].join('\n');
@@ -119,7 +124,7 @@ describe('pino-pretty loading', () => {
   it('reports a clear error when pretty logging is enabled without pino-pretty', async () => {
     const hookPath = makeMissingModuleHook();
     const script = [
-      `const mod = await import('file://${escapeForJavaScriptLiteral(distExpressEsm)}');`,
+      `const mod = await import('file://${escapeForJavaScriptLiteral(builtExpressEsmPath)}');`,
       'try {',
       "  mod.createLogger({ pretty: true, file: { enabled: false } });",
       '} catch (error) {',
