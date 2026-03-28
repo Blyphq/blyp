@@ -212,6 +212,18 @@ describe('package surface', () => {
     expect(packageJson.exports?.['./connectors/sentry']).toBeUndefined();
   });
 
+  it('keeps the Elysia declaration surface opaque to avoid duplicate framework type instances', () => {
+    const elysiaLoggerDeclaration = fs.readFileSync(
+      path.join(repoRoot, 'dist/frameworks/elysia/logger.d.ts'),
+      'utf8'
+    );
+
+    expect(elysiaLoggerDeclaration).toContain(
+      'export declare function createElysiaLogger(config?: ElysiaLoggerConfig): ElysiaLoggerPlugin;'
+    );
+    expect(elysiaLoggerDeclaration).not.toContain("import { Elysia } from 'elysia';");
+  });
+
   it('declares framework and connector integrations as optional peers', () => {
     const packageJson = readPackageJson();
 

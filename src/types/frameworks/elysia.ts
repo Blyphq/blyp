@@ -40,5 +40,9 @@ export interface ElysiaLoggerConfig extends ServerLoggerConfig<ElysiaContext> {}
 export interface ElysiaClientLogIngestionConfig
   extends SharedClientLogIngestionConfig<ElysiaContext> {}
 
+// Keep the public plugin return type opaque so local path-linked installs do not
+// leak Blyp's own Elysia type instance into consumer apps.
+export type ElysiaLoggerPlugin = any;
+
 export type LoggerConfig = ElysiaLoggerConfig;
 export type ClientLogIngestionConfig = ElysiaClientLogIngestionConfig;

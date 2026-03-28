@@ -3,6 +3,7 @@ export type {
   ClientLogIngestionConfig,
   ElysiaClientLogIngestionConfig,
   ElysiaLoggerConfig,
+  ElysiaLoggerPlugin,
   LoggerConfig,
   ElysiaContext,
   ResolveCtx,

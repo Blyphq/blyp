@@ -3,6 +3,7 @@ import type {
   ClientLogIngestionConfig,
   ElysiaContext,
   ElysiaLoggerConfig,
+  ElysiaLoggerPlugin,
 } from '../../types/frameworks/elysia';
 import {
   BLYP_TRACE_HEADER,
@@ -24,7 +25,9 @@ import {
   shouldSkipErrorLogging,
 } from '../shared';
 
-export function createElysiaLogger(config: ElysiaLoggerConfig = {}) {
+export function createElysiaLogger(
+  config: ElysiaLoggerConfig = {}
+): ElysiaLoggerPlugin {
   const shared = resolveServerLogger(config);
 
   let app = new Elysia({ name: 'logger' })
