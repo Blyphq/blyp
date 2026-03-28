@@ -253,7 +253,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "STABILITY.md"
   ],
   "publishConfig": {
     "access": "public"
