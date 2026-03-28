@@ -150,7 +150,7 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
     await this.durableInitPromise?.catch(() => {});
     await this.processUntilIdle();
     await this.flushDurableStaging();
-    await this.processDurableQueueOnce();
+    await this.drainDurableQueueForFlush();
     await this.flushDurableStaging();
     await this.processUntilIdle();
   }
@@ -323,6 +323,10 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
     fromDurable: boolean,
     now: number
   ): Promise<void> {
+    if (!fromDurable) {
+      await this.durableInitPromise?.catch(() => {});
+    }
+
     const durableReschedules: DurableQueueRescheduleInput[] = [];
     const durableDeadLetters: DurableConnectorDeadLetterRecord[] = [];
 
@@ -598,6 +602,43 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
       }
     } finally {
       this.durablePollRunning = false;
+    }
+  }
+
+  private async drainDurableQueueForFlush(): Promise<void> {
+    if (!this.durableReady || !this.durableClient) {
+      return;
+    }
+
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+
+    try {
+      while (!this.closed) {
+        while (this.durablePollRunning) {
+          await delay(10);
+        }
+
+        await this.processDurableQueueOnce();
+        await this.flushDurableStaging();
+
+        const remainingDurableJobs = await this.durableClient.count().catch(() => 0);
+        if (
+          remainingDurableJobs === 0 &&
+          !this.durablePollRunning &&
+          this.durableStaging.length === 0
+        ) {
+          break;
+        }
+
+        await delay(10);
+      }
+    } finally {
+      if (!this.closed) {
+        this.scheduleDurablePoll();
+      }
     }
   }
 

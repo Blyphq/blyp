@@ -40,7 +40,7 @@ async function runNode(args: string[]): Promise<{
 }
 
 function ensureBuildArtifacts(): void {
-  const tempOutDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blyp-dist-'));
+  const tempOutDir = fs.mkdtempSync(path.join(repoRoot, '.tmp-blyp-dist-'));
   const tsupBin = path.join(repoRoot, 'node_modules', '.bin', 'tsup');
   const buildResult = Bun.spawnSync([
     tsupBin,

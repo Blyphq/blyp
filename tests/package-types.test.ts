@@ -21,7 +21,7 @@ describe('package surface', () => {
     const packageJson = readPackageJson();
 
     expect(packageJson.types).toBe('./dist/index.d.ts');
-    expect(packageJson.files).toEqual(['dist', 'README.md']);
+    expect(packageJson.files).toEqual(['dist', 'README.md', 'STABILITY.md']);
     expect(fs.existsSync(path.join(repoRoot, 'exports'))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, 'types'))).toBe(false);
   });
