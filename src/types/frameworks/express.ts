@@ -24,6 +24,7 @@ export type { HttpRequestLog };
 declare module 'express-serve-static-core' {
   interface Request {
     blypLog: BlypLogger;
+    blypTraceId?: string;
   }
 
   interface Locals {

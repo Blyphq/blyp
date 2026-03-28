@@ -265,6 +265,26 @@ describe('Client Logger', () => {
     expect(payload.metadata).toEqual({ app: 'web' });
   });
 
+  it('forwards trace ids and preserves them through child loggers', async () => {
+    let body = '';
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }) as typeof fetch,
+    });
+
+    createClientLogger({ traceId: 'trace_84f2' })
+      .child({ feature: 'checkout' })
+      .info('trace-aware');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    expect(payload.traceId).toBe('trace_84f2');
+    expect((payload.bindings as Record<string, unknown>)?.feature).toBe('checkout');
+  });
+
   it('includes the PostHog connector and logs one local error when the server reports it missing', async () => {
     let body = '';
     const errorCalls: unknown[][] = [];

@@ -35,13 +35,16 @@ describe('Astro Integration', () => {
       pretty: false,
       customProps: () => ({ framework: 'astro' }),
     });
+    const context = createContext('http://localhost/posts');
 
-    const response = await astroLogger.onRequest(createContext('http://localhost/posts'), async () => {
+    const response = await astroLogger.onRequest(context, async () => {
       return new Response('ok', { status: 200 });
     });
     await waitForFileFlush();
 
     expect(response.status).toBe(200);
+    const traceId = response.headers.get('x-blyp-trace-id');
+    expect(context.locals.blypTraceId).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
@@ -49,6 +52,7 @@ describe('Astro Integration', () => {
     });
 
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('astro');
+    expect(requestRecord?.traceId).toBe(traceId);
   });
 
   it('logs error responses and supports ignorePaths', async () => {

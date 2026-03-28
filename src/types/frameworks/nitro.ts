@@ -23,6 +23,7 @@ export interface NitroNodeLike {
 
 export interface NitroEventContext {
   blypLog?: BlypLogger;
+  blypTraceId?: string;
   [key: string | symbol]: unknown;
 }
 

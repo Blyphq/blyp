@@ -7,13 +7,13 @@ import type {
 
 export interface TanStackStartMiddlewareContext {
   request: Request;
-  context: Record<string, unknown>;
-  next: (options?: { context?: Record<string, unknown> }) => Promise<Response>;
+  context: Record<string, unknown> & { blypTraceId?: string };
+  next: (options?: { context?: Record<string, unknown> & { blypTraceId?: string } }) => Promise<Response>;
 }
 
 export interface TanStackStartLoggerContext {
   request: Request;
-  context: Record<string, unknown>;
+  context: Record<string, unknown> & { blypTraceId?: string };
   response?: Response;
   error?: unknown;
 }

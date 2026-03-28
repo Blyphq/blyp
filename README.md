@@ -64,6 +64,10 @@ npx expo install expo-network
 
 Also: `npm install @blyp/core` | `yarn add @blyp/core` | `pnpm add @blyp/core`
 
+## Stability
+
+Blyp publishes a production stability contract in [STABILITY.md](./STABILITY.md). The core logger API, framework adapters, and connector APIs are Stable. Studio UI and CLI commands are Beta. Internal APIs and unexported symbols are Unstable.
+
 ## Usage
 
 ### Basic logger
@@ -745,7 +749,23 @@ bun run type-check
 
 ## Publishing
 
-GitHub Actions publishes the package to npm when a GitHub Release is published. Add an `NPM_TOKEN` repository secret before using the workflow.
+GitHub Actions publishes the package to npm when a GitHub Release is published. Add an `NPM_TOKEN` repository secret before using the workflow. The publish workflow uses npm provenance attestation, and maintainers should rotate `NPM_TOKEN` every 90 days.
+
+## Security
+
+Security issues should be reported through GitHub's private advisory flow for this repository. Public issue reports are not the right channel for suspected vulnerabilities. Security details and disclosure expectations are in [SECURITY.md](SECURITY.md).
+
+## Runtime dependencies
+
+Blyp keeps its shipped runtime dependency surface small and documents each direct dependency:
+
+- `pino`: core structured logger engine
+- `pino-pretty`: human-readable local and development console output when `pretty` mode is enabled
+- `jiti`: runtime loading for `blyp.config.*` files and optional first-party subpath modules
+- `fflate`: gzip compression and decompression for archived log files and log reading
+- `zod`: runtime validation for shared and client payloads
+
+Optional connectors stay in `peerDependencies` so regular installs do not pull large connector-specific transitive trees by default.
 
 ## Contributing
 
@@ -764,6 +784,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 - [GitHub Repository](https://github.com/Blyphq/blyp)
 - [NPM Package](https://www.npmjs.com/package/@blyp/core)
 - [Documentation](docs/README.md)
+- [Security Policy](SECURITY.md)
 - [Issues](https://github.com/Blyphq/blyp/issues)
 
 ---

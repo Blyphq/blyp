@@ -6,6 +6,7 @@ import type {
   SvelteKitRequestEvent,
 } from '../../types/frameworks/sveltekit';
 import {
+  createRequestTraceId,
   createRequestScopedLogger,
   createRequestLike,
   emitHttpErrorLog,
@@ -16,9 +17,11 @@ import {
   resolveAdditionalProps,
   resolveServerLogger,
   runWithRequestContext,
+  setActiveRequestTraceId,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
   toErrorLike,
+  withTraceResponseHeader,
 } from '../shared';
 
 function createContext(
@@ -36,7 +39,10 @@ export function createSvelteKitLogger(
 
   const handle: SvelteKitHandle = async ({ event, resolve }) => {
     return runWithRequestContext(async () => {
+      const traceId = createRequestTraceId();
       let structuredLogEmitted = false;
+      setActiveRequestTraceId(traceId);
+      event.locals.blypTraceId = traceId;
       event.locals.blypLog = createRequestScopedLogger(shared.logger, {
         resolveStructuredFields: () => ({
           method: event.request.method,
@@ -59,7 +65,7 @@ export function createSvelteKitLogger(
         const response = await resolve(event);
         if (structuredLogEmitted) {
           await flushServerLoggerSafely(shared);
-          return response;
+          return withTraceResponseHeader(response, traceId);
         }
 
         const statusCode = response.status;
@@ -93,7 +99,7 @@ export function createSvelteKitLogger(
 
         await flushServerLoggerSafely(shared);
 
-        return response;
+        return withTraceResponseHeader(response, traceId);
       } catch (error) {
         if (!structuredLogEmitted && !shouldSkipErrorLogging(shared, path)) {
           emitHttpErrorLog(
@@ -120,31 +126,40 @@ export function createSvelteKitLogger(
     logger: shared.logger,
     handle,
     clientLogHandler: async (event) => {
-      const path = event.url.pathname;
-      if (path !== shared.ingestionPath) {
-        return new Response(
-          JSON.stringify({
-            error: `Mounted route path ${path} does not match configured client logging path ${shared.ingestionPath}`,
-          }),
-          {
-            status: 500,
-            headers: {
-              'content-type': 'application/json',
-            },
-          }
-        );
-      }
+      return runWithRequestContext(async () => {
+        const traceId = createRequestTraceId();
+        setActiveRequestTraceId(traceId);
+        event.locals.blypTraceId = traceId;
+        const path = event.url.pathname;
+        if (path !== shared.ingestionPath) {
+          return new Response(
+            JSON.stringify({
+              error: `Mounted route path ${path} does not match configured client logging path ${shared.ingestionPath}`,
+            }),
+            {
+              status: 500,
+              headers: {
+                'content-type': 'application/json',
+                'x-blyp-trace-id': traceId,
+              },
+            }
+          );
+        }
 
-      const result = await handleClientLogIngestion({
-        config: shared,
-        ctx: createContext(event),
-        request: event.request,
-        deliveryPath: path,
-      });
-      await flushServerLoggerSafely(shared);
-      return new Response(null, {
-        status: result.status,
-        headers: result.headers,
+        const result = await handleClientLogIngestion({
+          config: shared,
+          ctx: createContext(event),
+          request: event.request,
+          deliveryPath: path,
+        });
+        await flushServerLoggerSafely(shared);
+        return new Response(null, {
+          status: result.status,
+          headers: {
+            ...result.headers,
+            'x-blyp-trace-id': traceId,
+          },
+        });
       });
     },
   };

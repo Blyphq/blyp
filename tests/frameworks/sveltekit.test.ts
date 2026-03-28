@@ -42,6 +42,9 @@ describe('SvelteKit Integration', () => {
     await waitForFileFlush();
 
     expect(response.status).toBe(200);
+    const traceId = response.headers.get('x-blyp-trace-id');
+    expect(traceId).toMatch(/^trace_/);
+    expect(event.locals.blypTraceId).toBe(traceId);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     const requestRecord = records.find((record) => {
       const data = record.data as Record<string, unknown> | undefined;
@@ -50,6 +53,7 @@ describe('SvelteKit Integration', () => {
 
     expect(records.some((record) => record.message === 'sveltekit-route')).toBe(true);
     expect((requestRecord?.data as Record<string, unknown>)?.framework).toBe('sveltekit');
+    expect(requestRecord?.traceId).toBe(traceId);
   });
 
   it('logs error responses and supports ignorePaths', async () => {

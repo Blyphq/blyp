@@ -164,6 +164,38 @@ export function attachNestRequestLogger(request: unknown, logger: unknown): void
   request.blypLog = logger;
 }
 
+export function attachNestRequestTraceId(request: unknown, traceId: string): void {
+  if (!isPlainObject(request)) {
+    return;
+  }
+
+  request.blypTraceId = traceId;
+
+  if (isPlainObject(request.raw)) {
+    request.raw.blypTraceId = traceId;
+  }
+}
+
+export function getNestRequestTraceId(request: unknown): string | undefined {
+  if (!isPlainObject(request)) {
+    return undefined;
+  }
+
+  if (typeof request.blypTraceId === 'string' && request.blypTraceId.length > 0) {
+    return request.blypTraceId;
+  }
+
+  if (
+    isPlainObject(request.raw) &&
+    typeof request.raw.blypTraceId === 'string' &&
+    request.raw.blypTraceId.length > 0
+  ) {
+    return request.raw.blypTraceId;
+  }
+
+  return undefined;
+}
+
 export function buildNestRequestLike(request: unknown) {
   const method = getNestRequestMethod(request);
   const headers = getNestRequestHeaders(request);

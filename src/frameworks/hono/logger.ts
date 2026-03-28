@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import type { HonoLoggerConfig } from '../../types/frameworks/hono';
 import {
+  createRequestTraceId,
   createRequestScopedLogger,
   createRequestLike,
   emitHttpErrorLog,
@@ -12,9 +13,11 @@ import {
   resolveAdditionalProps,
   resolveServerLogger,
   runWithRequestContext,
+  setActiveRequestTraceId,
   shouldSkipAutoLogging,
   shouldSkipErrorLogging,
   toErrorLike,
+  withTraceResponseHeader,
 } from '../shared';
 
 export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandler {
@@ -23,7 +26,9 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
   return async (context, next) => {
     return runWithRequestContext(async () => {
       const startTime = performance.now();
+      const traceId = createRequestTraceId();
       let structuredLogEmitted = false;
+      setActiveRequestTraceId(traceId);
       context.set(
         'blypLog',
         createRequestScopedLogger(shared.logger, {
@@ -37,6 +42,7 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
           },
         })
       );
+      context.set('blypTraceId', traceId);
       context.set('blypStartTime', startTime);
 
       const path = context.req.path || extractPathname(context.req.url);
@@ -55,7 +61,10 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
 
         return new Response(null, {
           status: result.status,
-          headers: result.headers,
+          headers: {
+            ...result.headers,
+            'x-blyp-trace-id': traceId,
+          },
         });
       }
 
@@ -68,6 +77,7 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
       } finally {
         if (structuredLogEmitted) {
           await flushServerLoggerSafely(shared);
+          context.res = withTraceResponseHeader(context.res, traceId);
           return;
         }
 
@@ -111,6 +121,7 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
           );
         }
         await flushServerLoggerSafely(shared);
+        context.res = withTraceResponseHeader(context.res, traceId);
       }
     });
   };
