@@ -1,8 +1,30 @@
 import fs from 'fs';
 import path from 'path';
+import { spawnSync } from 'child_process';
 import { describe, expect, it } from 'bun:test';
 
 const repoRoot = path.resolve(import.meta.dir, '..');
+const elysiaLoggerDeclarationPath = path.join(repoRoot, 'dist/frameworks/elysia/logger.d.ts');
+let typesBuilt = false;
+
+function ensureTypeDeclarations(): void {
+  if (typesBuilt && fs.existsSync(elysiaLoggerDeclarationPath)) {
+    return;
+  }
+
+  const result = spawnSync('bun', ['run', 'build:types'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to build type declarations for package surface tests.\n${result.stderr || result.stdout}`
+    );
+  }
+
+  typesBuilt = true;
+}
 
 function readPackageJson(): {
   types?: string;
@@ -213,10 +235,9 @@ describe('package surface', () => {
   });
 
   it('keeps the Elysia declaration surface opaque to avoid duplicate framework type instances', () => {
-    const elysiaLoggerDeclaration = fs.readFileSync(
-      path.join(repoRoot, 'dist/frameworks/elysia/logger.d.ts'),
-      'utf8'
-    );
+    ensureTypeDeclarations();
+
+    const elysiaLoggerDeclaration = fs.readFileSync(elysiaLoggerDeclarationPath, 'utf8');
 
     expect(elysiaLoggerDeclaration).toContain(
       'export declare function createElysiaLogger(config?: ElysiaLoggerConfig): ElysiaLoggerPlugin;'
