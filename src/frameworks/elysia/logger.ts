@@ -30,7 +30,9 @@ export function createElysiaLogger(
 ): ElysiaLoggerPlugin {
   const shared = resolveServerLogger(config);
 
-  let app = new Elysia({ name: 'logger' })
+  // Keep the implementation value opaque so declaration emit does not expose
+  // Elysia's concrete type through this public factory.
+  const plugin = new Elysia({ name: 'logger' })
     .decorate('log', shared.logger)
     .derive({ as: 'scoped' }, (ctx) => {
       enterRequestContext();
@@ -142,7 +144,7 @@ export function createElysiaLogger(
     });
 
   if (shared.resolvedClientLogging) {
-    app = app.post(shared.ingestionPath, async (ctx) => {
+    plugin.post(shared.ingestionPath, async (ctx) => {
       const requestContext = ctx as unknown as ElysiaContext;
       const result = await handleClientLogIngestion({
         config: shared,
@@ -163,5 +165,5 @@ export function createElysiaLogger(
     });
   }
 
-  return app;
+  return plugin as unknown as ElysiaLoggerPlugin;
 }
