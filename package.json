@@ -68,6 +68,9 @@
       "ai/vercel": [
         "dist/ai/vercel/index.d.ts"
       ],
+      "ai/better-agent": [
+        "dist/ai/better-agent/index.d.ts"
+      ],
       "ai/openai": [
         "dist/ai/openai/index.d.ts"
       ],
@@ -185,6 +188,11 @@
       "import": "./dist/ai/vercel.mjs",
       "require": "./dist/ai/vercel.js"
     },
+    "./ai/better-agent": {
+      "types": "./dist/ai/better-agent/index.d.ts",
+      "import": "./dist/ai/better-agent.mjs",
+      "require": "./dist/ai/better-agent.js"
+    },
     "./ai/openai": {
       "types": "./dist/ai/openai/index.d.ts",
       "import": "./dist/ai/openai.mjs",
@@ -273,6 +281,7 @@
     "clean": "rm -rf dist .log"
   },
   "devDependencies": {
+    "@better-agent/core": "0.1.0-beta.1",
     "@databuddy/sdk": "2.3.29",
     "@nestjs/common": "11.1.16",
     "@nestjs/core": "11.1.16",
@@ -299,6 +308,7 @@
     "tsup": "8.5.1"
   },
   "peerDependencies": {
+    "@better-agent/core": "^0.1.0-beta.1",
     "@databuddy/sdk": "^2",
     "@logtail/node": "^0.5",
     "@nestjs/common": "^10 || ^11",
@@ -329,6 +339,9 @@
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
+    "@better-agent/core": {
+      "optional": true
+    },
     "@databuddy/sdk": {
       "optional": true
     },

@@ -270,6 +270,7 @@ type MutableSDKTrace = {
   finishReason?: string;
   input?: unknown;
   output?: unknown;
+  reasoning?: unknown;
   toolCalls: AIToolCallRecord[];
   events: BlypTraceEvent[];
   error?: unknown;
@@ -347,6 +348,9 @@ export function createSDKTraceState(options: {
     get output() {
       return state.output;
     },
+    get reasoning() {
+      return state.reasoning;
+    },
     get toolCalls() {
       return state.toolCalls.length > 0 ? state.toolCalls : undefined;
     },
@@ -396,8 +400,16 @@ export function setSDKOutput(state: MutableSDKTrace, output: unknown): void {
   state.output = output;
 }
 
+export function setSDKReasoning(state: MutableSDKTrace, reasoning: unknown): void {
+  state.reasoning = reasoning;
+}
+
 export function setSDKRawProviderPayload(state: MutableSDKTrace, payload: unknown): void {
   state.rawProviderPayload = toProviderPayload(payload);
+}
+
+export function setSDKStreamed(state: MutableSDKTrace, streamed: boolean): void {
+  state.streamed = streamed;
 }
 
 export async function markSDKFirstChunk(
@@ -590,9 +602,17 @@ export async function finalizeSDKTrace(
     state.truncated ||= captured.truncated;
   }
 
+  if (state.capture.reasoning && state.reasoning !== undefined) {
+    const reasoningValue = toLoggableValue(state.reasoning);
+    const captured = captureValue(reasoningValue, state.options.limits.maxContentBytes);
+    trace.reasoning = captured.value;
+    state.truncated ||= captured.truncated;
+  }
+
   const tools = finalizeSDKTools(state);
   if (tools) {
     trace.tools = tools;
+    trace.toolCalls = tools;
   }
 
   if (state.capture.rawProviderPayload && state.rawProviderPayload !== undefined) {

@@ -67,6 +67,7 @@ describe('package surface', () => {
         nitro: ['dist/frameworks/nitro/index.d.ts'],
         nuxt: ['dist/frameworks/nuxt/index.d.ts'],
         'ai/vercel': ['dist/ai/vercel/index.d.ts'],
+        'ai/better-agent': ['dist/ai/better-agent/index.d.ts'],
         'ai/openai': ['dist/ai/openai/index.d.ts'],
         'ai/anthropic': ['dist/ai/anthropic/index.d.ts'],
         'ai/shared': ['dist/ai/shared/index.d.ts'],
@@ -162,6 +163,11 @@ describe('package surface', () => {
         import: './dist/ai/vercel.mjs',
         require: './dist/ai/vercel.js',
       },
+      './ai/better-agent': {
+        types: './dist/ai/better-agent/index.d.ts',
+        import: './dist/ai/better-agent.mjs',
+        require: './dist/ai/better-agent.js',
+      },
       './ai/openai': {
         types: './dist/ai/openai/index.d.ts',
         import: './dist/ai/openai.mjs',
@@ -249,6 +255,7 @@ describe('package surface', () => {
     const packageJson = readPackageJson();
 
     const optionalPeers = [
+      '@better-agent/core',
       '@databuddy/sdk',
       '@logtail/node',
       '@nestjs/common',

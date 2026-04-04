@@ -267,6 +267,7 @@ The Expo logger uses the runtime `fetch` implementation to send logs and reads c
 Blyp supports two AI tracing modes:
 
 - `@blyp/core/ai/vercel` for Vercel AI SDK middleware
+- `@blyp/core/ai/better-agent` for Better Agent plugins and manual trackers
 - `@blyp/core/ai/openai` and `@blyp/core/ai/anthropic` for direct provider SDK wrappers
 
 Blyp normalizes telemetry. It does not expose a cross-provider generation API.
@@ -275,6 +276,12 @@ Install the AI SDK in apps that use this entrypoint:
 
 ```bash
 bun add ai
+```
+
+Install Better Agent in apps that use the Better Agent entrypoint:
+
+```bash
+bun add @better-agent/core
 ```
 
 ### Quick start
@@ -340,6 +347,79 @@ const model = blypModel(anthropic('claude-sonnet-4-5'), {
 - Input, output, reasoning, tool payloads, and stream chunks are not captured unless you enable them.
 - `exclude.metadataPaths`, `exclude.toolNames`, and `exclude.providerOptions` run before Blyp writes the final structured record.
 - Content and event limits are capped. When Blyp truncates captured data, it keeps summary metrics and marks the trace as truncated.
+
+### Better Agent tracing
+
+Use the Better Agent plugin to emit one aggregated `ai_trace` for each Better Agent run.
+
+```typescript
+import { betterAgent } from '@better-agent/core';
+import { blypPlugin } from '@blyp/core/ai/better-agent';
+
+const app = betterAgent({
+  agents: [supportAgent],
+  plugins: [
+    blypPlugin({
+      operation: 'support_chat',
+      metadata: { team: 'support' },
+      capture: {
+        input: true,
+        output: true,
+        toolInputs: true,
+        toolOutputs: true,
+      },
+    }),
+  ],
+});
+```
+
+The Better Agent integration observes committed runtime events through `onEvent` and aggregates per-step model usage through `onAfterModelCall`. Each run emits one final structured `ai_trace` record keyed by the Better Agent `runId`.
+
+#### Resolver example
+
+Use `resolveRun(...)` when you want Better Agent traces to report the provider and model behind an agent rather than the default `provider: 'better-agent'` and `model: agentName`.
+
+```typescript
+import { blypPlugin } from '@blyp/core/ai/better-agent';
+
+const plugin = blypPlugin({
+  resolveRun({ agentName }) {
+    if (agentName === 'support-agent') {
+      return {
+        provider: 'openai',
+        model: 'gpt-5',
+        operation: 'support_chat',
+        metadata: { route: 'support' },
+      };
+    }
+  },
+});
+```
+
+#### Manual tracker
+
+Use `createBetterAgentTracker(...)` when you need to wire events yourself instead of registering the app-level plugin.
+
+```typescript
+import { createBetterAgentTracker } from '@blyp/core/ai/better-agent';
+
+const tracker = createBetterAgentTracker({
+  capture: {
+    output: true,
+    rawProviderPayload: true,
+  },
+});
+
+await tracker.onEvent(runStartedEvent);
+await tracker.onAfterModelCall(modelResponse, { stepIndex: 0 });
+await tracker.onEvent(runFinishedEvent);
+```
+
+Limitations:
+
+- The manual tracker needs `onAfterModelCall(...)` for full multi-step usage aggregation and per-step raw provider payload capture.
+- Without a resolver, Better Agent traces default to `provider: 'better-agent'` and `model: agentName`.
+- Better Agent traces use the same privacy controls as the other Blyp AI integrations, so captured input, output, reasoning, tools, raw payloads, and stream events stay off until you enable them.
 
 ### Captured data
 

@@ -2,8 +2,17 @@ import type { LanguageModelMiddleware } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { BlypLogger } from '../../core/logger';
 
-export type BlypAIProvider = 'openai' | 'anthropic' | 'openrouter';
-export type BlypAISDK = 'ai-sdk' | 'openai-sdk' | 'anthropic-sdk';
+export type BlypAIProvider =
+  | 'openai'
+  | 'anthropic'
+  | 'openrouter'
+  | 'better-agent'
+  | (string & {});
+export type BlypAISDK =
+  | 'ai-sdk'
+  | 'openai-sdk'
+  | 'anthropic-sdk'
+  | 'better-agent-sdk';
 
 export type BlypTraceEvent = {
   type:
@@ -118,6 +127,7 @@ export type BlypSDKContext = {
   finishReason?: string;
   input?: unknown;
   output?: unknown;
+  reasoning?: unknown;
   toolCalls?: AIToolCallRecord[];
   startedAt: string;
   firstChunkAt?: string;
@@ -158,8 +168,17 @@ export type BlypLLMTrace = {
     providerFormat?: unknown;
     status: 'started' | 'completed' | 'failed';
   }>;
+  toolCalls?: Array<{
+    id?: string;
+    name: string;
+    input?: unknown;
+    output?: unknown;
+    providerFormat?: unknown;
+    status: 'started' | 'completed' | 'failed';
+  }>;
   input?: unknown;
   output?: unknown;
+  reasoning?: unknown;
   timing: {
     startedAt: string;
     firstChunkAt?: string;

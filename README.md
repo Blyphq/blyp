@@ -83,7 +83,7 @@ See the [framework integration docs](docs/README.md#framework-integrations) for 
 
 - [Automatic redaction](docs/README.md#automatic-redaction) for common secrets, headers, and custom patterns.
 - [Client and Expo logging](docs/README.md#client) for browser and mobile apps that send logs through your backend.
-- [AI tracing](docs/README.md#ai-sdk-tracing) for Vercel AI SDK, OpenAI, Anthropic, and compatible transports.
+- [AI tracing](docs/README.md#ai-sdk-tracing) for Vercel AI SDK, Better Agent, OpenAI, Anthropic, and compatible transports.
 - [Database logging](docs/README.md#database-logging) when file persistence is not the right fit.
 - Connector forwarding for [PostHog](docs/README.md#posthog-connector), [Databuddy](docs/README.md#databuddy-connector), [Better Stack](docs/README.md#better-stack-connector), [Sentry](docs/README.md#sentry-connector), and [OTLP](docs/README.md#otlp-connector).
 
