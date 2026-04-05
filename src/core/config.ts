@@ -12,6 +12,7 @@ import type {
   BlypDestination,
   BlypConfig,
   BlypConnectorsConfig,
+  BlypUserConfig,
   ClientLoggingConfig,
   ConfigFileMatch,
   ConnectorDeliveryConfig,
@@ -49,6 +50,7 @@ export type {
   BetterStackErrorTrackingConfig,
   BlypDestination,
   BlypConnectorsConfig,
+  BlypUserConfig,
   ClientLoggingConfig,
   ConnectorDeliveryConfig,
   ConnectorRetryConfig,
@@ -95,7 +97,7 @@ const CONFIG_FILE_NAMES = [
   'blyp.config.cjs',
   'blyp.config.json',
 ] as const;
-const CONFIG_FILE_NAME = 'blyp.config.json';
+const CONFIG_FILE_NAME = 'blyp.config.ts';
 const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const DEFAULT_CONNECTOR_SERVICE_NAME = 'blyp-app';
 const DEFAULT_POSTHOG_SERVICE_NAME = DEFAULT_CONNECTOR_SERVICE_NAME;
@@ -209,30 +211,27 @@ function resolveDefaultConnectorServiceName(cwd: string = process.cwd()): string
   return findNearestPackageName(cwd) ?? DEFAULT_POSTHOG_SERVICE_NAME;
 }
 
-function getBootstrapConfig(): BlypConfig {
+function getBootstrapConfig(): BlypUserConfig {
   return {
     pretty: true,
     level: 'info',
     destination: 'file',
-    file: {
-      enabled: true,
-      format: 'ndjson',
-      rotation: {
-        enabled: true,
-        maxSizeBytes: 10 * 1024 * 1024,
-        maxArchives: 5,
-        compress: true,
-      },
-    },
     clientLogging: {
       enabled: true,
       path: DEFAULT_CLIENT_LOG_ENDPOINT,
     },
-    redact: DEFAULT_REDACTION_CONFIG,
-    connectors: {
-      delivery: DEFAULT_CONNECTOR_DELIVERY_CONFIG,
-    },
   };
+}
+
+function renderBootstrapConfigFile(config: BlypUserConfig): string {
+  return [
+    "import { defineConfig } from '@blyp/core';",
+    '',
+    'export default defineConfig(',
+    JSON.stringify(config, null, 2),
+    ');',
+    '',
+  ].join('\n');
 }
 
 function shouldBootstrapProjectFiles(cwd: string): boolean {
@@ -262,9 +261,9 @@ function ensureConfigFile(cwd: string): void {
   }
 
   try {
-    writeFileSync(configPath, `${JSON.stringify(getBootstrapConfig(), null, 2)}\n`);
+    writeFileSync(configPath, renderBootstrapConfigFile(getBootstrapConfig()));
   } catch (error) {
-    console.error('[Blyp] Warning: Failed to create blyp.config.json:', error);
+    console.error(`[Blyp] Warning: Failed to create ${CONFIG_FILE_NAME}:`, error);
   }
 }
 
@@ -337,7 +336,7 @@ function findConfigFile(): ConfigFileMatch | null {
 function normalizeLoadedConfig(
   value: unknown,
   configPath: string
-): Partial<BlypConfig> {
+): BlypUserConfig {
   const normalized = (
     value &&
     typeof value === 'object' &&
@@ -355,10 +354,10 @@ function normalizeLoadedConfig(
     return {};
   }
 
-  return normalized as Partial<BlypConfig>;
+  return normalized as BlypUserConfig;
 }
 
-function parseJsonConfigFile(configPath: string): Partial<BlypConfig> {
+function parseJsonConfigFile(configPath: string): BlypUserConfig {
   try {
     const content = readFileSync(configPath, 'utf-8');
     return normalizeLoadedConfig(JSON.parse(content), configPath);
@@ -368,7 +367,7 @@ function parseJsonConfigFile(configPath: string): Partial<BlypConfig> {
   }
 }
 
-function parseExecutableConfigFile(configPath: string): Partial<BlypConfig> {
+function parseExecutableConfigFile(configPath: string): BlypUserConfig {
   try {
     const jiti = createJiti(process.cwd(), {
       interopDefault: true,
@@ -382,7 +381,7 @@ function parseExecutableConfigFile(configPath: string): Partial<BlypConfig> {
   }
 }
 
-function parseConfigFile(config: ConfigFileMatch): Partial<BlypConfig> {
+function parseConfigFile(config: ConfigFileMatch): BlypUserConfig {
   return config.type === 'json'
     ? parseJsonConfigFile(config.path)
     : parseExecutableConfigFile(config.path);
@@ -894,7 +893,7 @@ function mergeConnectorsConfig(
 
 export function mergeBlypConfig(
   base: BlypConfig,
-  override: Partial<BlypConfig> = {},
+  override: BlypUserConfig = {},
   options: { configFileType?: ConfigFileMatch['type'] } = {}
 ): ResolvedBlypConfig {
   return {
@@ -907,6 +906,10 @@ export function mergeBlypConfig(
     redact: mergeRedactionConfig(base.redact, override.redact),
     connectors: mergeConnectorsConfig(base.connectors, override.connectors),
   };
+}
+
+export function defineConfig(config: BlypUserConfig): BlypUserConfig {
+  return config;
 }
 
 export function loadConfig(): ResolvedBlypConfig {
@@ -929,7 +932,7 @@ export function loadConfig(): ResolvedBlypConfig {
   return cachedConfig;
 }
 
-export function resolveConfig(overrides: Partial<BlypConfig> = {}): ResolvedBlypConfig {
+export function resolveConfig(overrides: BlypUserConfig = {}): ResolvedBlypConfig {
   return mergeBlypConfig(loadConfig(), overrides);
 }
 

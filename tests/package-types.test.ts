@@ -4,7 +4,9 @@ import { spawnSync } from 'child_process';
 import { describe, expect, it } from 'bun:test';
 
 const repoRoot = path.resolve(import.meta.dir, '..');
+const rootDeclarationPath = path.join(repoRoot, 'dist/index.d.ts');
 const elysiaLoggerDeclarationPath = path.join(repoRoot, 'dist/frameworks/elysia/logger.d.ts');
+const typescriptBinPath = path.join(repoRoot, 'node_modules/.bin/tsc');
 let typesBuilt = false;
 
 function ensureTypeDeclarations(): void {
@@ -36,6 +38,43 @@ function readPackageJson(): {
   dependencies?: Record<string, string>;
 } {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+}
+
+function compileFixture(source: string): ReturnType<typeof spawnSync> {
+  ensureTypeDeclarations();
+
+  const tempDir = fs.mkdtempSync(path.join(repoRoot, '.tmp-config-types-'));
+  const fixturePath = path.join(tempDir, 'index.ts');
+  const tsconfigPath = path.join(tempDir, 'tsconfig.json');
+
+  fs.writeFileSync(fixturePath, source);
+  fs.writeFileSync(
+    tsconfigPath,
+    JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+        baseUrl: '.',
+        paths: {
+          '@blyp/core': ['../dist/index.d.ts'],
+        },
+      },
+      include: ['./index.ts'],
+    }, null, 2)
+  );
+
+  try {
+    return spawnSync(typescriptBinPath, ['--project', tsconfigPath, '--pretty', 'false'], {
+      cwd: tempDir,
+      encoding: 'utf8',
+    });
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 describe('package surface', () => {
@@ -249,6 +288,66 @@ describe('package surface', () => {
       'export declare function createElysiaLogger(config?: ElysiaLoggerConfig): ElysiaLoggerPlugin;'
     );
     expect(elysiaLoggerDeclaration).not.toContain("import { Elysia } from 'elysia';");
+  });
+
+  it('exports the root config authoring helpers in the declaration surface', () => {
+    ensureTypeDeclarations();
+
+    const rootDeclaration = fs.readFileSync(rootDeclarationPath, 'utf8');
+
+    expect(rootDeclaration).toContain('defineConfig');
+    expect(rootDeclaration).toContain('BlypUserConfig');
+  });
+
+  it('allows valid typed blyp.config authoring through the published declarations', () => {
+    const result = compileFixture(`
+      import { defineConfig } from '@blyp/core';
+      import type { BlypUserConfig } from '@blyp/core';
+
+      export default defineConfig({
+        level: 'info',
+        file: {
+          rotation: {
+            maxArchives: 3,
+          },
+        },
+        connectors: {
+          posthog: {
+            enabled: true,
+            mode: 'auto',
+          },
+        },
+      });
+
+      const alternative = {
+        destination: 'file',
+        clientLogging: {
+          path: '/ingest',
+        },
+      } satisfies BlypUserConfig;
+
+      alternative;
+    `);
+
+    expect(result.status).toBe(0);
+  });
+
+  it('rejects invalid typed blyp.config authoring through the published declarations', () => {
+    const result = compileFixture(`
+      import { defineConfig } from '@blyp/core';
+
+      defineConfig({
+        // @ts-expect-error misspelled config keys should fail
+        levle: 'info',
+      });
+
+      defineConfig({
+        // @ts-expect-error unsupported destination literals should fail
+        destination: 'stdout',
+      });
+    `);
+
+    expect(result.status).toBe(0);
   });
 
   it('declares framework and connector integrations as optional peers', () => {

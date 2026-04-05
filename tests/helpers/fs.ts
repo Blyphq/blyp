@@ -3,7 +3,24 @@ import os from 'os';
 import path from 'path';
 
 export function makeTempDir(prefix: string = 'blyp-'): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const packageDir = path.join(tempDir, 'node_modules', '@blyp', 'core');
+
+  fs.mkdirSync(packageDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(packageDir, 'package.json'),
+    JSON.stringify({
+      name: '@blyp/core',
+      main: './index.js',
+      type: 'commonjs',
+    }, null, 2)
+  );
+  fs.writeFileSync(
+    path.join(packageDir, 'index.js'),
+    'exports.defineConfig = (config) => config;\n'
+  );
+
+  return tempDir;
 }
 
 export function readJsonLines(filePath: string): Array<Record<string, unknown>> {

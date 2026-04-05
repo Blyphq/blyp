@@ -274,6 +274,7 @@
     "build": "bun run build:js && bun run build:types",
     "build:js": "tsup",
     "build:types": "bun run tsc --project tsconfig.build.json",
+    "prepare": "bun run build",
     "prepublishOnly": "bun run build",
     "type-check": "bun run tsc --noEmit",
     "dev": "bun run test:watch",
