@@ -123,14 +123,16 @@ Built-in pattern scanning also redacts:
 Configure extra redaction in `blyp.config.*`:
 
 ```typescript
-export default {
+import { defineConfig } from '@blyp/core';
+
+export default defineConfig({
   redact: {
     keys: ['my_custom_secret', 'internal_token'],
     paths: ['user.ssn', 'payment.**.raw'],
     patterns: [/MY_ORG_[A-Z0-9]{32}/],
     disablePatternScanning: false,
   },
-};
+});
 ```
 
 Example:
@@ -605,10 +607,12 @@ The generated schema stores the full canonical record plus extracted query field
 
 ## PostHog connector
 
-Use `blyp.config.ts`, `blyp.config.js`, or `blyp.config.json`. When you need environment variables, prefer `blyp.config.ts`:
+Use `blyp.config.ts` by default for typed authoring and autocomplete. `blyp.config.js` and `blyp.config.json` are also supported when you need them:
 
 ```typescript
-export default {
+import { defineConfig } from '@blyp/core';
+
+export default defineConfig({
   connectors: {
     posthog: {
       enabled: true,
@@ -622,7 +626,7 @@ export default {
       },
     },
   },
-};
+});
 ```
 
 Static JSON config works too:
@@ -1332,11 +1336,45 @@ try {
 }
 ```
 
-The Workers integration is console-based. It does not use file logging, does not read `blyp.config.json`, and does not include client-log ingestion in this first version. Use the subpath import `@blyp/core/workers`.
+The Workers integration is console-based. It does not use file logging, does not read project config files, and does not include client-log ingestion in this first version. Use the subpath import `@blyp/core/workers`.
 
 ---
 
 ## Advanced configuration
+
+### Type-safe config files
+
+Blyp bootstraps `blyp.config.ts` for new projects. Use `defineConfig()` when you want editor autocomplete and config validation while keeping the export runtime-simple:
+
+```typescript
+import { defineConfig } from '@blyp/core';
+
+export default defineConfig({
+  level: 'info',
+  connectors: {
+    posthog: {
+      enabled: true,
+      mode: 'auto',
+    },
+  },
+});
+```
+
+If you prefer `satisfies`, Blyp also exports `BlypUserConfig`:
+
+```typescript
+import type { BlypUserConfig } from '@blyp/core';
+
+export default {
+  clientLogging: {
+    path: '/inngest',
+  },
+} satisfies BlypUserConfig;
+```
+
+`blyp.config.json` remains supported for static config, but TypeScript config is the recommended path when you want autocomplete, environment variables, regexes, or runtime adapters.
+
+### Runtime overrides
 
 ```typescript
 import { createLogger } from '@blyp/core/elysia';
@@ -1388,15 +1426,17 @@ const app = new Elysia()
 
 Enabling `clientLogging` writes accepted browser events into the same Blyp log stream as your backend logs. Programmatic router integrations auto-register `POST /inngest`; file-based integrations expose an explicit handler helper for the configured path. Client-originated records are tagged with `type: 'client_log'` and `source: 'client'`.
 
-You can change the default client ingestion path globally in `blyp.config.json`:
+You can change the default client ingestion path globally in `blyp.config.ts`:
 
-```json
-{
-  "clientLogging": {
-    "enabled": true,
-    "path": "/inngest"
-  }
-}
+```typescript
+import { defineConfig } from '@blyp/core';
+
+export default defineConfig({
+  clientLogging: {
+    enabled: true,
+    path: '/inngest',
+  },
+});
 ```
 
 Set `"enabled": false` to disable the auto-registered ingestion route.

@@ -263,6 +263,8 @@ export interface BlypConfig {
   connectors?: BlypConnectorsConfig;
 }
 
+export type BlypUserConfig = Partial<BlypConfig>;
+
 export interface ResolvedBlypConnectorsConfig {
   betterstack: ResolvedBetterStackConnectorConfig;
   databuddy: ResolvedDatabuddyConnectorConfig;

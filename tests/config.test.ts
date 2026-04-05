@@ -58,7 +58,7 @@ describe('Configuration', () => {
     expect(resolved.clientLogging?.path).toBe('/config-inngest');
   });
 
-  it('bootstraps blyp.config.json and .gitignore for consumer projects', () => {
+  it('bootstraps blyp.config.ts and .gitignore for consumer projects', () => {
     process.chdir(tempDir);
     fs.writeFileSync(
       path.join(tempDir, 'package.json'),
@@ -66,19 +66,42 @@ describe('Configuration', () => {
     );
 
     const resolved = resolveConfig();
-    const configPath = path.join(tempDir, 'blyp.config.json');
+    const configPath = path.join(tempDir, 'blyp.config.ts');
     const gitignorePath = path.join(tempDir, '.gitignore');
-    const createdConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const createdConfig = fs.readFileSync(configPath, 'utf8');
     const gitignore = fs.readFileSync(gitignorePath, 'utf8');
 
     expect(resolved.level).toBe('info');
     expect(resolved.destination).toBe('file');
-    expect(createdConfig.clientLogging).toEqual({
-      enabled: true,
-      path: '/inngest',
-    });
+    expect(createdConfig).toContain("import { defineConfig } from '@blyp/core';");
+    expect(createdConfig).toContain('export default defineConfig(');
+    expect(createdConfig).toContain('"path": "/inngest"');
+    expect(fs.existsSync(path.join(tempDir, 'blyp.config.json'))).toBe(false);
     expect(gitignore).toContain('logs');
     expect(gitignore).toContain('.blyp');
+  });
+
+  it('prefers blyp.config.ts over blyp.config.json when both exist', () => {
+    process.chdir(tempDir);
+    fs.writeFileSync(
+      path.join(tempDir, 'blyp.config.ts'),
+      [
+        'export default {',
+        '  level: "warn",',
+        '};',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tempDir, 'blyp.config.json'),
+      JSON.stringify({
+        level: 'error',
+      })
+    );
+
+    resetConfigCache();
+    const resolved = resolveConfig();
+
+    expect(resolved.level).toBe('warn');
   });
 
   it('resolves connector delivery defaults', () => {
