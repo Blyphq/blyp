@@ -588,7 +588,7 @@ await logger.flush();
 await logger.shutdown();
 ```
 
-Promise-based and hook-driven framework integrations such as Hono, Elysia, Next.js, React Router, Astro, Nitro, Nuxt, SvelteKit, and TanStack Start flush automatically in database mode so request logs are persisted before the response completes. For callback-style servers like Express, Fastify, and NestJS, call `await logger.flush()` at your own boundary when you need the same guarantee.
+Promise-based and hook-driven framework integrations such as Hono, Elysia, Next.js, React Router, Astro, Nitro, Nuxt, SolidStart, SvelteKit, and TanStack Start flush automatically in database mode so request logs are persisted before the response completes. For callback-style servers like Express, Fastify, and NestJS, call `await logger.flush()` at your own boundary when you need the same guarantee.
 
 ### CLI schema setup
 
@@ -1231,6 +1231,24 @@ export const requestMiddleware = tanstackLogger.requestMiddleware;
 // In a server route mounted at /inngest
 export const POST = tanstackLogger.clientLogHandlers.POST;
 ```
+
+### SolidStart
+
+```typescript
+import { createMiddleware } from '@solidjs/start/middleware';
+import { createLogger } from '@blyp/core/solid-start';
+
+const solidLogger = createLogger({
+  level: 'info',
+});
+
+export default createMiddleware(solidLogger.middleware);
+
+// src/routes/inngest.ts
+export const POST = solidLogger.clientLogHandler;
+```
+
+Inside middleware and API routes, use `event.locals.blypLog`. In other server-side Solid contexts, use `getRequestEvent()?.locals.blypLog`.
 
 ### Astro
 

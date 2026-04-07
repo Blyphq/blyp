@@ -1,7 +1,7 @@
 {
   "name": "@blyp/core",
   "version": "0.1.23",
-  "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, React Router, Astro, Nitro, Nuxt, TanStack Start, and SvelteKit.",
+  "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, and SvelteKit.",
   "keywords": [
     "logger",
     "pino",
@@ -52,6 +52,9 @@
       ],
       "tanstack-start": [
         "dist/frameworks/tanstack-start/index.d.ts"
+      ],
+      "solid-start": [
+        "dist/frameworks/solid-start/index.d.ts"
       ],
       "sveltekit": [
         "dist/frameworks/sveltekit/index.d.ts"
@@ -162,6 +165,11 @@
       "types": "./dist/frameworks/tanstack-start/index.d.ts",
       "import": "./dist/tanstack-start.mjs",
       "require": "./dist/tanstack-start.js"
+    },
+    "./solid-start": {
+      "types": "./dist/frameworks/solid-start/index.d.ts",
+      "import": "./dist/solid-start.mjs",
+      "require": "./dist/solid-start.js"
     },
     "./sveltekit": {
       "types": "./dist/frameworks/sveltekit/index.d.ts",
@@ -322,6 +330,7 @@
     "@opentelemetry/sdk-logs": "^0.206",
     "@prisma/client": "^5 || ^6",
     "@sentry/node": "^10",
+    "@solidjs/start": "^1",
     "@sveltejs/kit": "^2",
     "@tanstack/react-start": "^1",
     "ai": "^6",
@@ -377,6 +386,9 @@
       "optional": true
     },
     "@sentry/node": {
+      "optional": true
+    },
+    "@solidjs/start": {
       "optional": true
     },
     "@sveltejs/kit": {

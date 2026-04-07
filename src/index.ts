@@ -315,6 +315,22 @@ export type {
   TanStackStartLoggerFactory,
   TanStackStartMiddlewareContext,
 } from './frameworks/tanstack-start';
+export { createSolidStartLogger } from './frameworks/solid-start';
+export type {
+  SolidStartAPIEvent,
+  SolidStartApiHandler,
+  SolidStartClientLogIngestionConfig,
+  SolidStartFetchEvent,
+  SolidStartLocals,
+  SolidStartLoggerConfig,
+  SolidStartLoggerContext,
+  SolidStartLoggerFactory,
+  SolidStartMiddlewareDefinition,
+  SolidStartNativeEvent,
+  SolidStartRequestMiddleware,
+  SolidStartResponseMiddleware,
+  SolidStartResponseStub,
+} from './frameworks/solid-start';
 export { createSvelteKitLogger } from './frameworks/sveltekit';
 export type {
   SvelteKitClientLogIngestionConfig,
