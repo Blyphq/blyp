@@ -46,6 +46,10 @@ function compileFixture(source: string): ReturnType<typeof spawnSync> {
   const tempDir = fs.mkdtempSync(path.join(repoRoot, '.tmp-config-types-'));
   const fixturePath = path.join(tempDir, 'index.ts');
   const tsconfigPath = path.join(tempDir, 'tsconfig.json');
+  const packageDir = path.join(tempDir, 'node_modules', '@blyp', 'core');
+
+  fs.mkdirSync(path.dirname(packageDir), { recursive: true });
+  fs.symlinkSync(repoRoot, packageDir, 'dir');
 
   fs.writeFileSync(fixturePath, source);
   fs.writeFileSync(
@@ -58,10 +62,6 @@ function compileFixture(source: string): ReturnType<typeof spawnSync> {
         strict: true,
         noEmit: true,
         skipLibCheck: true,
-        baseUrl: '.',
-        paths: {
-          '@blyp/core': ['../dist/index.d.ts'],
-        },
       },
       include: ['./index.ts'],
     }, null, 2)
@@ -101,6 +101,7 @@ describe('package surface', () => {
         nextjs: ['dist/frameworks/nextjs/index.d.ts'],
         'react-router': ['dist/frameworks/react-router/index.d.ts'],
         'tanstack-start': ['dist/frameworks/tanstack-start/index.d.ts'],
+        'solid-start': ['dist/frameworks/solid-start/index.d.ts'],
         sveltekit: ['dist/frameworks/sveltekit/index.d.ts'],
         astro: ['dist/frameworks/astro/index.d.ts'],
         nitro: ['dist/frameworks/nitro/index.d.ts'],
@@ -176,6 +177,11 @@ describe('package surface', () => {
         types: './dist/frameworks/tanstack-start/index.d.ts',
         import: './dist/tanstack-start.mjs',
         require: './dist/tanstack-start.js',
+      },
+      './solid-start': {
+        types: './dist/frameworks/solid-start/index.d.ts',
+        import: './dist/solid-start.mjs',
+        require: './dist/solid-start.js',
       },
       './sveltekit': {
         types: './dist/frameworks/sveltekit/index.d.ts',
@@ -332,6 +338,25 @@ describe('package surface', () => {
     expect(result.status).toBe(0);
   });
 
+  it('exposes SolidStart locals augmentation through the published declarations', () => {
+    const result = compileFixture(`
+      import type { BlypLogger } from '@blyp/core';
+      import type { SolidStartLoggerFactory } from '@blyp/core/solid-start';
+
+      const loggerFactory = null as unknown as SolidStartLoggerFactory;
+      loggerFactory;
+
+      const locals = {} as App.RequestEventLocals;
+      const maybeLogger: BlypLogger | undefined = locals.blypLog;
+      const maybeTraceId: string | undefined = locals.blypTraceId;
+
+      maybeLogger;
+      maybeTraceId;
+    `);
+
+    expect(result.status).toBe(0);
+  });
+
   it('rejects invalid typed blyp.config authoring through the published declarations', () => {
     const result = compileFixture(`
       import { defineConfig } from '@blyp/core';
@@ -367,6 +392,7 @@ describe('package surface', () => {
       '@opentelemetry/sdk-logs',
       '@prisma/client',
       '@sentry/node',
+      '@solidjs/start',
       '@sveltejs/kit',
       '@tanstack/react-start',
       'ai',

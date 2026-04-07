@@ -24,6 +24,7 @@ try {
       "./frameworks/nextjs.test.ts",
       "./frameworks/react-router.test.ts",
       "./frameworks/tanstack-start.test.ts",
+      "./frameworks/solid-start.test.ts",
       "./frameworks/sveltekit.test.ts",
       "./frameworks/astro.test.ts",
       "./frameworks/nitro.test.ts",
@@ -46,4 +47,4 @@ console.log("   - Color Functions: ✅ Working");
 console.log("   - Standalone Logger: ✅ Working");
 console.log("   - Client Logger: ✅ Working");
 console.log("   - File Logging: ✅ Working");
-console.log("   - Server Frameworks: ✅ Elysia / Hono / Express / Fastify / Next.js / TanStack Start / SvelteKit");
+console.log("   - Server Frameworks: ✅ Elysia / Hono / Express / Fastify / Next.js / TanStack Start / SolidStart / SvelteKit");

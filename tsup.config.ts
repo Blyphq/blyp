@@ -13,6 +13,7 @@ export default defineConfig([
       nextjs: 'src/frameworks/nextjs/index.ts',
       'react-router': 'src/frameworks/react-router/index.ts',
       'tanstack-start': 'src/frameworks/tanstack-start/index.ts',
+      'solid-start': 'src/frameworks/solid-start/index.ts',
       sveltekit: 'src/frameworks/sveltekit/index.ts',
       astro: 'src/frameworks/astro/index.ts',
       nitro: 'src/frameworks/nitro/index.ts',
