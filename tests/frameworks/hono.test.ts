@@ -174,6 +174,57 @@ describe('Hono Integration', () => {
     expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
   });
 
+  it('resolves Better Auth ingestion auth with source=client_ingestion', async () => {
+    const app = new Hono();
+    app.use('*', createHonoLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              return {
+                session: {
+                  id: 'sess_1',
+                },
+                user: {
+                  id: 'user_1',
+                },
+              };
+            },
+          },
+        },
+        enrich: async ({ source }) => ({
+          claims: {
+            source,
+          },
+        }),
+      },
+    }));
+
+    const response = await app.fetch(
+      new Request('http://localhost/inngest', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createClientPayload()),
+      })
+    );
+    await waitForFileFlush();
+
+    expect(response.status).toBe(204);
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(clientRecord?.auth).toMatchObject({
+      provider: 'better-auth',
+      claims: {
+        source: 'client_ingestion',
+      },
+    });
+  });
+
   it('emits one structured request record and drops mixed root logger writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;

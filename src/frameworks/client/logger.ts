@@ -122,6 +122,18 @@ async function sendRemoteLog(
       if (
         config.connector &&
         typeof config.connector === 'object' &&
+        config.connector.type === 'http' &&
+        response.headers.get('x-blyp-http-status') === 'missing'
+      ) {
+        errorOnce(
+          `http-missing:${config.connector.name}`,
+          `[blyp/client] HTTP target "${config.connector.name}" was requested but not configured on the server. Continuing without HTTP forwarding.`
+        );
+      }
+
+      if (
+        config.connector &&
+        typeof config.connector === 'object' &&
         config.connector.type === 'otlp' &&
         response.headers.get('x-blyp-otlp-status') === 'missing'
       ) {
@@ -236,9 +248,17 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
         ? createRemoteDeliveryManager({
             runtime: 'browser',
             delivery: config.delivery,
-            send: (event) => {
+            send: async (event) => {
               if (resolvedConfig.transport) {
-                return resolvedConfig.transport(event);
+                try {
+                  return await resolvedConfig.transport(event);
+                } catch (error) {
+                  return {
+                    outcome: 'failure',
+                    reason: 'network_error',
+                    error: error instanceof Error ? error.message : String(error),
+                  };
+                }
               }
 
               return sendRemoteLog(resolvedConfig, event);

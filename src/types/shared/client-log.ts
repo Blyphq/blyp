@@ -41,6 +41,7 @@ export type ClientConnectorRequest =
   | 'databuddy'
   | 'posthog'
   | 'sentry'
+  | { type: 'http'; name: string }
   | { type: 'otlp'; name: string };
 
 export interface ClientLogEvent {

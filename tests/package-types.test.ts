@@ -95,6 +95,7 @@ describe('package surface', () => {
         standalone: ['dist/frameworks/standalone/index.d.ts'],
         'better-auth': ['dist/better-auth/index.d.ts'],
         clerk: ['dist/clerk/index.d.ts'],
+        workos: ['dist/workos/index.d.ts'],
         elysia: ['dist/frameworks/elysia/index.d.ts'],
         hono: ['dist/frameworks/hono/index.d.ts'],
         express: ['dist/frameworks/express/index.d.ts'],
@@ -117,6 +118,7 @@ describe('package surface', () => {
         client: ['dist/frameworks/client/index.d.ts'],
         expo: ['dist/frameworks/expo/index.d.ts'],
         database: ['dist/database/index.d.ts'],
+        http: ['dist/connectors/http/index.d.ts'],
         betterstack: ['dist/connectors/betterstack/index.d.ts'],
         databuddy: ['dist/connectors/databuddy/index.d.ts'],
         posthog: ['dist/connectors/posthog/index.d.ts'],
@@ -149,6 +151,11 @@ describe('package surface', () => {
         types: './dist/clerk/index.d.ts',
         import: './dist/clerk.mjs',
         require: './dist/clerk.js',
+      },
+      './workos': {
+        types: './dist/workos/index.d.ts',
+        import: './dist/workos.mjs',
+        require: './dist/workos.js',
       },
       './elysia': {
         types: './dist/frameworks/elysia/index.d.ts',
@@ -259,6 +266,11 @@ describe('package surface', () => {
         types: './dist/database/index.d.ts',
         import: './dist/database.mjs',
         require: './dist/database.js',
+      },
+      './http': {
+        types: './dist/connectors/http/index.d.ts',
+        import: './dist/connectors/http.mjs',
+        require: './dist/connectors/http.js',
       },
       './betterstack': {
         types: './dist/connectors/betterstack/index.d.ts',
@@ -507,6 +519,7 @@ describe('package surface', () => {
       'posthog-node',
       'react-router',
       'rxjs',
+      '@workos-inc/node',
     ] as const;
 
     for (const dependency of optionalPeers) {

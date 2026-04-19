@@ -1,8 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { blyp, blypClient, identifyUser, normalizeBetterAuthContext } from '../src/better-auth';
+import {
+  blyp,
+  blypClient,
+  identifyUser,
+  normalizeBetterAuthContext,
+  withBetterAuthContextOverride,
+} from '../src/better-auth';
 import { createStandaloneLogger } from '../src/frameworks/standalone';
+import { createClientPayload } from './helpers/client-payload';
 import { makeTempDir, readJsonLines, waitForFileFlush } from './helpers/fs';
 
 describe('Better Auth integration', () => {
@@ -86,6 +93,76 @@ describe('Better Auth integration', () => {
   it('returns null when no Better Auth session is present', () => {
     expect(normalizeBetterAuthContext(null)).toBeNull();
     expect(normalizeBetterAuthContext({})).toBeNull();
+  });
+
+  it('ignores invalid Better Auth overrides and preserves canonical provider fields', () => {
+    const base = normalizeBetterAuthContext(
+      {
+        session: {
+          id: 'sess_1',
+          activeOrganizationId: 'org_1',
+        },
+        user: {
+          id: 'user_1',
+          email: 'ada@example.com',
+        },
+      },
+      {
+        includeClaims: true,
+        includeRawSession: true,
+      }
+    );
+
+    const overridden = withBetterAuthContextOverride(base, {
+      provider: 'clerk',
+      authenticated: false,
+      actor: {
+        email: 'grace@example.com',
+      },
+      session: 'broken',
+      organization: 123,
+      lookup: {
+        provider: 'clerk',
+        email: 'grace@example.com',
+      },
+      claims: 'invalid',
+      raw: [],
+    });
+
+    expect(overridden).toMatchObject({
+      provider: 'better-auth',
+      authenticated: false,
+      actor: {
+        kind: 'user',
+        id: 'user_1',
+        email: 'grace@example.com',
+      },
+      session: {
+        id: 'sess_1',
+        activeOrganizationId: 'org_1',
+      },
+      organization: {
+        id: 'org_1',
+      },
+      lookup: {
+        provider: 'better-auth',
+        userId: 'user_1',
+        sessionId: 'sess_1',
+        organizationId: 'org_1',
+        email: 'grace@example.com',
+      },
+    });
+    expect(overridden?.claims).toBeUndefined();
+    expect(overridden?.raw).toEqual({
+      session: {
+        id: 'sess_1',
+        activeOrganizationId: 'org_1',
+      },
+      user: {
+        id: 'user_1',
+        email: 'ada@example.com',
+      },
+    });
   });
 
   it('identifies users from canonical records and database rows', () => {
@@ -183,6 +260,132 @@ describe('Better Auth integration', () => {
         action: 'get_session',
       },
     });
+  });
+
+  it('prefers newSession over session in the Better Auth client-ingestion endpoint', async () => {
+    const logger = createStandaloneLogger({
+      pretty: false,
+      logDir: tempDir,
+    });
+    const plugin = blyp({
+      logger,
+      clientLogging: true,
+    }) as {
+      endpoints?: {
+        blypLog?: (ctx: Record<string, unknown>) => Promise<Response>;
+      };
+    };
+
+    const response = await plugin.endpoints?.blypLog?.({
+      headers: new Headers({
+        'content-type': 'application/json',
+      }),
+      body: createClientPayload(),
+      context: {
+        session: {
+          session: {
+            id: 'sess_old',
+          },
+          user: {
+            id: 'user_old',
+            email: 'old@example.com',
+          },
+        },
+        newSession: {
+          session: {
+            id: 'sess_new',
+          },
+          user: {
+            id: 'user_new',
+            email: 'new@example.com',
+          },
+        },
+      },
+    });
+    await logger.flush();
+    await waitForFileFlush();
+
+    expect(response?.status).toBe(204);
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const record = records.find((entry) => entry.message === '[client] frontend rendered');
+
+    expect(record?.auth).toMatchObject({
+      provider: 'better-auth',
+      actor: {
+        id: 'user_new',
+        email: 'new@example.com',
+      },
+      session: {
+        id: 'sess_new',
+      },
+    });
+  });
+
+  it('redacts Better Auth claims and raw session fields before persisting auth context', async () => {
+    const logger = createStandaloneLogger({
+      pretty: false,
+      logDir: tempDir,
+      redact: {
+        keys: ['secret', 'token', 'password'],
+      },
+    });
+    const plugin = blyp({
+      logger,
+      clientLogging: true,
+      includeClaims: true,
+      includeRawSession: true,
+    }) as {
+      endpoints?: {
+        blypLog?: (ctx: Record<string, unknown>) => Promise<Response>;
+      };
+    };
+
+    await plugin.endpoints?.blypLog?.({
+      headers: new Headers({
+        'content-type': 'application/json',
+      }),
+      body: createClientPayload(),
+      context: {
+        session: {
+          session: {
+            id: 'sess_1',
+            token: 'session-secret',
+            claims: {
+              secret: 'claim-secret',
+            },
+          },
+          user: {
+            id: 'user_1',
+            email: 'ada@example.com',
+            password: 'hunter2',
+          },
+        },
+        newSession: {
+          session: {
+            id: 'sess_1',
+            token: 'session-secret',
+            claims: {
+              secret: 'claim-secret',
+            },
+          },
+          user: {
+            id: 'user_1',
+            email: 'ada@example.com',
+            password: 'hunter2',
+          },
+        },
+      },
+    });
+    await logger.flush();
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const record = records.find((entry) => entry.message === '[client] frontend rendered');
+    const auth = record?.auth as Record<string, any> | undefined;
+
+    expect(auth?.claims?.secret).toBe('[REDACTED]');
+    expect(auth?.raw?.session?.token).toBe('[REDACTED]');
+    expect(auth?.raw?.user?.password).toBe('[REDACTED]');
   });
 
   it('creates a Better Auth client plugin logger that posts to the plugin endpoint', async () => {

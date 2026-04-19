@@ -264,6 +264,68 @@ describe('Client Logger', () => {
     expect(deliveries[0]?.data).toEqual({ source: 'better-auth-client' });
   });
 
+  it('converts thrown custom transports into delivery failures without throwing locally', async () => {
+    const failureCalls: Array<{ reason: string; error?: string }> = [];
+
+    installBrowserGlobals();
+
+    const logger = createClientLogger({
+      transport: async () => {
+        throw new Error('transport exploded');
+      },
+      delivery: {
+        retryDelayMs: 5,
+        onFailure: (ctx) => {
+          failureCalls.push({
+            reason: ctx.reason,
+            error: ctx.error,
+          });
+        },
+      },
+    });
+
+    expect(() => logger.info('transport throw')).not.toThrow();
+    await wait(20);
+
+    expect(failureCalls).toEqual([
+      {
+        reason: 'network_error',
+        error: 'transport exploded',
+      },
+    ]);
+  });
+
+  it('converts rejected custom transports into delivery failures without throwing locally', async () => {
+    const failureCalls: Array<{ reason: string; error?: string }> = [];
+
+    installBrowserGlobals();
+
+    const logger = createClientLogger({
+      transport: async () => {
+        return await Promise.reject(new Error('transport rejected'));
+      },
+      delivery: {
+        retryDelayMs: 5,
+        onFailure: (ctx) => {
+          failureCalls.push({
+            reason: ctx.reason,
+            error: ctx.error,
+          });
+        },
+      },
+    });
+
+    expect(() => logger.info('transport reject')).not.toThrow();
+    await wait(20);
+
+    expect(failureCalls).toEqual([
+      {
+        reason: 'network_error',
+        error: 'transport rejected',
+      },
+    ]);
+  });
+
   it('normalizes warning level, child bindings, and metadata', async () => {
     let body = '';
 
@@ -401,6 +463,38 @@ describe('Client Logger', () => {
     expect(payload.connector).toEqual({ type: 'otlp', name: 'grafana' });
     expect(errorCalls).toHaveLength(1);
     expect(String(errorCalls[0]?.[0] ?? '')).toContain('OTLP target "grafana"');
+  });
+
+  it('includes the named HTTP connector and logs one local error when the server reports it missing', async () => {
+    let body = '';
+    const errorCalls: unknown[][] = [];
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return Promise.resolve(new Response(null, {
+          status: 204,
+          headers: {
+            'x-blyp-http-status': 'missing',
+          },
+        }));
+      }) as typeof fetch,
+    });
+    console.error = (...args: unknown[]) => {
+      errorCalls.push(args);
+    };
+
+    const logger = createClientLogger({
+      connector: { type: 'http', name: 'webhook' },
+    });
+    logger.info('frontend ready');
+    logger.info('frontend ready again');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    expect(payload.connector).toEqual({ type: 'http', name: 'webhook' });
+    expect(errorCalls).toHaveLength(1);
+    expect(String(errorCalls[0]?.[0] ?? '')).toContain('HTTP target "webhook"');
   });
 
   it('includes the Sentry connector and logs one local error when the server reports it missing', async () => {

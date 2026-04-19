@@ -8,15 +8,49 @@ import type {
   ClerkLogContext,
   ClerkLookupDescriptor,
 } from './clerk';
+import type {
+  WorkOsIntegrationConfig,
+  WorkOsLogContext,
+  WorkOsLookupDescriptor,
+} from './workos';
 
-export type AuthLogContext = BetterAuthLogContext | ClerkLogContext;
+export type AuthLogContext =
+  | BetterAuthLogContext
+  | ClerkLogContext
+  | WorkOsLogContext;
 
-export type AuthLookupDescriptor = BetterAuthLookupDescriptor | ClerkLookupDescriptor;
+export type AuthLookupDescriptor =
+  | BetterAuthLookupDescriptor
+  | ClerkLookupDescriptor
+  | WorkOsLookupDescriptor;
 
-export interface AuthIntegrationConfig<Ctx = unknown> {
-  betterAuth?: BetterAuthIntegrationConfig<Ctx>;
-  clerk?: ClerkIntegrationConfig<Ctx>;
-}
+export type AuthProvidersConfig<Ctx = unknown> =
+  | {
+      betterAuth: BetterAuthIntegrationConfig<Ctx>;
+      clerk?: never;
+      workos?: never;
+    }
+  | {
+      betterAuth?: never;
+      clerk: ClerkIntegrationConfig<Ctx>;
+      workos?: never;
+    }
+  | {
+      betterAuth?: never;
+      clerk?: never;
+      workos: WorkOsIntegrationConfig<Ctx>;
+    };
+
+export type AuthIntegrationConfig<Ctx = unknown> = AuthProvidersConfig<Ctx>;
+
+export type AuthConfig<Ctx = unknown> =
+  | BetterAuthIntegrationConfig<Ctx>
+  | AuthProvidersConfig<Ctx>;
+
+export type ResolvedAuthProvider<Ctx = unknown> =
+  | { provider: 'better-auth'; config: BetterAuthIntegrationConfig<Ctx> }
+  | { provider: 'clerk'; config: ClerkIntegrationConfig<Ctx> }
+  | { provider: 'workos'; config: WorkOsIntegrationConfig<Ctx> };
 
 export type LegacyServerAuthConfig<Ctx = unknown> =
   | BetterAuthIntegrationConfig<Ctx>

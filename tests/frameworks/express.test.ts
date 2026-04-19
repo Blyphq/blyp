@@ -285,6 +285,60 @@ describe('Express Integration', () => {
     }
   });
 
+  it('resolves Better Auth ingestion auth with source=client_ingestion', async () => {
+    const app = express();
+    app.use(createExpressLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              return {
+                session: {
+                  id: 'sess_1',
+                },
+                user: {
+                  id: 'user_1',
+                },
+              };
+            },
+          },
+        },
+        enrich: async ({ source }) => ({
+          claims: {
+            source,
+          },
+        }),
+      },
+    }));
+
+    const server = await listen(app as unknown as Parameters<typeof listen>[0]);
+    try {
+      const response = await fetch(`${server.baseUrl}/inngest`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createClientPayload()),
+      });
+      await waitForFileFlush();
+
+      expect(response.status).toBe(204);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+      expect(clientRecord?.auth).toMatchObject({
+        provider: 'better-auth',
+        claims: {
+          source: 'client_ingestion',
+        },
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('emits one structured request record and drops mixed root logger writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;

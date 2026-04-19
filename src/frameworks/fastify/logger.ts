@@ -41,11 +41,27 @@ export function createFastifyLogger(
     fastify.decorateRequest('blypTraceId', undefined);
     fastify.decorateRequest('blypError', undefined);
     fastify.decorateRequest('blypStructuredLogEmitted', undefined);
+    fastify.decorateRequest('blypClientIngestion', undefined);
 
     fastify.addHook('onRequest', async (request, reply) => {
       enterRequestContext();
       const traceId = createRequestTraceId();
+      const path = extractPathname(request.url);
       setActiveRequestTraceId(traceId);
+      request.blypStartTime = performance.now();
+      request.blypTraceId = traceId;
+      request.blypError = undefined;
+      request.blypStructuredLogEmitted = false;
+      request.blypClientIngestion =
+        Boolean(shared.resolvedClientLogging) &&
+        request.method.toUpperCase() === 'POST' &&
+        path === shared.ingestionPath;
+      reply.header(BLYP_TRACE_HEADER, traceId);
+
+      if (request.blypClientIngestion) {
+        return;
+      }
+
       await resolveRequestAuthContext({
         config: shared,
         ctx: {
@@ -60,11 +76,6 @@ export function createFastifyLogger(
         ),
         source: 'request',
       });
-      request.blypStartTime = performance.now();
-      request.blypTraceId = traceId;
-      reply.header(BLYP_TRACE_HEADER, traceId);
-      request.blypError = undefined;
-      request.blypStructuredLogEmitted = false;
     });
 
     fastify.addHook('preHandler', async (request) => {

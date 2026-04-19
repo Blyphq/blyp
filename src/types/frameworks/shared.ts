@@ -9,10 +9,13 @@ import type {
 import type { BetterAuthLogContext } from '../better-auth';
 import type { ClerkLogContext, ClerkIntegrationConfig } from '../clerk';
 import type {
+  AuthConfig,
   AuthIntegrationConfig,
   AuthLogContext,
   LegacyServerAuthConfig,
+  ResolvedAuthProvider,
 } from '../auth';
+import type { WorkOsLogContext } from '../workos';
 import type { BlypLogger } from '../core/logger';
 import type { ClientLogEvent } from '../shared/client-log';
 import type { ConnectorMode } from '../connectors/mode';
@@ -43,7 +46,7 @@ export interface ServerLoggerConfig<Ctx> {
   includePaths?: string[];
   ignorePaths?: string[];
   clientLogging?: boolean | ClientLogIngestionConfig<Ctx>;
-  auth?: LegacyServerAuthConfig<Ctx>;
+  auth?: AuthConfig<Ctx>;
   redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
 }
@@ -215,12 +218,54 @@ export interface ResolvedOTLPRegistry {
   flush: () => Promise<void>;
 }
 
+export interface ResolvedHTTPConnector {
+  name: string;
+  enabled: boolean;
+  ready: boolean;
+  mode: ConnectorMode;
+  serviceName: string;
+  endpoint?: string;
+  status: 'enabled' | 'missing';
+  send: (
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+}
+
+export interface ResolvedHTTPRegistry {
+  get: (name: string) => ResolvedHTTPConnector;
+  getAutoForwardTargets: () => ResolvedHTTPConnector[];
+  send: (
+    name: string,
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+  flush: () => Promise<void>;
+}
+
 export interface ResolvedServerLogger<Ctx> {
   logger: BlypLogger;
   betterstack: ResolvedBetterStackConnector;
   databuddy: ResolvedDatabuddyConnector;
   posthog: ResolvedPostHogConnector;
   sentry: ResolvedSentryConnector;
+  http: ResolvedHTTPRegistry;
   otlp: ResolvedOTLPRegistry;
   resolvedConfig: BlypConfig;
   level: string;
@@ -234,14 +279,18 @@ export interface ResolvedServerLogger<Ctx> {
   resolvedIgnorePaths?: string[];
   resolvedClientLogging: ClientLogIngestionConfig<Ctx> | null;
   ingestionPath: string;
-  resolvedAuth: AuthIntegrationConfig<Ctx> | null;
+  resolvedAuth: ResolvedAuthProvider<Ctx> | null;
 }
 
 export type { HttpRequestLog } from './http';
 export type {
+  AuthConfig,
   AuthIntegrationConfig,
   AuthLogContext,
   BetterAuthLogContext,
   ClerkIntegrationConfig,
   ClerkLogContext,
+  LegacyServerAuthConfig,
+  ResolvedAuthProvider,
 };
+export type { WorkOsLogContext };

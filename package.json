@@ -35,6 +35,9 @@
       "clerk": [
         "dist/clerk/index.d.ts"
       ],
+      "workos": [
+        "dist/workos/index.d.ts"
+      ],
       "elysia": [
         "dist/frameworks/elysia/index.d.ts"
       ],
@@ -101,6 +104,9 @@
       "database": [
         "dist/database/index.d.ts"
       ],
+      "http": [
+        "dist/connectors/http/index.d.ts"
+      ],
       "betterstack": [
         "dist/connectors/betterstack/index.d.ts"
       ],
@@ -141,6 +147,11 @@
       "types": "./dist/clerk/index.d.ts",
       "import": "./dist/clerk.mjs",
       "require": "./dist/clerk.js"
+    },
+    "./workos": {
+      "types": "./dist/workos/index.d.ts",
+      "import": "./dist/workos.mjs",
+      "require": "./dist/workos.js"
     },
     "./elysia": {
       "types": "./dist/frameworks/elysia/index.d.ts",
@@ -251,6 +262,11 @@
       "types": "./dist/database/index.d.ts",
       "import": "./dist/database.mjs",
       "require": "./dist/database.js"
+    },
+    "./http": {
+      "types": "./dist/connectors/http/index.d.ts",
+      "import": "./dist/connectors/http.mjs",
+      "require": "./dist/connectors/http.js"
     },
     "./betterstack": {
       "types": "./dist/connectors/betterstack/index.d.ts",
@@ -365,6 +381,7 @@
     "posthog-node": "^5",
     "react-router": "^7",
     "rxjs": "^7",
+    "@workos-inc/node": "^7",
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
@@ -459,6 +476,9 @@
       "optional": true
     },
     "rxjs": {
+      "optional": true
+    },
+    "@workos-inc/node": {
       "optional": true
     }
   },

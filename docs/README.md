@@ -1082,6 +1082,135 @@ The browser and Expo Sentry connector does not send directly to Sentry. It conti
 
 ---
 
+## HTTP connector
+
+Use the HTTP connector when you want Blyp to forward logs to an arbitrary endpoint as `application/json`.
+
+Configure one or more named targets in `connectors.http`:
+
+```typescript
+export default {
+  connectors: {
+    http: [
+      {
+        name: 'webhook',
+        enabled: true,
+        mode: 'auto',
+        endpoint: 'https://logs.example.com/ingest',
+        headers: {
+          'x-api-key': process.env.LOGS_API_KEY!,
+        },
+        auth: process.env.LOGS_AUTH,
+      },
+      {
+        name: 'audit',
+        enabled: true,
+        mode: 'manual',
+        endpoint: 'https://audit.example.com/events',
+      },
+    ],
+  },
+};
+```
+
+Static JSON config works too:
+
+```json
+{
+  "connectors": {
+    "http": [
+      {
+        "name": "webhook",
+        "enabled": true,
+        "mode": "auto",
+        "endpoint": "https://logs.example.com/ingest"
+      }
+    ]
+  }
+}
+```
+
+Notes:
+
+- `enabled: true` is required for each HTTP target.
+- `endpoint` must be an absolute `http://` or `https://` URL.
+- Blyp always sends a `POST` request with `Content-Type: application/json` and `Accept: application/json`.
+- If `headers.Authorization` is set, it wins over `auth`. Otherwise Blyp maps `auth` to the `Authorization` header.
+- Custom methods, payload templates, and array batch bodies are out of scope for this connector.
+
+`mode: "auto"` forwards normal server-side Blyp logs to every ready HTTP target automatically. `mode: "manual"` keeps the regular Blyp logger local-only and lets you opt in with the HTTP subpath:
+
+```typescript
+import { createHttpLogger, createStructuredHttpLogger } from '@blyp/core/http';
+
+const httpLogger = createHttpLogger({
+  name: 'webhook',
+});
+httpLogger.info('manual http log');
+
+const structured = createStructuredHttpLogger('checkout', {
+  orderId: 'ord_123',
+}, {
+  name: 'audit',
+});
+structured.info('manual start');
+structured.emit({ status: 200 });
+```
+
+Each request body is wrapped JSON with top-level metadata plus the full sanitized Blyp log payload:
+
+```json
+{
+  "timestamp": "2026-04-19T12:34:56.000Z",
+  "level": "info",
+  "message": "frontend rendered",
+  "source": "server",
+  "serviceName": "blyp-app",
+  "target": "webhook",
+  "metadata": {
+    "type": "http_request",
+    "caller": "src/app.ts:42",
+    "groupId": "checkout",
+    "traceId": "abc123",
+    "http": {
+      "method": "GET",
+      "path": "/checkout",
+      "statusCode": 200,
+      "durationMs": 18
+    }
+  },
+  "payload": {
+    "timestamp": "2026-04-19T12:34:56.000Z",
+    "level": "info",
+    "message": "frontend rendered"
+  }
+}
+```
+
+Browser and Expo loggers can request named HTTP forwarding through the existing Blyp ingestion route:
+
+```typescript
+import { createClientLogger } from '@blyp/core/client';
+
+const logger = createClientLogger({
+  endpoint: '/inngest',
+  connector: { type: 'http', name: 'webhook' },
+});
+```
+
+```typescript
+import { createExpoLogger } from '@blyp/core/expo';
+
+const logger = createExpoLogger({
+  endpoint: 'https://api.example.com/inngest',
+  connector: { type: 'http', name: 'webhook' },
+});
+```
+
+The browser and Expo HTTP connector does not send directly to the external target. It continues to send to Blyp's ingestion endpoint and Blyp forwards to the requested named HTTP target when the server connector is configured and ready. Workers are still out of scope for this connector.
+
+---
+
 ## OTLP connector
 
 Use OTLP when you want to forward Blyp logs to Grafana Cloud, Datadog, Honeycomb, Jaeger, Splunk, New Relic, or any OTLP-compatible backend.

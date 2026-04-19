@@ -7,9 +7,12 @@ import {
 import {
   createSignedOutClerkContext,
 } from '../../clerk/normalize';
+import { resolveClerkAuthContext } from '../../clerk/integration';
 import {
-  resolveClerkAuthContext,
-} from '../../clerk/integration';
+  normalizeWorkOsContext,
+  withWorkOsContextOverride,
+} from '../../workos/normalize';
+import { extractWorkOsSessionCookie } from '../../workos/cookie';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
@@ -18,6 +21,7 @@ import {
   createBaseLogger,
   getBetterStackSender,
   getDatabuddySender,
+  getHttpRegistry,
   getOtlpRegistry,
   getPostHogSender,
   getRedactionConfig,
@@ -30,6 +34,7 @@ import {
   sanitizeLogMessage,
   sanitizeLogValue,
 } from '../../shared/redaction';
+import { createWarnOnceLogger } from '../../shared/once';
 import {
   buildClientDetails,
   buildInfoLogMessage,
@@ -40,7 +45,10 @@ import {
 } from './http';
 import type { ErrorLike, HttpRequestLog, RequestLike, ResolveLike } from '../../types/frameworks/http';
 import type {
+  AuthConfig,
+  AuthLogContext,
   ClientLogIngestionConfig,
+  ResolvedAuthProvider,
   ResolvedServerLogger,
   ServerLoggerConfig,
 } from '../../types/frameworks/shared';
@@ -55,10 +63,18 @@ import {
 } from './request-context';
 import type {
   BetterAuthIntegrationConfig,
+  BetterAuthLogContext,
   BetterAuthResolveArgs,
   BetterAuthSessionEnvelope,
 } from '../../types/better-auth';
-import type { AuthIntegrationConfig, AuthLogContext, LegacyServerAuthConfig } from '../../types/auth';
+import type { ClerkIntegrationConfig, ClerkLogContext } from '../../types/clerk';
+import type { LegacyServerAuthConfig } from '../../types/auth';
+import type {
+  WorkOsAuthenticateResponse,
+  WorkOsIntegrationConfig,
+  WorkOsLogContext,
+  WorkOsResolveArgs,
+} from '../../types/workos';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -75,6 +91,9 @@ function buildVerboseLogMessage(
   const timeColor = getResponseTimeColor(responseTime);
   return `${methodColor} ${url} ${statusColor} ${timeColor}`;
 }
+
+const authResolutionWarnings = new Set<string>();
+const warnAuthResolutionOnce = createWarnOnceLogger(authResolutionWarnings);
 
 export function resolveClientLoggingConfig<Ctx>(
   clientLogging: ServerLoggerConfig<Ctx>['clientLogging'],
@@ -106,6 +125,90 @@ export function resolveClientLoggingConfig<Ctx>(
     ...clientLogging,
     path: normalizeEndpointPath(clientLogging.path ?? defaultPath),
   };
+}
+
+function isLegacyBetterAuthConfig<Ctx>(
+  auth: AuthConfig<Ctx>
+): auth is BetterAuthIntegrationConfig<Ctx> {
+  const candidate = auth as Record<string, unknown>;
+  if ('clerk' in candidate || 'workos' in candidate) {
+    return false;
+  }
+  if (
+    candidate.betterAuth &&
+    typeof candidate.betterAuth === 'object' &&
+    'betterAuth' in (candidate.betterAuth as object)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function resolveAuthConfig<Ctx>(
+  auth: AuthConfig<Ctx> | undefined
+): ResolvedAuthProvider<Ctx> | null {
+  if (!auth) {
+    return null;
+  }
+
+  if (isLegacyBetterAuthConfig(auth)) {
+    return { provider: 'better-auth', config: auth };
+  }
+
+  const expanded = auth as {
+    betterAuth?: BetterAuthIntegrationConfig<Ctx>;
+    clerk?: ClerkIntegrationConfig<Ctx>;
+    workos?: WorkOsIntegrationConfig<Ctx>;
+  };
+
+  if (expanded.betterAuth && expanded.workos && !expanded.clerk) {
+    throw new Error(
+      '[blyp] Cannot configure both Better Auth and WorkOS auth providers simultaneously. ' +
+      'Please provide only one auth provider per logger instance.'
+    );
+  }
+
+  const selectedProviders = [
+    expanded.betterAuth
+      ? ({
+          provider: 'better-auth',
+          config: expanded.betterAuth,
+        } as const)
+      : null,
+    expanded.clerk
+      ? ({
+          provider: 'clerk',
+          config: expanded.clerk,
+        } as const)
+      : null,
+    expanded.workos
+      ? ({
+          provider: 'workos',
+          config: expanded.workos,
+        } as const)
+      : null,
+  ].filter((entry): entry is ResolvedAuthProvider<Ctx> => entry !== null);
+
+  if (selectedProviders.length > 1) {
+    throw new Error(
+      '[blyp] Cannot configure multiple auth providers simultaneously. ' +
+      'Please provide only one auth provider per logger instance.'
+    );
+  }
+
+  if (expanded.clerk) {
+    return { provider: 'clerk', config: expanded.clerk };
+  }
+
+  if (expanded.workos) {
+    return { provider: 'workos', config: expanded.workos };
+  }
+
+  if (expanded.betterAuth) {
+    return { provider: 'better-auth', config: expanded.betterAuth };
+  }
+
+  return null;
 }
 
 export function resolveServerLogger<Ctx>(
@@ -163,6 +266,7 @@ export function resolveServerLogger<Ctx>(
     databuddy: getDatabuddySender(logger),
     posthog: getPostHogSender(logger),
     sentry: getSentrySender(logger),
+    http: getHttpRegistry(logger),
     otlp: getOtlpRegistry(logger),
     resolvedConfig,
     level,
@@ -176,35 +280,8 @@ export function resolveServerLogger<Ctx>(
     resolvedIgnorePaths,
     resolvedClientLogging,
     ingestionPath,
-    resolvedAuth: normalizeServerAuthConfig(auth),
+    resolvedAuth: resolveAuthConfig(auth),
   };
-}
-
-function isLegacyBetterAuthConfig<Ctx>(
-  value: LegacyServerAuthConfig<Ctx> | undefined
-): value is BetterAuthIntegrationConfig<Ctx> {
-  if (!isRecord(value) || !('betterAuth' in value) || 'clerk' in value) {
-    return false;
-  }
-
-  const betterAuth = value.betterAuth;
-  return !isRecord(betterAuth) || !('betterAuth' in betterAuth);
-}
-
-function normalizeServerAuthConfig<Ctx>(
-  value: LegacyServerAuthConfig<Ctx> | undefined
-): AuthIntegrationConfig<Ctx> | null {
-  if (!value) {
-    return null;
-  }
-
-  if (isLegacyBetterAuthConfig(value)) {
-    return {
-      betterAuth: value,
-    };
-  }
-
-  return value;
 }
 
 function hasHeaders(
@@ -233,60 +310,64 @@ async function getBetterAuthSessionFromRequest<Ctx>(
   }
 }
 
-export async function resolveRequestAuthContext<Ctx>(options: {
-  config: ResolvedServerLogger<Ctx>;
-  ctx: Ctx;
-  request: RequestLike | { headers?: Headers | Record<string, unknown> };
-  source: 'request' | 'client_ingestion';
-}): Promise<AuthLogContext | null> {
-  const existing = getActiveRequestAuthContext();
-  if (existing !== undefined || hasResolvedRequestAuth()) {
-    return existing ?? null;
+async function resolveBetterAuthProvider<Ctx>(
+  authConfig: BetterAuthIntegrationConfig<Ctx>,
+  options: {
+    ctx: Ctx;
+    request: RequestLike | { headers?: Headers | Record<string, unknown> };
+    source: 'request' | 'client_ingestion';
   }
+): Promise<BetterAuthLogContext | null> {
+  const session = await getBetterAuthSessionFromRequest(authConfig, options.request);
+  let auth = normalizeBetterAuthContext(session, {
+    includeClaims: authConfig.includeClaims,
+    includeRawSession: authConfig.includeRawSession,
+  });
 
-  const authConfig = options.config.resolvedAuth;
-  if (!authConfig) {
-    markRequestAuthResolved();
-    return null;
-  }
-
-  let auth: AuthLogContext | null;
-
-  if (authConfig.clerk) {
+  if (authConfig.enrich) {
     try {
-      auth = await resolveClerkAuthContext(authConfig.clerk, {
-        ctx: options.ctx,
-        request: toWebRequest(options.request),
-        source: options.source,
-      });
-    } catch {
-      auth = createSignedOutClerkContext();
-    }
-  } else if (authConfig.betterAuth) {
-    const session = await getBetterAuthSessionFromRequest(authConfig.betterAuth, options.request);
-    let betterAuth = normalizeBetterAuthContext(session, {
-      includeClaims: authConfig.betterAuth.includeClaims,
-      includeRawSession: authConfig.betterAuth.includeRawSession,
-    });
-
-    if (authConfig.betterAuth.enrich) {
-      const extra = await authConfig.betterAuth.enrich({
+      const extra = await authConfig.enrich({
         ctx: options.ctx,
         request: options.request,
         session,
-        auth: authConfig.betterAuth.betterAuth,
+        auth: authConfig.betterAuth,
         source: options.source,
       } as BetterAuthResolveArgs<Ctx>);
-      betterAuth = withBetterAuthContextOverride(betterAuth, extra);
+      auth = withBetterAuthContextOverride(auth, extra);
+    } catch (error) {
+      warnAuthResolutionOnce(
+        'better-auth-enrich-failure',
+        '[blyp] Better Auth enrich hook failed. Continuing with the normalized auth context.',
+        error
+      );
     }
-
-    auth = betterAuth;
-  } else {
-    auth = null;
   }
 
-  setActiveRequestAuthContext(auth);
   return auth;
+}
+
+async function resolveClerkProvider<Ctx>(
+  authConfig: ClerkIntegrationConfig<Ctx>,
+  options: {
+    ctx: Ctx;
+    request: RequestLike | { headers?: Headers | Record<string, unknown> };
+    source: 'request' | 'client_ingestion';
+  }
+): Promise<ClerkLogContext> {
+  try {
+    return await resolveClerkAuthContext(authConfig, {
+      ctx: options.ctx,
+      request: toWebRequest(options.request),
+      source: options.source,
+    });
+  } catch (error) {
+    warnAuthResolutionOnce(
+      'clerk-auth-failure',
+      '[blyp] Clerk auth resolution failed. Continuing with a signed-out Clerk auth context.',
+      error
+    );
+    return createSignedOutClerkContext();
+  }
 }
 
 function toWebRequest(
@@ -328,6 +409,127 @@ function toWebRequest(
       headers,
     }
   );
+}
+
+async function resolveWorkOsProvider<Ctx>(
+  authConfig: WorkOsIntegrationConfig<Ctx>,
+  options: {
+    ctx: Ctx;
+    request: RequestLike | { headers?: Headers | Record<string, unknown> };
+    source: 'request' | 'client_ingestion';
+  }
+): Promise<WorkOsLogContext | null> {
+  const headers = hasHeaders(options.request) ? options.request.headers : undefined;
+  const cookieName = authConfig.cookieName ?? 'wos-session';
+  const sessionCookie = extractWorkOsSessionCookie(
+    headers as Headers | Record<string, unknown> | undefined,
+    cookieName
+  );
+
+  let authResponse: WorkOsAuthenticateResponse | null = null;
+
+  if (sessionCookie) {
+    const loader = authConfig.workos?.userManagement?.loadSealedSession;
+    if (typeof loader === 'function') {
+      try {
+        const sealedSession = loader({
+          sessionData: sessionCookie,
+          cookiePassword: authConfig.cookiePassword,
+        });
+        authResponse = await sealedSession.authenticate();
+      } catch (error) {
+        warnAuthResolutionOnce(
+          'workos-session-failure',
+          '[blyp] WorkOS sealed session authentication failed. Continuing without auth context.',
+          error
+        );
+      }
+    }
+  }
+
+  let auth = normalizeWorkOsContext(authResponse, {
+    includeClaims: authConfig.includeClaims,
+    includeRawSession: authConfig.includeRawSession,
+  });
+
+  if (authConfig.enrich) {
+    try {
+      const extra = await authConfig.enrich({
+        ctx: options.ctx,
+        request: options.request,
+        sessionCookie,
+        authResponse,
+        workos: authConfig.workos,
+        source: options.source,
+      } as WorkOsResolveArgs<Ctx>);
+      auth = withWorkOsContextOverride(auth, extra);
+    } catch (error) {
+      warnAuthResolutionOnce(
+        'workos-enrich-failure',
+        '[blyp] WorkOS enrich hook failed. Continuing with the normalized auth context.',
+        error
+      );
+    }
+  }
+
+  return auth;
+}
+
+export async function resolveRequestAuthContext<Ctx>(options: {
+  config: ResolvedServerLogger<Ctx>;
+  ctx: Ctx;
+  request: RequestLike | { headers?: Headers | Record<string, unknown> };
+  source: 'request' | 'client_ingestion';
+}): Promise<AuthLogContext | null> {
+  try {
+    const existing = getActiveRequestAuthContext();
+    if (existing !== undefined || hasResolvedRequestAuth()) {
+      return existing ?? null;
+    }
+
+    const resolved = options.config.resolvedAuth;
+    if (!resolved) {
+      markRequestAuthResolved();
+      return null;
+    }
+
+    let auth: AuthLogContext | null = null;
+
+    switch (resolved.provider) {
+      case 'better-auth':
+        auth = await resolveBetterAuthProvider(resolved.config, {
+          ctx: options.ctx,
+          request: options.request,
+          source: options.source,
+        });
+        break;
+      case 'clerk':
+        auth = await resolveClerkProvider(resolved.config, {
+          ctx: options.ctx,
+          request: options.request,
+          source: options.source,
+        });
+        break;
+      case 'workos':
+        auth = await resolveWorkOsProvider(resolved.config, {
+          ctx: options.ctx,
+          request: options.request,
+          source: options.source,
+        });
+        break;
+    }
+
+    setActiveRequestAuthContext(auth);
+    return auth;
+  } catch (error) {
+    warnAuthResolutionOnce(
+      'auth-resolution-failure',
+      '[blyp] Auth context resolution failed. Continuing without auth context.',
+      error
+    );
+    setActiveRequestAuthContext(null);
+    return null;
+  }
 }
 
 export function getCurrentRequestAuthContext(): AuthLogContext | null {
@@ -808,6 +1010,21 @@ export async function handleClientLogIngestion<Ctx>(options: {
     const sender = config.otlp.get(sanitizedPayload.connector.name);
 
     headers['x-blyp-otlp-status'] = sender.ready ? 'enabled' : 'missing';
+
+    if (sender.ready) {
+      sender.send({
+        timestamp: structuredPayload.receivedAt as string,
+        level: sanitizedPayload.level,
+        message: clientMessage,
+        data: structuredPayload,
+      }, {
+        source: 'client',
+      });
+    }
+  } else if (sanitizedPayload.connector?.type === 'http') {
+    const sender = config.http.get(sanitizedPayload.connector.name);
+
+    headers['x-blyp-http-status'] = sender.ready ? 'enabled' : 'missing';
 
     if (sender.ready) {
       sender.send({

@@ -1,6 +1,8 @@
 import type { BlypLogger } from '../core/logger';
 import type { AuthLogContext } from '../auth';
 
+export type { AuthLogContext } from '../auth';
+
 export interface BlypRequestContextStore {
   requestScopedLoggerActive: boolean;
   structuredCollectorActive: boolean;

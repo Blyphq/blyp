@@ -65,6 +65,10 @@ const clientConnectorRequestSchema = z.union([
   z.literal('sentry'),
   z.undefined(),
   z.object({
+    type: z.literal('http'),
+    name: nonEmptyStringSchema,
+  }),
+  z.object({
     type: z.literal('otlp'),
     name: nonEmptyStringSchema,
   }),
