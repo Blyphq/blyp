@@ -4,6 +4,11 @@ import {
   normalizeBetterAuthContext,
   withBetterAuthContextOverride,
 } from '../../better-auth/normalize';
+import {
+  normalizeWorkOsContext,
+  withWorkOsContextOverride,
+} from '../../workos/normalize';
+import { extractWorkOsSessionCookie } from '../../workos/cookie';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
@@ -36,7 +41,10 @@ import {
 } from './http';
 import type { ErrorLike, HttpRequestLog, RequestLike, ResolveLike } from '../../types/frameworks/http';
 import type {
+  AuthConfig,
+  AuthLogContext,
   ClientLogIngestionConfig,
+  ResolvedAuthProvider,
   ResolvedServerLogger,
   ServerLoggerConfig,
 } from '../../types/frameworks/shared';
@@ -55,6 +63,12 @@ import type {
   BetterAuthResolveArgs,
   BetterAuthSessionEnvelope,
 } from '../../types/better-auth';
+import type {
+  WorkOsAuthenticateResponse,
+  WorkOsIntegrationConfig,
+  WorkOsLogContext,
+  WorkOsResolveArgs,
+} from '../../types/workos';
 
 function buildVerboseLogMessage(
   method: string,
@@ -101,6 +115,57 @@ export function resolveClientLoggingConfig<Ctx>(
     ...clientLogging,
     path: normalizeEndpointPath(clientLogging.path ?? defaultPath),
   };
+}
+
+function isLegacyBetterAuthConfig<Ctx>(
+  auth: AuthConfig<Ctx>
+): auth is BetterAuthIntegrationConfig<Ctx> {
+  const candidate = auth as Record<string, unknown>;
+  if ('workos' in candidate) {
+    return false;
+  }
+  if (
+    candidate.betterAuth &&
+    typeof candidate.betterAuth === 'object' &&
+    'betterAuth' in (candidate.betterAuth as object)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function resolveAuthConfig<Ctx>(
+  auth: AuthConfig<Ctx> | undefined
+): ResolvedAuthProvider<Ctx> | null {
+  if (!auth) {
+    return null;
+  }
+
+  if (isLegacyBetterAuthConfig(auth)) {
+    return { provider: 'better-auth', config: auth };
+  }
+
+  const expanded = auth as {
+    betterAuth?: BetterAuthIntegrationConfig<Ctx>;
+    workos?: WorkOsIntegrationConfig<Ctx>;
+  };
+
+  if (expanded.betterAuth && expanded.workos) {
+    throw new Error(
+      '[blyp] Cannot configure both Better Auth and WorkOS auth providers simultaneously. ' +
+      'Please provide only one auth provider per logger instance.'
+    );
+  }
+
+  if (expanded.workos) {
+    return { provider: 'workos', config: expanded.workos };
+  }
+
+  if (expanded.betterAuth) {
+    return { provider: 'better-auth', config: expanded.betterAuth };
+  }
+
+  return null;
 }
 
 export function resolveServerLogger<Ctx>(
@@ -172,7 +237,7 @@ export function resolveServerLogger<Ctx>(
     resolvedIgnorePaths,
     resolvedClientLogging,
     ingestionPath,
-    resolvedAuth: auth ?? null,
+    resolvedAuth: resolveAuthConfig(auth),
   };
 }
 
@@ -202,55 +267,149 @@ async function getBetterAuthSessionFromRequest<Ctx>(
   }
 }
 
+async function resolveBetterAuthProvider<Ctx>(
+  authConfig: BetterAuthIntegrationConfig<Ctx>,
+  options: {
+    ctx: Ctx;
+    request: RequestLike | { headers?: Headers | Record<string, unknown> };
+    source: 'request' | 'client_ingestion';
+  }
+): Promise<BetterAuthLogContext | null> {
+  const session = await getBetterAuthSessionFromRequest(authConfig, options.request);
+  let auth = normalizeBetterAuthContext(session, {
+    includeClaims: authConfig.includeClaims,
+    includeRawSession: authConfig.includeRawSession,
+  });
+
+  if (authConfig.enrich) {
+    try {
+      const extra = await authConfig.enrich({
+        ctx: options.ctx,
+        request: options.request,
+        session,
+        auth: authConfig.betterAuth,
+        source: options.source,
+      } as BetterAuthResolveArgs<Ctx>);
+      auth = withBetterAuthContextOverride(auth, extra);
+    } catch (error) {
+      warnAuthResolutionOnce(
+        'better-auth-enrich-failure',
+        '[blyp] Better Auth enrich hook failed. Continuing with the normalized auth context.',
+        error
+      );
+    }
+  }
+
+  return auth;
+}
+
+async function resolveWorkOsProvider<Ctx>(
+  authConfig: WorkOsIntegrationConfig<Ctx>,
+  options: {
+    ctx: Ctx;
+    request: RequestLike | { headers?: Headers | Record<string, unknown> };
+    source: 'request' | 'client_ingestion';
+  }
+): Promise<WorkOsLogContext | null> {
+  const headers = hasHeaders(options.request) ? options.request.headers : undefined;
+  const cookieName = authConfig.cookieName ?? 'wos-session';
+  const sessionCookie = extractWorkOsSessionCookie(
+    headers as Headers | Record<string, unknown> | undefined,
+    cookieName
+  );
+
+  let authResponse: WorkOsAuthenticateResponse | null = null;
+
+  if (sessionCookie) {
+    const loader = authConfig.workos?.userManagement?.loadSealedSession;
+    if (typeof loader === 'function') {
+      try {
+        const sealedSession = loader({
+          sessionData: sessionCookie,
+          cookiePassword: authConfig.cookiePassword,
+        });
+        authResponse = await sealedSession.authenticate();
+      } catch (error) {
+        warnAuthResolutionOnce(
+          'workos-session-failure',
+          '[blyp] WorkOS sealed session authentication failed. Continuing without auth context.',
+          error
+        );
+      }
+    }
+  }
+
+  let auth = normalizeWorkOsContext(authResponse, {
+    includeClaims: authConfig.includeClaims,
+    includeRawSession: authConfig.includeRawSession,
+  });
+
+  if (authConfig.enrich) {
+    try {
+      const extra = await authConfig.enrich({
+        ctx: options.ctx,
+        request: options.request,
+        sessionCookie,
+        authResponse,
+        workos: authConfig.workos,
+        source: options.source,
+      } as WorkOsResolveArgs<Ctx>);
+      auth = withWorkOsContextOverride(auth, extra);
+    } catch (error) {
+      warnAuthResolutionOnce(
+        'workos-enrich-failure',
+        '[blyp] WorkOS enrich hook failed. Continuing with the normalized auth context.',
+        error
+      );
+    }
+  }
+
+  return auth;
+}
+
 export async function resolveRequestAuthContext<Ctx>(options: {
   config: ResolvedServerLogger<Ctx>;
   ctx: Ctx;
   request: RequestLike | { headers?: Headers | Record<string, unknown> };
   source: 'request' | 'client_ingestion';
-}): Promise<BetterAuthLogContext | null> {
+}): Promise<AuthLogContext | null> {
   try {
     const existing = getActiveRequestAuthContext();
     if (existing !== undefined || hasResolvedRequestAuth()) {
       return existing ?? null;
     }
 
-    const authConfig = options.config.resolvedAuth;
-    if (!authConfig) {
+    const resolved = options.config.resolvedAuth;
+    if (!resolved) {
       markRequestAuthResolved();
       return null;
     }
 
-    const session = await getBetterAuthSessionFromRequest(authConfig, options.request);
-    let auth = normalizeBetterAuthContext(session, {
-      includeClaims: authConfig.includeClaims,
-      includeRawSession: authConfig.includeRawSession,
-    });
+    let auth: AuthLogContext | null = null;
 
-    if (authConfig.enrich) {
-      try {
-        const extra = await authConfig.enrich({
+    switch (resolved.provider) {
+      case 'better-auth':
+        auth = await resolveBetterAuthProvider(resolved.config, {
           ctx: options.ctx,
           request: options.request,
-          session,
-          auth: authConfig.betterAuth,
           source: options.source,
-        } as BetterAuthResolveArgs<Ctx>);
-        auth = withBetterAuthContextOverride(auth, extra);
-      } catch (error) {
-        warnAuthResolutionOnce(
-          'better-auth-enrich-failure',
-          '[blyp] Better Auth enrich hook failed. Continuing with the normalized auth context.',
-          error
-        );
-      }
+        });
+        break;
+      case 'workos':
+        auth = await resolveWorkOsProvider(resolved.config, {
+          ctx: options.ctx,
+          request: options.request,
+          source: options.source,
+        });
+        break;
     }
 
     setActiveRequestAuthContext(auth);
     return auth;
   } catch (error) {
     warnAuthResolutionOnce(
-      'better-auth-resolution-failure',
-      '[blyp] Better Auth context resolution failed. Continuing without auth context.',
+      'auth-resolution-failure',
+      '[blyp] Auth context resolution failed. Continuing without auth context.',
       error
     );
     setActiveRequestAuthContext(null);
@@ -258,7 +417,7 @@ export async function resolveRequestAuthContext<Ctx>(options: {
   }
 }
 
-export function getCurrentRequestAuthContext(): BetterAuthLogContext | null {
+export function getCurrentRequestAuthContext(): AuthLogContext | null {
   return getActiveRequestAuthContext() ?? null;
 }
 

@@ -32,6 +32,9 @@
       "better-auth": [
         "dist/better-auth/index.d.ts"
       ],
+      "workos": [
+        "dist/workos/index.d.ts"
+      ],
       "elysia": [
         "dist/frameworks/elysia/index.d.ts"
       ],
@@ -136,6 +139,11 @@
       "types": "./dist/better-auth/index.d.ts",
       "import": "./dist/better-auth.mjs",
       "require": "./dist/better-auth.js"
+    },
+    "./workos": {
+      "types": "./dist/workos/index.d.ts",
+      "import": "./dist/workos.mjs",
+      "require": "./dist/workos.js"
     },
     "./elysia": {
       "types": "./dist/frameworks/elysia/index.d.ts",
@@ -364,6 +372,7 @@
     "posthog-node": "^5",
     "react-router": "^7",
     "rxjs": "^7",
+    "@workos-inc/node": "^7",
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
@@ -455,6 +464,9 @@
       "optional": true
     },
     "rxjs": {
+      "optional": true
+    },
+    "@workos-inc/node": {
       "optional": true
     }
   },

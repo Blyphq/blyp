@@ -7,6 +7,19 @@ import type {
   RedactionConfig,
 } from '../core/config';
 import type { BetterAuthIntegrationConfig, BetterAuthLogContext } from '../better-auth';
+import type { WorkOsIntegrationConfig, WorkOsLogContext } from '../workos';
+
+export type AuthLogContext = BetterAuthLogContext | WorkOsLogContext;
+
+export type AuthProvidersConfig<Ctx> =
+  | { betterAuth: BetterAuthIntegrationConfig<Ctx>; workos?: never }
+  | { betterAuth?: never; workos: WorkOsIntegrationConfig<Ctx> };
+
+export type AuthConfig<Ctx> = BetterAuthIntegrationConfig<Ctx> | AuthProvidersConfig<Ctx>;
+
+export type ResolvedAuthProvider<Ctx> =
+  | { provider: 'better-auth'; config: BetterAuthIntegrationConfig<Ctx> }
+  | { provider: 'workos'; config: WorkOsIntegrationConfig<Ctx> };
 import type { BlypLogger } from '../core/logger';
 import type { ClientLogEvent } from '../shared/client-log';
 import type { ConnectorMode } from '../connectors/mode';
@@ -37,7 +50,7 @@ export interface ServerLoggerConfig<Ctx> {
   includePaths?: string[];
   ignorePaths?: string[];
   clientLogging?: boolean | ClientLogIngestionConfig<Ctx>;
-  auth?: BetterAuthIntegrationConfig<Ctx>;
+  auth?: AuthConfig<Ctx>;
   redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
 }
@@ -270,8 +283,9 @@ export interface ResolvedServerLogger<Ctx> {
   resolvedIgnorePaths?: string[];
   resolvedClientLogging: ClientLogIngestionConfig<Ctx> | null;
   ingestionPath: string;
-  resolvedAuth: BetterAuthIntegrationConfig<Ctx> | null;
+  resolvedAuth: ResolvedAuthProvider<Ctx> | null;
 }
 
 export type { HttpRequestLog } from './http';
 export type { BetterAuthLogContext };
+export type { WorkOsLogContext };

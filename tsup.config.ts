@@ -5,6 +5,7 @@ export default defineConfig([
     entry: {
       index: 'src/index.ts',
       'better-auth': 'src/better-auth/index.ts',
+      workos: 'src/workos/index.ts',
       standalone: 'src/frameworks/standalone/index.ts',
       elysia: 'src/frameworks/elysia/index.ts',
       hono: 'src/frameworks/hono/index.ts',
@@ -71,6 +72,7 @@ export default defineConfig([
       'better-auth',
       'better-auth/api',
       'better-auth/client',
+      '@workos-inc/node',
       'winston',
       'chalk',
       '@sentry/node',

@@ -94,6 +94,7 @@ describe('package surface', () => {
       '*': {
         standalone: ['dist/frameworks/standalone/index.d.ts'],
         'better-auth': ['dist/better-auth/index.d.ts'],
+        workos: ['dist/workos/index.d.ts'],
         elysia: ['dist/frameworks/elysia/index.d.ts'],
         hono: ['dist/frameworks/hono/index.d.ts'],
         express: ['dist/frameworks/express/index.d.ts'],
@@ -144,6 +145,11 @@ describe('package surface', () => {
         types: './dist/better-auth/index.d.ts',
         import: './dist/better-auth.mjs',
         require: './dist/better-auth.js',
+      },
+      './workos': {
+        types: './dist/workos/index.d.ts',
+        import: './dist/workos.mjs',
+        require: './dist/workos.js',
       },
       './elysia': {
         types: './dist/frameworks/elysia/index.d.ts',
@@ -454,6 +460,7 @@ describe('package surface', () => {
       'posthog-node',
       'react-router',
       'rxjs',
+      '@workos-inc/node',
     ] as const;
 
     for (const dependency of optionalPeers) {

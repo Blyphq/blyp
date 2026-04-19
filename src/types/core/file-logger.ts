@@ -1,4 +1,7 @@
 import type { BetterAuthLogContext } from '../better-auth';
+import type { WorkOsLogContext } from '../workos';
+
+export type AuthLogContext = BetterAuthLogContext | WorkOsLogContext;
 
 export interface LogRecord {
   timestamp: string;
@@ -7,7 +10,7 @@ export interface LogRecord {
   caller?: string;
   data?: unknown;
   bindings?: Record<string, unknown>;
-  auth?: BetterAuthLogContext;
+  auth?: AuthLogContext;
   [key: string]: unknown;
 }
 
