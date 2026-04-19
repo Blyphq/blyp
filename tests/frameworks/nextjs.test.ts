@@ -233,6 +233,68 @@ describe('Next.js Integration', () => {
     });
   });
 
+  it('continues request logging when Better Auth enrich throws and falls back to base auth', async () => {
+    const warnings: unknown[][] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    const nextLogger = createNextJsLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              return {
+                session: {
+                  id: 'sess_1',
+                },
+                user: {
+                  id: 'user_1',
+                  email: 'ada@example.com',
+                },
+              };
+            },
+          },
+        },
+        enrich: async () => {
+          throw new Error('enrich exploded');
+        },
+      },
+    });
+
+    const handler = nextLogger.withLogger(async (_request, _context, { log }) => {
+      log.info('better-auth enrich fallback');
+      return new Response('ok', { status: 200 });
+    });
+
+    try {
+      const response = await handler(new Request('http://localhost/api/auth-fallback'), {});
+      await waitForFileFlush();
+
+      expect(response.status).toBe(200);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const routeRecord = records.find((record) => record.message === 'better-auth enrich fallback');
+
+      expect(routeRecord?.auth).toMatchObject({
+        provider: 'better-auth',
+        actor: {
+          id: 'user_1',
+          email: 'ada@example.com',
+        },
+        session: {
+          id: 'sess_1',
+        },
+      });
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]?.[0] ?? '')).toContain('Better Auth enrich hook failed');
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
   it('emits one structured request record and drops mixed root logger writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;

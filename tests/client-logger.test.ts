@@ -264,6 +264,68 @@ describe('Client Logger', () => {
     expect(deliveries[0]?.data).toEqual({ source: 'better-auth-client' });
   });
 
+  it('converts thrown custom transports into delivery failures without throwing locally', async () => {
+    const failureCalls: Array<{ reason: string; error?: string }> = [];
+
+    installBrowserGlobals();
+
+    const logger = createClientLogger({
+      transport: async () => {
+        throw new Error('transport exploded');
+      },
+      delivery: {
+        retryDelayMs: 5,
+        onFailure: (ctx) => {
+          failureCalls.push({
+            reason: ctx.reason,
+            error: ctx.error,
+          });
+        },
+      },
+    });
+
+    expect(() => logger.info('transport throw')).not.toThrow();
+    await wait(20);
+
+    expect(failureCalls).toEqual([
+      {
+        reason: 'network_error',
+        error: 'transport exploded',
+      },
+    ]);
+  });
+
+  it('converts rejected custom transports into delivery failures without throwing locally', async () => {
+    const failureCalls: Array<{ reason: string; error?: string }> = [];
+
+    installBrowserGlobals();
+
+    const logger = createClientLogger({
+      transport: async () => {
+        return await Promise.reject(new Error('transport rejected'));
+      },
+      delivery: {
+        retryDelayMs: 5,
+        onFailure: (ctx) => {
+          failureCalls.push({
+            reason: ctx.reason,
+            error: ctx.error,
+          });
+        },
+      },
+    });
+
+    expect(() => logger.info('transport reject')).not.toThrow();
+    await wait(20);
+
+    expect(failureCalls).toEqual([
+      {
+        reason: 'network_error',
+        error: 'transport rejected',
+      },
+    ]);
+  });
+
   it('normalizes warning level, child bindings, and metadata', async () => {
     let body = '';
 

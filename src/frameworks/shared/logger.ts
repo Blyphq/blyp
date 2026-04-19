@@ -24,6 +24,7 @@ import {
   sanitizeLogMessage,
   sanitizeLogValue,
 } from '../../shared/redaction';
+import { createWarnOnceLogger } from '../../shared/once';
 import {
   buildClientDetails,
   buildInfoLogMessage,
@@ -65,6 +66,9 @@ function buildVerboseLogMessage(
   const timeColor = getResponseTimeColor(responseTime);
   return `${methodColor} ${url} ${statusColor} ${timeColor}`;
 }
+
+const authResolutionWarnings = new Set<string>();
+const warnAuthResolutionOnce = createWarnOnceLogger(authResolutionWarnings);
 
 export function resolveClientLoggingConfig<Ctx>(
   clientLogging: ServerLoggerConfig<Ctx>['clientLogging'],
@@ -202,36 +206,54 @@ export async function resolveRequestAuthContext<Ctx>(options: {
   request: RequestLike | { headers?: Headers | Record<string, unknown> };
   source: 'request' | 'client_ingestion';
 }): Promise<BetterAuthLogContext | null> {
-  const existing = getActiveRequestAuthContext();
-  if (existing !== undefined || hasResolvedRequestAuth()) {
-    return existing ?? null;
-  }
+  try {
+    const existing = getActiveRequestAuthContext();
+    if (existing !== undefined || hasResolvedRequestAuth()) {
+      return existing ?? null;
+    }
 
-  const authConfig = options.config.resolvedAuth;
-  if (!authConfig) {
-    markRequestAuthResolved();
+    const authConfig = options.config.resolvedAuth;
+    if (!authConfig) {
+      markRequestAuthResolved();
+      return null;
+    }
+
+    const session = await getBetterAuthSessionFromRequest(authConfig, options.request);
+    let auth = normalizeBetterAuthContext(session, {
+      includeClaims: authConfig.includeClaims,
+      includeRawSession: authConfig.includeRawSession,
+    });
+
+    if (authConfig.enrich) {
+      try {
+        const extra = await authConfig.enrich({
+          ctx: options.ctx,
+          request: options.request,
+          session,
+          auth: authConfig.betterAuth,
+          source: options.source,
+        } as BetterAuthResolveArgs<Ctx>);
+        auth = withBetterAuthContextOverride(auth, extra);
+      } catch (error) {
+        warnAuthResolutionOnce(
+          'better-auth-enrich-failure',
+          '[blyp] Better Auth enrich hook failed. Continuing with the normalized auth context.',
+          error
+        );
+      }
+    }
+
+    setActiveRequestAuthContext(auth);
+    return auth;
+  } catch (error) {
+    warnAuthResolutionOnce(
+      'better-auth-resolution-failure',
+      '[blyp] Better Auth context resolution failed. Continuing without auth context.',
+      error
+    );
+    setActiveRequestAuthContext(null);
     return null;
   }
-
-  const session = await getBetterAuthSessionFromRequest(authConfig, options.request);
-  let auth = normalizeBetterAuthContext(session, {
-    includeClaims: authConfig.includeClaims,
-    includeRawSession: authConfig.includeRawSession,
-  });
-
-  if (authConfig.enrich) {
-    const extra = await authConfig.enrich({
-      ctx: options.ctx,
-      request: options.request,
-      session,
-      auth: authConfig.betterAuth,
-      source: options.source,
-    } as BetterAuthResolveArgs<Ctx>);
-    auth = withBetterAuthContextOverride(auth, extra);
-  }
-
-  setActiveRequestAuthContext(auth);
-  return auth;
 }
 
 export function getCurrentRequestAuthContext(): BetterAuthLogContext | null {

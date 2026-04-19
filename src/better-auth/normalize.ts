@@ -114,38 +114,59 @@ export function withBetterAuthContextOverride(
     return auth;
   }
 
-  const next = {
+  const next: BetterAuthLogContext = {
     ...auth,
-    ...extra,
-  } as BetterAuthLogContext;
+    provider: 'better-auth',
+    actor: { ...auth.actor },
+    lookup: {
+      ...auth.lookup,
+      provider: 'better-auth',
+    },
+    ...(auth.session ? { session: { ...auth.session } } : {}),
+    ...(auth.organization ? { organization: { ...auth.organization } } : {}),
+    ...(auth.claims ? { claims: auth.claims } : {}),
+    ...(auth.raw ? { raw: auth.raw } : {}),
+  };
 
-  if (extra.actor && isRecord(extra.actor)) {
+  if (typeof extra.authenticated === 'boolean') {
+    next.authenticated = extra.authenticated;
+  }
+
+  if (isRecord(extra.actor)) {
     next.actor = {
-      ...auth.actor,
+      ...next.actor,
       ...extra.actor,
     };
   }
 
-  if (extra.session && isRecord(extra.session)) {
+  if (isRecord(extra.session)) {
     next.session = {
-      ...(auth.session ?? {}),
+      ...(next.session ?? {}),
       ...extra.session,
     };
   }
 
-  if (extra.organization && isRecord(extra.organization)) {
+  if (isRecord(extra.organization)) {
     next.organization = {
-      ...(auth.organization ?? {}),
+      ...(next.organization ?? {}),
       ...extra.organization,
     };
   }
 
-  if (extra.lookup && isRecord(extra.lookup)) {
+  if (isRecord(extra.lookup)) {
     next.lookup = {
-      ...auth.lookup,
+      ...next.lookup,
       ...extra.lookup,
       provider: 'better-auth',
     };
+  }
+
+  if (isRecord(extra.claims)) {
+    next.claims = extra.claims;
+  }
+
+  if (isRecord(extra.raw)) {
+    next.raw = extra.raw;
   }
 
   return next;

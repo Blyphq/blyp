@@ -40,12 +40,24 @@ export class BlypNestMiddleware implements NestMiddleware {
     void (async () => {
       enterRequestContext();
       const traceId = createRequestTraceId();
+      const path = getNestRequestPath(request);
+      const method = getNestRequestMethod(request).toUpperCase();
       setActiveRequestTraceId(traceId);
       setNestStructuredLogEmitted(request, false);
       attachNestRequestTraceId(request, traceId);
       setNestResponseHeaders(response, {
         [BLYP_TRACE_HEADER]: traceId,
       });
+
+      if (
+        this.state.resolvedClientLogging &&
+        method === 'POST' &&
+        path === this.state.ingestionPath
+      ) {
+        await this.handleClientLogRequest(request, response, next);
+        return;
+      }
+
       await resolveRequestAuthContext({
         config: this.state,
         ctx: createNestLoggerContext({
@@ -76,18 +88,6 @@ export class BlypNestMiddleware implements NestMiddleware {
         })
       );
       setNestRequestStartTime(request, performance.now());
-
-      const path = getNestRequestPath(request);
-      const method = getNestRequestMethod(request).toUpperCase();
-
-      if (
-        this.state.resolvedClientLogging &&
-        method === 'POST' &&
-        path === this.state.ingestionPath
-      ) {
-        await this.handleClientLogRequest(request, response, next);
-        return;
-      }
 
       next();
     })().catch(next);

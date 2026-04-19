@@ -16,6 +16,7 @@ import {
   normalizeBetterAuthContext,
   withBetterAuthContextOverride,
 } from './normalize';
+import { createWarnOnceLogger } from '../shared/once';
 import type {
   BetterAuthLogContext,
   BetterAuthPluginEnrichArgs,
@@ -25,6 +26,8 @@ import type {
 
 const DEFAULT_BETTER_AUTH_CLIENT_LOG_PATH = '/blyp/log';
 const BLYP_BETTER_AUTH_PLUGIN_SYMBOL = Symbol.for('blyp.better-auth-plugin');
+const pluginWarnings = new Set<string>();
+const warnPluginOnce = createWarnOnceLogger(pluginWarnings);
 
 type RequestState = {
   request: Request;
@@ -124,8 +127,17 @@ async function enrichPluginAuth(
     return auth;
   }
 
-  const extra = await options.enrich(args);
-  return withBetterAuthContextOverride(auth, extra);
+  try {
+    const extra = await options.enrich(args);
+    return withBetterAuthContextOverride(auth, extra);
+  } catch (error) {
+    warnPluginOnce(
+      'better-auth-plugin-enrich-failure',
+      '[blyp] Better Auth plugin enrich hook failed. Continuing with the normalized auth context.',
+      error
+    );
+    return auth;
+  }
 }
 
 export function isBlypBetterAuthPlugin(value: unknown): boolean {
@@ -158,8 +170,8 @@ export function blyp(
               },
               async (ctx) => {
                 const session =
-                  resolveSessionEnvelope(ctx.context.session) ??
                   resolveSessionEnvelope(ctx.context.newSession) ??
+                  resolveSessionEnvelope(ctx.context.session) ??
                   await getSessionFromCtx(ctx).catch(() => null);
                 const auth = normalizeBetterAuthContext(session, {
                   includeClaims: options.includeClaims,

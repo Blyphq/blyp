@@ -236,9 +236,17 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
         ? createRemoteDeliveryManager({
             runtime: 'browser',
             delivery: config.delivery,
-            send: (event) => {
+            send: async (event) => {
               if (resolvedConfig.transport) {
-                return resolvedConfig.transport(event);
+                try {
+                  return await resolvedConfig.transport(event);
+                } catch (error) {
+                  return {
+                    outcome: 'failure',
+                    reason: 'network_error',
+                    error: error instanceof Error ? error.message : String(error),
+                  };
+                }
               }
 
               return sendRemoteLog(resolvedConfig, event);

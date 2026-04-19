@@ -40,10 +40,37 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
     void (async () => {
       enterRequestContext();
       const traceId = createRequestTraceId();
+      const path = extractPathname(req.originalUrl || req.url || '/');
       setActiveRequestTraceId(traceId);
       let structuredLogEmitted = false;
       req.blypTraceId = traceId;
       res.setHeader(BLYP_TRACE_HEADER, traceId);
+
+      if (
+        shared.resolvedClientLogging &&
+        req.method.toUpperCase() === 'POST' &&
+        path === shared.ingestionPath
+      ) {
+        const body = req.body === undefined ? await readNodeRequestBody(req) : req.body;
+        const result = await handleClientLogIngestion({
+          config: shared,
+          ctx: buildExpressContext(req, res),
+          request: createRequestLike(
+            req.method,
+            buildAbsoluteUrl(req.originalUrl || req.url || '/', req.headers),
+            req.headers
+          ),
+          body,
+          deliveryPath: shared.ingestionPath,
+        });
+        if (result.headers) {
+          for (const [key, value] of Object.entries(result.headers)) {
+            res.setHeader(key, value);
+          }
+        }
+        res.status(result.status).end();
+        return;
+      }
 
       await resolveRequestAuthContext({
         config: shared,
@@ -115,33 +142,6 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
           );
         }
       });
-
-      const path = extractPathname(req.originalUrl || req.url || '/');
-      if (
-        shared.resolvedClientLogging &&
-        req.method.toUpperCase() === 'POST' &&
-        path === shared.ingestionPath
-      ) {
-        const body = req.body === undefined ? await readNodeRequestBody(req) : req.body;
-        const result = await handleClientLogIngestion({
-          config: shared,
-          ctx: buildExpressContext(req, res),
-          request: createRequestLike(
-            req.method,
-            buildAbsoluteUrl(req.originalUrl || req.url || '/', req.headers),
-            req.headers
-          ),
-          body,
-          deliveryPath: shared.ingestionPath,
-        });
-        if (result.headers) {
-          for (const [key, value] of Object.entries(result.headers)) {
-            res.setHeader(key, value);
-          }
-        }
-        res.status(result.status).end();
-        return;
-      }
 
       next();
     })().catch(next);

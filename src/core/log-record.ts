@@ -145,7 +145,7 @@ export function buildRecord(
   }
 
   if (auth) {
-    record.auth = auth;
+    record.auth = sanitizeLogValue(auth, redaction) as typeof auth;
   }
 
   return record;
@@ -180,7 +180,7 @@ export function buildStructuredRecord(
   }
 
   if (auth) {
-    record.auth = auth;
+    record.auth = sanitizeLogValue(auth, redaction) as typeof auth;
   }
 
   record.level =
