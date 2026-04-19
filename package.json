@@ -95,6 +95,9 @@
       "database": [
         "dist/database/index.d.ts"
       ],
+      "http": [
+        "dist/connectors/http/index.d.ts"
+      ],
       "betterstack": [
         "dist/connectors/betterstack/index.d.ts"
       ],
@@ -235,6 +238,11 @@
       "types": "./dist/database/index.d.ts",
       "import": "./dist/database.mjs",
       "require": "./dist/database.js"
+    },
+    "./http": {
+      "types": "./dist/connectors/http/index.d.ts",
+      "import": "./dist/connectors/http.mjs",
+      "require": "./dist/connectors/http.js"
     },
     "./betterstack": {
       "types": "./dist/connectors/betterstack/index.d.ts",

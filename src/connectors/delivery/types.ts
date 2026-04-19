@@ -6,6 +6,7 @@ export const CONNECTOR_DELIVERY_BINDER = Symbol('blyp.connector.delivery-binder'
 export type QueuedConnectorType =
   | 'betterstack'
   | 'databuddy'
+  | 'http'
   | 'posthog'
   | 'sentry'
   | 'otlp';

@@ -20,6 +20,7 @@ import type { BetterStackSender } from '../types/connectors/betterstack';
 import type { DatabuddySender } from '../types/connectors/databuddy';
 import type { PostHogSender } from '../types/connectors/posthog';
 import type { SentrySender } from '../types/connectors/sentry';
+import type { HTTPRegistry } from '../types/connectors/http';
 import type { OTLPRegistry } from '../types/connectors/otlp';
 import type { ResolvedRedactionConfig } from '../types/core/config';
 import { runtime } from './runtime';
@@ -77,6 +78,10 @@ interface PostHogSenderModule {
 
 interface SentrySenderModule {
   createSentrySender: (config: BlypConfig) => SentrySender;
+}
+
+interface HTTPSenderModule {
+  createHTTPRegistry: (config: BlypConfig) => HTTPRegistry;
 }
 
 interface OTLPSenderModule {
@@ -175,6 +180,29 @@ function createOtlpSenderStub(name: string): import('../types/connectors/otlp').
   };
 }
 
+function createHttpSenderStub(name: string): import('../types/connectors/http').HTTPSender {
+  return {
+    name,
+    enabled: false,
+    ready: false,
+    mode: 'auto',
+    serviceName: 'blyp-app',
+    endpoint: undefined,
+    status: 'missing',
+    send: () => {},
+    flush: async () => {},
+  };
+}
+
+function createHTTPRegistryStub(): HTTPRegistry {
+  return {
+    get: (name: string) => createHttpSenderStub(name),
+    getAutoForwardTargets: () => [],
+    send: () => {},
+    flush: async () => {},
+  };
+}
+
 function createOTLPRegistryStub(): OTLPRegistry {
   return {
     get: (name: string) => createOtlpSenderStub(name),
@@ -236,6 +264,18 @@ function createSentrySenderForConfig(config: BlypConfig): SentrySender {
     ['@sentry/node'],
     '../connectors/sentry/sender'
   ).createSentrySender(config);
+}
+
+function createHTTPRegistryForConfig(config: BlypConfig): HTTPRegistry {
+  if (!config.connectors?.http?.some((connector) => connector.enabled)) {
+    return createHTTPRegistryStub();
+  }
+
+  return loadOptionalModule<HTTPSenderModule>(
+    'http',
+    [],
+    '../connectors/http/sender'
+  ).createHTTPRegistry(config);
 }
 
 function createOTLPRegistryForConfig(config: BlypConfig): OTLPRegistry {
@@ -405,6 +445,10 @@ export function getSentrySender(logger: BlypLogger): SentrySender {
   return getLoggerFactory(logger).sentry;
 }
 
+export function getHttpRegistry(logger: BlypLogger): HTTPRegistry {
+  return getLoggerFactory(logger).http;
+}
+
 export function getOtlpRegistry(logger: BlypLogger): OTLPRegistry {
   return getLoggerFactory(logger).otlp;
 }
@@ -543,6 +587,19 @@ function maybeSendToOTLP(
   }
 }
 
+function maybeSendToHTTP(
+  http: HTTPRegistry,
+  record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
+): void {
+  if (isClientLogRecord(record)) {
+    return;
+  }
+
+  for (const sender of http.getAutoForwardTargets()) {
+    sender.send(record, { source: 'server', warnIfUnavailable: true });
+  }
+}
+
 function createLoggerInstance(
   rootRawLogger: any,
   sink: BlypPrimarySink,
@@ -551,6 +608,7 @@ function createLoggerInstance(
   databuddy: DatabuddySender,
   posthog: PostHogSender,
   sentry: SentrySender,
+  http: HTTPRegistry,
   otlp: OTLPRegistry,
   redact: ResolvedRedactionConfig,
   bindings: Record<string, unknown> = {},
@@ -598,6 +656,7 @@ function createLoggerInstance(
     maybeSendToDatabuddy(databuddy, record);
     maybeSendToPostHog(posthog, record);
     maybeSendToSentry(sentry, record);
+    maybeSendToHTTP(http, record);
     maybeSendToOTLP(otlp, record);
   };
 
@@ -632,6 +691,7 @@ function createLoggerInstance(
     maybeSendToDatabuddy(databuddy, record);
     maybeSendToPostHog(posthog, record);
     maybeSendToSentry(sentry, record);
+    maybeSendToHTTP(http, record);
     maybeSendToOTLP(otlp, record);
   };
 
@@ -682,6 +742,7 @@ function createLoggerInstance(
         databuddy.flush(),
         posthog.flush(),
         sentry.flush(),
+        http.flush(),
         otlp.flush(),
       ]);
     },
@@ -696,6 +757,7 @@ function createLoggerInstance(
         databuddy.flush(),
         posthog.flush(),
         sentry.flush(),
+        http.flush(),
         otlp.flush(),
       ]);
     },
@@ -719,6 +781,7 @@ function createLoggerInstance(
         databuddy,
         posthog,
         sentry,
+        http,
         otlp,
         redact,
         mergedBindings,
@@ -732,6 +795,7 @@ function createLoggerInstance(
       databuddy,
       posthog,
       sentry,
+      http,
       otlp,
       redact,
       sink,
@@ -747,6 +811,7 @@ function createLoggerInstance(
           databuddy,
           posthog,
           sentry,
+          http,
           otlp,
           redact,
           nextBindings,
@@ -780,6 +845,7 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   const databuddy = createDatabuddySenderForConfig(resolvedConfig);
   const posthog = createPostHogSenderForConfig(resolvedConfig);
   const sentry = createSentrySenderForConfig(resolvedConfig);
+  const http = createHTTPRegistryForConfig(resolvedConfig);
   const otlp = createOTLPRegistryForConfig(resolvedConfig);
   const connectorDelivery = resolvedConfig.connectors.delivery.enabled
     ? new ConnectorDeliveryManager(resolvedConfig.connectors.delivery)
@@ -790,6 +856,10 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
     connectorDelivery.bindTarget(databuddy as unknown as ConnectorBatchDispatchTarget);
     connectorDelivery.bindTarget(posthog as unknown as ConnectorBatchDispatchTarget);
     connectorDelivery.bindTarget(sentry as unknown as ConnectorBatchDispatchTarget);
+
+    for (const sender of http.getAutoForwardTargets()) {
+      connectorDelivery.bindTarget(sender as unknown as ConnectorBatchDispatchTarget);
+    }
 
     for (const sender of otlp.getAutoForwardTargets()) {
       connectorDelivery.bindTarget(sender as unknown as ConnectorBatchDispatchTarget);
@@ -804,6 +874,7 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
     databuddy,
     posthog,
     sentry,
+    http,
     otlp,
     resolvedConfig.redact
   );

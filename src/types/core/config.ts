@@ -242,11 +242,34 @@ export interface ResolvedOTLPConnectorConfig {
   status: 'enabled' | 'missing';
 }
 
+export interface HTTPConnectorConfig {
+  name: string;
+  enabled?: boolean;
+  mode?: ConnectorMode;
+  endpoint?: string;
+  headers?: Record<string, string>;
+  auth?: string;
+  serviceName?: string;
+}
+
+export interface ResolvedHTTPConnectorConfig {
+  name: string;
+  enabled: boolean;
+  mode: ConnectorMode;
+  endpoint?: string;
+  headers: Record<string, string>;
+  auth?: string;
+  serviceName: string;
+  ready: boolean;
+  status: 'enabled' | 'missing';
+}
+
 export interface BlypConnectorsConfig {
   betterstack?: BetterStackConnectorConfig;
   databuddy?: DatabuddyConnectorConfig;
   posthog?: PostHogConnectorConfig;
   sentry?: SentryConnectorConfig;
+  http?: HTTPConnectorConfig[];
   otlp?: OTLPConnectorConfig[];
   delivery?: ConnectorDeliveryConfig;
 }
@@ -270,6 +293,7 @@ export interface ResolvedBlypConnectorsConfig {
   databuddy: ResolvedDatabuddyConnectorConfig;
   posthog: ResolvedPostHogConnectorConfig;
   sentry: ResolvedSentryConnectorConfig;
+  http: ResolvedHTTPConnectorConfig[];
   otlp: ResolvedOTLPConnectorConfig[];
   delivery: ResolvedConnectorDeliveryConfig;
 }

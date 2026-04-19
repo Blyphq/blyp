@@ -2,6 +2,7 @@ import type { BetterStackSender } from '../connectors/betterstack';
 import type { DatabuddySender } from '../connectors/databuddy';
 import type { PostHogSender } from '../connectors/posthog';
 import type { SentrySender } from '../connectors/sentry';
+import type { HTTPRegistry } from '../connectors/http';
 import type { OTLPRegistry } from '../connectors/otlp';
 import type { BlypPrimarySink } from '../../core/primary-sink';
 import type { StructuredLog, StructuredLogPayload } from './structured-log';
@@ -41,6 +42,7 @@ export interface LoggerFactoryHandle {
   databuddy: DatabuddySender;
   posthog: PostHogSender;
   sentry: SentrySender;
+  http: HTTPRegistry;
   otlp: OTLPRegistry;
   redact: ResolvedRedactionConfig;
   sink: BlypPrimarySink;

@@ -13,7 +13,7 @@ It gives you structured logging, framework adapters, client-to-server log ingest
 - Create structured, request-scoped logs with `createStructuredLog`.
 - Redact common secrets before logs reach output or downstream sinks.
 - Ingest logs from browser and Expo apps into your backend flow.
-- Forward logs to optional connectors such as PostHog, Better Stack, Sentry, Databuddy, and OTLP targets.
+- Forward logs to optional connectors such as PostHog, Better Stack, Sentry, Databuddy, named HTTP endpoints, and OTLP targets.
 - Built for Bun-first setups with support for supported Node runtimes.
 - Full TypeScript support across the main package and subpath exports.
 
@@ -85,7 +85,7 @@ See the [framework integration docs](docs/README.md#framework-integrations) for 
 - [Client and Expo logging](docs/README.md#client) for browser and mobile apps that send logs through your backend.
 - [AI tracing](docs/README.md#ai-sdk-tracing) for Vercel AI SDK, Better Agent, OpenAI, Anthropic, and compatible transports.
 - [Database logging](docs/README.md#database-logging) when file persistence is not the right fit.
-- Connector forwarding for [PostHog](docs/README.md#posthog-connector), [Databuddy](docs/README.md#databuddy-connector), [Better Stack](docs/README.md#better-stack-connector), [Sentry](docs/README.md#sentry-connector), and [OTLP](docs/README.md#otlp-connector).
+- Connector forwarding for [PostHog](docs/README.md#posthog-connector), [Databuddy](docs/README.md#databuddy-connector), [Better Stack](docs/README.md#better-stack-connector), [Sentry](docs/README.md#sentry-connector), [HTTP](docs/README.md#http-connector), and [OTLP](docs/README.md#otlp-connector).
 
 ## Documentation
 
@@ -98,6 +98,7 @@ See the [framework integration docs](docs/README.md#framework-integrations) for 
 - [Databuddy connector](docs/README.md#databuddy-connector)
 - [Better Stack connector](docs/README.md#better-stack-connector)
 - [Sentry connector](docs/README.md#sentry-connector)
+- [HTTP connector](docs/README.md#http-connector)
 - [OTLP connector](docs/README.md#otlp-connector)
 - [Stability policy](STABILITY.md)
 - [Security policy](SECURITY.md)

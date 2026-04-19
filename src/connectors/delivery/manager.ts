@@ -545,8 +545,8 @@ export class ConnectorDeliveryManager implements ConnectorDeliveryBinder {
             continue;
           }
 
-          const dispatchKey = row.connectorType === 'otlp'
-            ? `otlp:${row.connectorTarget ?? ''}`
+          const dispatchKey = row.connectorType === 'otlp' || row.connectorType === 'http'
+            ? `${row.connectorType}:${row.connectorTarget ?? ''}`
             : row.connectorType;
           const dispatcher = this.dispatchers.get(dispatchKey);
 

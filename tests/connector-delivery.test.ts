@@ -207,6 +207,71 @@ describe('Connector Delivery Manager', () => {
     await delivery.shutdown();
   });
 
+  it('replays named HTTP connector jobs using the target-specific dispatch key', async () => {
+    const durableQueuePath = path.join(tempDir, '.blyp', 'queue-http.db');
+    const delivery = new ConnectorDeliveryManager({
+      enabled: true,
+      memoryBufferSize: 10,
+      durableQueuePath,
+      durableSpillStrategy: 'after-first-failure',
+      memoryBatchSize: 10,
+      sqliteWriteBatchSize: 10,
+      sqliteReadBatchSize: 10,
+      dispatchConcurrency: 1,
+      pollIntervalMs: 2000,
+      overflowStrategy: 'drop-oldest',
+      durableReady: false,
+      retry: {
+        maxAttempts: 4,
+        initialBackoffMs: 0,
+        maxBackoffMs: 0,
+        multiplier: 2,
+        jitter: false,
+      },
+    });
+
+    const dispatched: string[] = [];
+    let shouldFail = true;
+    const dispatcher: ConnectorBatchDispatcher = {
+      dispatchKey: 'http:webhook',
+      async dispatch(records) {
+        if (shouldFail) {
+          shouldFail = false;
+          return {
+            ok: false,
+            retryable: true,
+            error: 'temporary http outage',
+          };
+        }
+
+        dispatched.push(...records.map((record) => record.message));
+        return { ok: true };
+      },
+    };
+
+    await waitForFileFlush(50);
+    delivery.enqueue(
+      'http',
+      {
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'queued http retry',
+      },
+      dispatcher,
+      'webhook'
+    );
+
+    await waitForFileFlush(50);
+    expect(await delivery.getDurableCountForTests()).toBe(1);
+
+    await delivery.flush();
+
+    expect(dispatched).toEqual(['queued http retry']);
+    expect(await delivery.getDurableCountForTests()).toBe(0);
+
+    await delivery.shutdown();
+  });
+
   it('drops jobs after max attempts are exceeded in memory-only mode', async () => {
     const delivery = new ConnectorDeliveryManager({
       enabled: true,
