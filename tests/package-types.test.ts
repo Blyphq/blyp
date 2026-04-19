@@ -93,6 +93,7 @@ describe('package surface', () => {
     expect(packageJson.typesVersions).toEqual({
       '*': {
         standalone: ['dist/frameworks/standalone/index.d.ts'],
+        'better-auth': ['dist/better-auth/index.d.ts'],
         elysia: ['dist/frameworks/elysia/index.d.ts'],
         hono: ['dist/frameworks/hono/index.d.ts'],
         express: ['dist/frameworks/express/index.d.ts'],
@@ -138,6 +139,11 @@ describe('package surface', () => {
         types: './dist/frameworks/standalone/index.d.ts',
         import: './dist/standalone.mjs',
         require: './dist/standalone.js',
+      },
+      './better-auth': {
+        types: './dist/better-auth/index.d.ts',
+        import: './dist/better-auth.mjs',
+        require: './dist/better-auth.js',
       },
       './elysia': {
         types: './dist/frameworks/elysia/index.d.ts',
@@ -363,6 +369,39 @@ describe('package surface', () => {
     expect(result.status).toBe(0);
   });
 
+  it('publishes Better Auth integration types through the subpath export', () => {
+    const result = compileFixture(`
+      import { blyp, blypClient, identifyUser } from '@blyp/core/better-auth';
+      import { createNextJsLogger } from '@blyp/core/nextjs';
+      import type { BetterAuthIntegrationConfig } from '@blyp/core/better-auth';
+
+      const auth = {
+        api: {
+          async getSession(input: { headers: Headers | Record<string, unknown> }) {
+            return input;
+          },
+        },
+      };
+
+      const config: BetterAuthIntegrationConfig<{ request: Request }> = {
+        betterAuth: auth,
+      };
+
+      createNextJsLogger({
+        auth: config,
+      });
+
+      blyp();
+      blypClient();
+      identifyUser({
+        authProvider: 'better-auth',
+        authActorId: 'user_1',
+      });
+    `);
+
+    expect(result.status).toBe(0);
+  });
+
   it('rejects invalid typed blyp.config authoring through the published declarations', () => {
     const result = compileFixture(`
       import { defineConfig } from '@blyp/core';
@@ -386,6 +425,7 @@ describe('package surface', () => {
 
     const optionalPeers = [
       '@better-agent/core',
+      'better-auth',
       '@databuddy/sdk',
       '@logtail/node',
       '@nestjs/common',
@@ -422,6 +462,7 @@ describe('package surface', () => {
     }
 
     expect(packageJson.peerDependencies?.['@databuddy/sdk']).toBe('^2');
+    expect(packageJson.peerDependencies?.['better-auth']).toBe('^1.6.5');
     expect(packageJson.peerDependencies?.['@logtail/node']).toBe('^0.5');
     expect(packageJson.peerDependencies?.['@opentelemetry/api-logs']).toBe('^0.206');
     expect(packageJson.peerDependencies?.['@opentelemetry/exporter-logs-otlp-http']).toBe('^0.206');

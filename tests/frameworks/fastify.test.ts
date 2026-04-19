@@ -139,6 +139,99 @@ describe('Fastify Integration', () => {
     await app.close();
   });
 
+  it('resolves Better Auth ingestion auth with source=client_ingestion', async () => {
+    const app = Fastify();
+    await app.register(createFastifyLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              return {
+                session: {
+                  id: 'sess_1',
+                },
+                user: {
+                  id: 'user_1',
+                },
+              };
+            },
+          },
+        },
+        enrich: async ({ source }) => ({
+          claims: {
+            source,
+          },
+        }),
+      },
+    }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/inngest',
+      headers: {
+        'content-type': 'application/json',
+      },
+      payload: createClientPayload(),
+    });
+    await waitForFileFlush();
+
+    expect(response.statusCode).toBe(204);
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(clientRecord?.auth).toMatchObject({
+      provider: 'better-auth',
+      claims: {
+        source: 'client_ingestion',
+      },
+    });
+    await app.close();
+  });
+
+  it('includes Better Auth resolution latency in logged response times', async () => {
+    const app = Fastify();
+    await app.register(createFastifyLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              await new Promise((resolve) => setTimeout(resolve, 20));
+              return {
+                session: {
+                  id: 'sess_1',
+                },
+                user: {
+                  id: 'user_1',
+                },
+              };
+            },
+          },
+        },
+      },
+    }));
+    app.get('/timed', async () => ({ ok: true }));
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/timed',
+    });
+    await waitForFileFlush();
+
+    expect(response.statusCode).toBe(200);
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const requestRecord = records.find((record) => {
+      const data = record.data as Record<string, unknown> | undefined;
+      return data?.type === 'http_request' && data?.url === '/timed';
+    });
+
+    expect((requestRecord?.data as Record<string, unknown>)?.responseTime).toBeGreaterThanOrEqual(15);
+    await app.close();
+  });
+
   it('emits one structured request record and drops mixed root logger writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;

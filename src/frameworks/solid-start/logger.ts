@@ -18,6 +18,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   runWithRequestContext,
   setActiveRequestLogger,
@@ -47,7 +48,7 @@ export function createSolidStartLogger(
   return {
     logger: shared.logger,
     middleware: {
-      onRequest: (event) => {
+      onRequest: async (event) => {
         enterRequestContext();
         const traceId = createRequestTraceId();
         const path = extractPathname(event.request.url);
@@ -66,6 +67,12 @@ export function createSolidStartLogger(
           },
         });
         ensureTraceHeader(event.response, traceId);
+        await resolveRequestAuthContext({
+          config: shared,
+          ctx: createContext(event, event.response),
+          request: event.request,
+          source: 'request',
+        });
       },
       onBeforeResponse: async (event) => {
         return runWithRequestContext(async () => {

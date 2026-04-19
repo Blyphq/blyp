@@ -149,6 +149,152 @@ describe('Next.js Integration', () => {
     ).toBe(true);
   });
 
+  it('enriches request and client logs with Better Auth session context', async () => {
+    const nextLogger = createNextJsLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              return {
+                session: {
+                  id: 'sess_1',
+                  activeOrganizationId: 'org_1',
+                },
+                user: {
+                  id: 'user_1',
+                  email: 'ada@example.com',
+                  name: 'Ada',
+                },
+              };
+            },
+          },
+        },
+      },
+    });
+
+    const handler = nextLogger.withLogger(async (_request, _context, { log }) => {
+      log.info('better-auth route log');
+      return new Response('ok', { status: 200 });
+    });
+
+    await handler(new Request('http://localhost/api/auth-aware'), {});
+    await nextLogger.clientLogHandler(
+      new Request('http://localhost/inngest', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createClientPayload()),
+      })
+    );
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const routeRecord = records.find((record) => record.message === 'better-auth route log');
+    const requestRecord = records.find((record) => {
+      const data = record.data as Record<string, unknown> | undefined;
+      return data?.type === 'http_request' && data?.url === '/api/auth-aware';
+    });
+    const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(routeRecord?.auth).toMatchObject({
+      provider: 'better-auth',
+      actor: {
+        id: 'user_1',
+        email: 'ada@example.com',
+        name: 'Ada',
+      },
+      session: {
+        id: 'sess_1',
+      },
+      organization: {
+        id: 'org_1',
+      },
+    });
+    expect(requestRecord?.auth).toMatchObject({
+      provider: 'better-auth',
+      actor: {
+        id: 'user_1',
+      },
+    });
+    expect(clientRecord?.auth).toMatchObject({
+      provider: 'better-auth',
+      actor: {
+        id: 'user_1',
+      },
+    });
+    expect((clientRecord?.data as Record<string, any>)?.serverContext?.auth).toMatchObject({
+      provider: 'better-auth',
+      actor: {
+        id: 'user_1',
+      },
+    });
+  });
+
+  it('continues request logging when Better Auth enrich throws and falls back to base auth', async () => {
+    const warnings: unknown[][] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    const nextLogger = createNextJsLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              return {
+                session: {
+                  id: 'sess_1',
+                },
+                user: {
+                  id: 'user_1',
+                  email: 'ada@example.com',
+                },
+              };
+            },
+          },
+        },
+        enrich: async () => {
+          throw new Error('enrich exploded');
+        },
+      },
+    });
+
+    const handler = nextLogger.withLogger(async (_request, _context, { log }) => {
+      log.info('better-auth enrich fallback');
+      return new Response('ok', { status: 200 });
+    });
+
+    try {
+      const response = await handler(new Request('http://localhost/api/auth-fallback'), {});
+      await waitForFileFlush();
+
+      expect(response.status).toBe(200);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const routeRecord = records.find((record) => record.message === 'better-auth enrich fallback');
+
+      expect(routeRecord?.auth).toMatchObject({
+        provider: 'better-auth',
+        actor: {
+          id: 'user_1',
+          email: 'ada@example.com',
+        },
+        session: {
+          id: 'sess_1',
+        },
+      });
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0]?.[0] ?? '')).toContain('Better Auth enrich hook failed');
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
   it('emits one structured request record and drops mixed root logger writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;

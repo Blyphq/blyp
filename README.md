@@ -79,6 +79,46 @@ const app = new Elysia()
 
 See the [framework integration docs](docs/README.md#framework-integrations) for the full adapter matrix and framework-specific examples.
 
+## Better Auth
+
+Better Auth can be attached as a real Better Auth plugin and then reused by Blyp framework adapters for request enrichment.
+
+```ts
+import { betterAuth } from 'better-auth';
+import { blyp } from '@blyp/core/better-auth';
+
+export const auth = betterAuth({
+  plugins: [
+    blyp({
+      clientLogging: true,
+    }),
+  ],
+});
+```
+
+```ts
+import { createLogger } from '@blyp/core/nextjs';
+import { auth } from './auth';
+
+export const nextLogger = createLogger({
+  auth: {
+    betterAuth: auth,
+  },
+});
+```
+
+```ts
+import { createAuthClient } from 'better-auth/client';
+import { blypClient } from '@blyp/core/better-auth';
+
+export const authClient = createAuthClient({
+  plugins: [blypClient()],
+});
+
+const logger = authClient.blyp.createLogger();
+logger.info('mounted');
+```
+
 ## More features
 
 - [Automatic redaction](docs/README.md#automatic-redaction) for common secrets, headers, and custom patterns.

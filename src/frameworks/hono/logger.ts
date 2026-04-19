@@ -11,6 +11,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   runWithRequestContext,
   setActiveRequestTraceId,
@@ -27,25 +28,10 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
     return runWithRequestContext(async () => {
       const startTime = performance.now();
       const traceId = createRequestTraceId();
+      const path = context.req.path || extractPathname(context.req.url);
       let structuredLogEmitted = false;
       setActiveRequestTraceId(traceId);
-      context.set(
-        'blypLog',
-        createRequestScopedLogger(shared.logger, {
-          resolveStructuredFields: () => ({
-            method: context.req.method,
-            path: context.req.path || extractPathname(context.req.url),
-            ...resolveAdditionalProps(shared, context),
-          }),
-          onStructuredEmit: () => {
-            structuredLogEmitted = true;
-          },
-        })
-      );
-      context.set('blypTraceId', traceId);
-      context.set('blypStartTime', startTime);
 
-      const path = context.req.path || extractPathname(context.req.url);
       if (
         shared.resolvedClientLogging &&
         context.req.method === 'POST' &&
@@ -67,6 +53,28 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
           },
         });
       }
+
+      await resolveRequestAuthContext({
+        config: shared,
+        ctx: context,
+        request: context.req.raw,
+        source: 'request',
+      });
+      context.set(
+        'blypLog',
+        createRequestScopedLogger(shared.logger, {
+          resolveStructuredFields: () => ({
+            method: context.req.method,
+            path: context.req.path || extractPathname(context.req.url),
+            ...resolveAdditionalProps(shared, context),
+          }),
+          onStructuredEmit: () => {
+            structuredLogEmitted = true;
+          },
+        })
+      );
+      context.set('blypTraceId', traceId);
+      context.set('blypStartTime', startTime);
 
       let thrownError: unknown;
       try {

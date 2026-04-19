@@ -27,5 +27,6 @@ declare module 'fastify' {
     blypStartTime?: number;
     blypError?: unknown;
     blypStructuredLogEmitted?: boolean;
+    blypClientIngestion?: boolean;
   }
 }

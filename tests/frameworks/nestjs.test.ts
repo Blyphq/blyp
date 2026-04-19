@@ -294,6 +294,58 @@ describe('NestJS Integration', () => {
     }
   });
 
+  it('resolves Better Auth ingestion auth with source=client_ingestion in Nest middleware', async () => {
+    const app = await startNestApp('express', {
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        betterAuth: {
+          api: {
+            async getSession() {
+              return {
+                session: {
+                  id: 'sess_1',
+                },
+                user: {
+                  id: 'user_1',
+                },
+              };
+            },
+          },
+        },
+        enrich: async ({ source }) => ({
+          claims: {
+            source,
+          },
+        }),
+      },
+    });
+
+    try {
+      const response = await fetch(`${app.baseUrl}/inngest`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createClientPayload()),
+      });
+      await waitForFileFlush();
+
+      expect(response.status).toBe(204);
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+      expect(clientRecord?.auth).toMatchObject({
+        provider: 'better-auth',
+        claims: {
+          source: 'client_ingestion',
+        },
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it('fails fast when BlypModule is used before createLogger', async () => {
     const processHandle = Bun.spawn(
       ['bun', 'run', 'tests/helpers/nest-bootstrap-missing.ts'],

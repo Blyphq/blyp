@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import type { BetterAuthLogContext } from '../../types/better-auth';
 import type { BlypLogger } from '../../core/logger';
 import type { BlypRequestContextStore } from '../../types/frameworks/request-context';
 
@@ -49,6 +50,29 @@ export function setActiveRequestTraceId(traceId: string | undefined): void {
 
 export function getActiveRequestTraceId(): string | undefined {
   return getRequestContextStore()?.traceId;
+}
+
+export function setActiveRequestAuthContext(auth: BetterAuthLogContext | null): void {
+  const store = getRequestContextStore();
+  if (store) {
+    store.auth = auth;
+    store.authResolved = true;
+  }
+}
+
+export function markRequestAuthResolved(): void {
+  const store = getRequestContextStore();
+  if (store) {
+    store.authResolved = true;
+  }
+}
+
+export function hasResolvedRequestAuth(): boolean {
+  return getRequestContextStore()?.authResolved === true;
+}
+
+export function getActiveRequestAuthContext(): BetterAuthLogContext | null | undefined {
+  return getRequestContextStore()?.auth;
 }
 
 export function markStructuredCollectorActive(): void {

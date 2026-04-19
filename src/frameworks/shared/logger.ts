@@ -1,5 +1,9 @@
 import { DEFAULT_CLIENT_LOG_ENDPOINT, isClientLogEvent, normalizeEndpointPath } from '../../shared/client-log';
 import type { ClientLogEvent } from '../../shared/client-log';
+import {
+  normalizeBetterAuthContext,
+  withBetterAuthContextOverride,
+} from '../../better-auth/normalize';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
@@ -21,6 +25,7 @@ import {
   sanitizeLogMessage,
   sanitizeLogValue,
 } from '../../shared/redaction';
+import { createWarnOnceLogger } from '../../shared/once';
 import {
   buildClientDetails,
   buildInfoLogMessage,
@@ -37,9 +42,19 @@ import type {
 } from '../../types/frameworks/shared';
 import type { HttpErrorCaptureContext } from '../../types/frameworks/request-logger';
 import {
+  getActiveRequestAuthContext,
   getActiveRequestTraceId,
+  hasResolvedRequestAuth,
+  markRequestAuthResolved,
+  setActiveRequestAuthContext,
   setActiveRequestTraceId,
 } from './request-context';
+import type {
+  BetterAuthIntegrationConfig,
+  BetterAuthLogContext,
+  BetterAuthResolveArgs,
+  BetterAuthSessionEnvelope,
+} from '../../types/better-auth';
 
 function buildVerboseLogMessage(
   method: string,
@@ -52,6 +67,9 @@ function buildVerboseLogMessage(
   const timeColor = getResponseTimeColor(responseTime);
   return `${methodColor} ${url} ${statusColor} ${timeColor}`;
 }
+
+const authResolutionWarnings = new Set<string>();
+const warnAuthResolutionOnce = createWarnOnceLogger(authResolutionWarnings);
 
 export function resolveClientLoggingConfig<Ctx>(
   clientLogging: ServerLoggerConfig<Ctx>['clientLogging'],
@@ -112,6 +130,7 @@ export function resolveServerLogger<Ctx>(
     includePaths,
     ignorePaths,
     clientLogging,
+    auth,
     connectors,
   } = config;
   const logger = loggerOverride ?? createBaseLogger({
@@ -153,7 +172,94 @@ export function resolveServerLogger<Ctx>(
     resolvedIgnorePaths,
     resolvedClientLogging,
     ingestionPath,
+    resolvedAuth: auth ?? null,
   };
+}
+
+function hasHeaders(
+  request: RequestLike | { headers?: Headers | Record<string, unknown> }
+): request is RequestLike & { headers: Headers | Record<string, unknown> } {
+  return request.headers !== undefined;
+}
+
+async function getBetterAuthSessionFromRequest<Ctx>(
+  config: BetterAuthIntegrationConfig<Ctx>,
+  request: RequestLike | { headers?: Headers | Record<string, unknown> }
+): Promise<BetterAuthSessionEnvelope | null> {
+  const getter = config.betterAuth?.api?.getSession;
+  if (typeof getter !== 'function' || !hasHeaders(request)) {
+    return null;
+  }
+
+  try {
+    const session = await getter({
+      headers: request.headers,
+    });
+
+    return session as BetterAuthSessionEnvelope | null;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveRequestAuthContext<Ctx>(options: {
+  config: ResolvedServerLogger<Ctx>;
+  ctx: Ctx;
+  request: RequestLike | { headers?: Headers | Record<string, unknown> };
+  source: 'request' | 'client_ingestion';
+}): Promise<BetterAuthLogContext | null> {
+  try {
+    const existing = getActiveRequestAuthContext();
+    if (existing !== undefined || hasResolvedRequestAuth()) {
+      return existing ?? null;
+    }
+
+    const authConfig = options.config.resolvedAuth;
+    if (!authConfig) {
+      markRequestAuthResolved();
+      return null;
+    }
+
+    const session = await getBetterAuthSessionFromRequest(authConfig, options.request);
+    let auth = normalizeBetterAuthContext(session, {
+      includeClaims: authConfig.includeClaims,
+      includeRawSession: authConfig.includeRawSession,
+    });
+
+    if (authConfig.enrich) {
+      try {
+        const extra = await authConfig.enrich({
+          ctx: options.ctx,
+          request: options.request,
+          session,
+          auth: authConfig.betterAuth,
+          source: options.source,
+        } as BetterAuthResolveArgs<Ctx>);
+        auth = withBetterAuthContextOverride(auth, extra);
+      } catch (error) {
+        warnAuthResolutionOnce(
+          'better-auth-enrich-failure',
+          '[blyp] Better Auth enrich hook failed. Continuing with the normalized auth context.',
+          error
+        );
+      }
+    }
+
+    setActiveRequestAuthContext(auth);
+    return auth;
+  } catch (error) {
+    warnAuthResolutionOnce(
+      'better-auth-resolution-failure',
+      '[blyp] Better Auth context resolution failed. Continuing without auth context.',
+      error
+    );
+    setActiveRequestAuthContext(null);
+    return null;
+  }
+}
+
+export function getCurrentRequestAuthContext(): BetterAuthLogContext | null {
+  return getActiveRequestAuthContext() ?? null;
 }
 
 export function isIncludedPath(
@@ -404,6 +510,13 @@ export async function handleClientLogIngestion<Ctx>(options: {
 }): Promise<{ status: number; headers?: Record<string, string> }> {
   const { config, ctx, request, body, deliveryPath } = options;
 
+  await resolveRequestAuthContext({
+    config,
+    ctx,
+    request,
+    source: 'client_ingestion',
+  });
+
   if (!config.resolvedClientLogging) {
     return { status: 404 };
   }
@@ -439,6 +552,16 @@ export async function handleClientLogIngestion<Ctx>(options: {
 
   if (serverContext !== undefined) {
     structuredPayload.serverContext = sanitizeLogValue(serverContext, redaction);
+  }
+
+  const requestAuth = getCurrentRequestAuthContext();
+  if (requestAuth) {
+    structuredPayload.serverContext = sanitizeLogValue({
+      ...(structuredPayload.serverContext && typeof structuredPayload.serverContext === 'object'
+        ? structuredPayload.serverContext as Record<string, unknown>
+        : {}),
+      auth: requestAuth,
+    }, redaction);
   }
 
   const clientMessage = sanitizeLogMessage(`[client] ${sanitizedPayload.message}`, redaction);
