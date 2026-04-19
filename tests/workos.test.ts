@@ -706,6 +706,7 @@ describe('WorkOS AuthKit integration', () => {
 
       expect(() => {
         resolveServerLogger({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           auth: {
             betterAuth: {
               betterAuth,
@@ -714,7 +715,7 @@ describe('WorkOS AuthKit integration', () => {
               workos,
               cookiePassword: 'test-password',
             },
-          },
+          } as any,
         });
       }).toThrow('Cannot configure both Better Auth and WorkOS');
     });

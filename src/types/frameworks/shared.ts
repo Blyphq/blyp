@@ -11,10 +11,9 @@ import type { WorkOsIntegrationConfig, WorkOsLogContext } from '../workos';
 
 export type AuthLogContext = BetterAuthLogContext | WorkOsLogContext;
 
-export interface AuthProvidersConfig<Ctx> {
-  betterAuth?: BetterAuthIntegrationConfig<Ctx>;
-  workos?: WorkOsIntegrationConfig<Ctx>;
-}
+export type AuthProvidersConfig<Ctx> =
+  | { betterAuth: BetterAuthIntegrationConfig<Ctx>; workos?: never }
+  | { betterAuth?: never; workos: WorkOsIntegrationConfig<Ctx> };
 
 export type AuthConfig<Ctx> = BetterAuthIntegrationConfig<Ctx> | AuthProvidersConfig<Ctx>;
 
