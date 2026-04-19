@@ -5,8 +5,18 @@ import {
   identifyUser,
   normalizeClerkAuthContext,
   resolveClerkAuthContext,
+  withClerkContextOverride,
 } from '../src/clerk';
-import { createMachineClerkAuth, createSessionClerkAuth } from './helpers/clerk';
+import {
+  resolveRequestAuthContext,
+  resolveServerLogger,
+  runWithRequestContext,
+} from '../src/frameworks/shared';
+import {
+  createMachineClerkAuth,
+  createMockClerkClient,
+  createSessionClerkAuth,
+} from './helpers/clerk';
 
 describe('Clerk integration', () => {
   it('normalizes signed-out requests into a canonical anonymous Clerk auth context', () => {
@@ -115,6 +125,27 @@ describe('Clerk integration', () => {
       email: 'ada@example.com',
     });
     expect(withExtras.raw).toEqual(auth);
+  });
+
+  it('preserves provider and authenticated fields when overrides attempt to change them', () => {
+    const auth = normalizeClerkAuthContext(createSessionClerkAuth());
+    const overridden = withClerkContextOverride(auth, {
+      provider: 'workos',
+      authenticated: false,
+      actor: {
+        name: 'Ada Lovelace',
+      },
+      lookup: {
+        provider: 'workos',
+        email: 'grace@example.com',
+      },
+    });
+
+    expect(overridden.provider).toBe('clerk');
+    expect(overridden.authenticated).toBe(true);
+    expect(overridden.actor.name).toBe('Ada Lovelace');
+    expect(overridden.lookup.provider).toBe('clerk');
+    expect(overridden.lookup.email).toBe('grace@example.com');
   });
 
   it('identifies actors from canonical records and database-style fallback columns', () => {
@@ -258,6 +289,48 @@ describe('Clerk integration', () => {
         delete (globalThis as Record<string, unknown>).sessionStorage;
       }
     }
+  });
+
+  it('preserves cookie separators when resolving Clerk auth from plain object headers', async () => {
+    let seenCookie: string | null = null;
+    const config = resolveServerLogger({
+      auth: {
+        clerk: clerk({
+          clerkClient: createMockClerkClient({
+            auth: createSessionClerkAuth(),
+            inspect(request) {
+              seenCookie = request.headers.get('cookie');
+            },
+          }),
+        }),
+      },
+    });
+
+    await runWithRequestContext(async () => {
+      const auth = await resolveRequestAuthContext({
+        config,
+        ctx: undefined,
+        request: {
+          method: 'GET',
+          url: '/clerk-cookie',
+          headers: {
+            host: 'localhost',
+            cookie: ['__session=token_123', '__client_uat=seen_456'],
+          },
+        },
+        source: 'request',
+      });
+
+      expect(auth).toMatchObject({
+        provider: 'clerk',
+        authenticated: true,
+      });
+    });
+
+    if (seenCookie === null) {
+      throw new Error('missing cookie header');
+    }
+    expect(seenCookie === '__session=token_123; __client_uat=seen_456').toBe(true);
   });
 
   it('hydrates Clerk users once per TTL window and reuses the cached value', async () => {

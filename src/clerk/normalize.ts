@@ -236,6 +236,8 @@ export function withClerkContextOverride(
     ...auth,
     ...extra,
   } as ClerkLogContext;
+  next.provider = 'clerk';
+  next.authenticated = auth.authenticated;
 
   if (isRecord(extra.actor)) {
     next.actor = {

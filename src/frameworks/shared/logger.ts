@@ -394,7 +394,17 @@ function toWebRequest(
   } else if (isRecord(sourceHeaders)) {
     for (const [key, value] of Object.entries(sourceHeaders)) {
       if (Array.isArray(value)) {
-        headers.set(key, value.join(', '));
+        const values = value.filter((entry): entry is string => typeof entry === 'string');
+        if (values.length === 0) {
+          continue;
+        }
+
+        headers.set(
+          key,
+          key.toLowerCase() === 'cookie'
+            ? values.join('; ')
+            : values.join(', ')
+        );
       } else if (typeof value === 'string') {
         headers.set(key, value);
       }
