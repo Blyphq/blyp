@@ -8,6 +8,7 @@ import {
   createBaseLogger,
   getBetterStackSender,
   getDatabuddySender,
+  getHttpRegistry,
   getOtlpRegistry,
   getPostHogSender,
   getRedactionConfig,
@@ -138,6 +139,7 @@ export function resolveServerLogger<Ctx>(
     databuddy: getDatabuddySender(logger),
     posthog: getPostHogSender(logger),
     sentry: getSentrySender(logger),
+    http: getHttpRegistry(logger),
     otlp: getOtlpRegistry(logger),
     resolvedConfig,
     level,
@@ -611,6 +613,21 @@ export async function handleClientLogIngestion<Ctx>(options: {
     const sender = config.otlp.get(sanitizedPayload.connector.name);
 
     headers['x-blyp-otlp-status'] = sender.ready ? 'enabled' : 'missing';
+
+    if (sender.ready) {
+      sender.send({
+        timestamp: structuredPayload.receivedAt as string,
+        level: sanitizedPayload.level,
+        message: clientMessage,
+        data: structuredPayload,
+      }, {
+        source: 'client',
+      });
+    }
+  } else if (sanitizedPayload.connector?.type === 'http') {
+    const sender = config.http.get(sanitizedPayload.connector.name);
+
+    headers['x-blyp-http-status'] = sender.ready ? 'enabled' : 'missing';
 
     if (sender.ready) {
       sender.send({

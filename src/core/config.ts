@@ -22,6 +22,7 @@ import type {
   DatabaseLoggerConfig,
   DatabaseRetryConfig,
   DrizzleDatabaseAdapterConfig,
+  HTTPConnectorConfig,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
@@ -36,6 +37,7 @@ import type {
   ResolvedConnectorRetryConfig,
   ResolvedDatabuddyConnectorConfig,
   ResolvedDatabaseLoggerConfig,
+  ResolvedHTTPConnectorConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
   ResolvedRedactionConfig,
@@ -62,6 +64,7 @@ export type {
   DatabaseLoggerConfig,
   DatabaseRetryConfig,
   DrizzleDatabaseAdapterConfig,
+  HTTPConnectorConfig,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
@@ -76,6 +79,7 @@ export type {
   ResolvedDatabuddyConnectorConfig,
   ResolvedDatabaseDeliveryConfig,
   ResolvedDatabaseLoggerConfig,
+  ResolvedHTTPConnectorConfig,
   PostHogErrorTrackingConfig,
   ResolvedOTLPConnectorConfig,
   ResolvedPostHogConnectorConfig,
@@ -877,6 +881,59 @@ function mergeOTLPConnectorsConfig(
   return Array.from(deduped.values());
 }
 
+function mergeHTTPConnectorConfig(
+  base: HTTPConnectorConfig | undefined,
+  override: HTTPConnectorConfig | undefined
+): ResolvedHTTPConnectorConfig {
+  const endpoint = override?.endpoint ?? base?.endpoint;
+  const enabled = override?.enabled ?? base?.enabled ?? false;
+  const resolvedHeaders = {
+    ...(base?.headers ?? {}),
+    ...(override?.headers ?? {}),
+  };
+  const ready = enabled && isAbsoluteHttpUrl(endpoint);
+
+  return {
+    name: override?.name ?? base?.name ?? '',
+    enabled,
+    mode: override?.mode ?? base?.mode ?? 'auto',
+    endpoint,
+    headers: resolvedHeaders,
+    auth: override?.auth ?? base?.auth,
+    serviceName:
+      override?.serviceName ??
+      base?.serviceName ??
+      resolveDefaultConnectorServiceName(),
+    ready,
+    status: ready ? 'enabled' : 'missing',
+  };
+}
+
+function mergeHTTPConnectorsConfig(
+  base: HTTPConnectorConfig[] | undefined,
+  override: HTTPConnectorConfig[] | undefined
+): ResolvedHTTPConnectorConfig[] {
+  const source = override ?? base ?? [];
+  const deduped = new Map<string, ResolvedHTTPConnectorConfig>();
+
+  for (const connector of source) {
+    if (!connector || typeof connector.name !== 'string' || connector.name.length === 0) {
+      continue;
+    }
+
+    if (deduped.has(connector.name)) {
+      warnOnce(
+        `http-duplicate:${connector.name}`,
+        `[Blyp] Warning: Duplicate HTTP connector name "${connector.name}" found. Using the last definition.`
+      );
+    }
+
+    deduped.set(connector.name, mergeHTTPConnectorConfig(undefined, connector));
+  }
+
+  return Array.from(deduped.values());
+}
+
 function mergeConnectorsConfig(
   base: BlypConnectorsConfig | undefined,
   override: BlypConnectorsConfig | undefined
@@ -886,6 +943,7 @@ function mergeConnectorsConfig(
     databuddy: mergeDatabuddyConnectorConfig(base?.databuddy, override?.databuddy),
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
     sentry: mergeSentryConnectorConfig(base?.sentry, override?.sentry),
+    http: mergeHTTPConnectorsConfig(base?.http, override?.http),
     otlp: mergeOTLPConnectorsConfig(base?.otlp, override?.otlp),
     delivery: mergeConnectorDeliveryConfig(base?.delivery, override?.delivery),
   };

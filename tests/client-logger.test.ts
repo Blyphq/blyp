@@ -381,6 +381,38 @@ describe('Client Logger', () => {
     expect(String(errorCalls[0]?.[0] ?? '')).toContain('OTLP target "grafana"');
   });
 
+  it('includes the named HTTP connector and logs one local error when the server reports it missing', async () => {
+    let body = '';
+    const errorCalls: unknown[][] = [];
+
+    installBrowserGlobals({
+      fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
+        body = String(init?.body ?? '');
+        return Promise.resolve(new Response(null, {
+          status: 204,
+          headers: {
+            'x-blyp-http-status': 'missing',
+          },
+        }));
+      }) as typeof fetch,
+    });
+    console.error = (...args: unknown[]) => {
+      errorCalls.push(args);
+    };
+
+    const logger = createClientLogger({
+      connector: { type: 'http', name: 'webhook' },
+    });
+    logger.info('frontend ready');
+    logger.info('frontend ready again');
+    await flushAsyncWork();
+
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    expect(payload.connector).toEqual({ type: 'http', name: 'webhook' });
+    expect(errorCalls).toHaveLength(1);
+    expect(String(errorCalls[0]?.[0] ?? '')).toContain('HTTP target "webhook"');
+  });
+
   it('includes the Sentry connector and logs one local error when the server reports it missing', async () => {
     let body = '';
     const errorCalls: unknown[][] = [];

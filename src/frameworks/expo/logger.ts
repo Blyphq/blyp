@@ -182,6 +182,18 @@ async function sendRemoteLog(
       if (
         config.connector &&
         typeof config.connector === 'object' &&
+        config.connector.type === 'http' &&
+        response.headers.get('x-blyp-http-status') === 'missing'
+      ) {
+        errorOnce(
+          `missing-http-server-config:${config.connector.name}`,
+          `[blyp/expo] HTTP target "${config.connector.name}" was requested but not configured on the server. Continuing without HTTP forwarding.`
+        );
+      }
+
+      if (
+        config.connector &&
+        typeof config.connector === 'object' &&
         config.connector.type === 'otlp' &&
         response.headers.get('x-blyp-otlp-status') === 'missing'
       ) {

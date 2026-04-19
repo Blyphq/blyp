@@ -2,6 +2,7 @@ import { logger } from './frameworks/standalone';
 import { loadOptionalModule } from './core/optional-module';
 import { getActiveRequestLogger } from './frameworks/shared/request-context';
 import type { StructuredLog } from './core/structured-log';
+import type { ResolvedHTTPConnectorConfig } from './core/config';
 import type { ResolvedOTLPConnectorConfig } from './core/config';
 import type { LogRecord } from './core/file-logger';
 import type {
@@ -16,6 +17,12 @@ import type {
   DatabuddyLogger,
   DatabuddyLoggerConfig,
 } from './types/connectors/databuddy';
+import type {
+  HTTPLogger,
+  HTTPLoggerConfig,
+  HTTPNormalizedRecord,
+  HTTPLogSource,
+} from './types/connectors/http';
 import type {
   OTLPLogger,
   OTLPLoggerConfig,
@@ -94,6 +101,20 @@ interface OTLPConnectorModule {
     connector: ResolvedOTLPConnectorConfig,
     source?: OTLPLogSource
   ) => OTLPNormalizedRecord;
+}
+
+interface HTTPConnectorModule {
+  createHttpLogger: (config?: HTTPLoggerConfig) => HTTPLogger;
+  createStructuredHttpLogger: <TFields extends Record<string, unknown> = Record<string, unknown>>(
+    groupId: string,
+    initial?: TFields,
+    config?: HTTPLoggerConfig
+  ) => StructuredLog<TFields>;
+  normalizeHTTPRecord: (
+    record: LogRecord,
+    connector: ResolvedHTTPConnectorConfig,
+    source?: HTTPLogSource
+  ) => HTTPNormalizedRecord;
 }
 
 interface SentryConnectorModule {
@@ -409,6 +430,10 @@ export type {
   ExpoLoggerConfig,
 } from './types/frameworks/expo';
 export type {
+  HTTPLogger,
+  HTTPLoggerConfig,
+} from './types/connectors/http';
+export type {
   OTLPLogger,
   OTLPLoggerConfig,
 } from './types/connectors/otlp';
@@ -495,6 +520,13 @@ function loadPosthogModule() {
   );
 }
 
+function loadHttpModule() {
+  return loadOptionalModule<HTTPConnectorModule>(
+    'http',
+    []
+  );
+}
+
 function loadOtlpModule() {
   return loadOptionalModule<OTLPConnectorModule>(
     'otlp',
@@ -547,6 +579,14 @@ export function normalizeOTLPRecord(
   source?: OTLPLogSource
 ): OTLPNormalizedRecord {
   return loadOtlpModule().normalizeOTLPRecord(record, connector, source);
+}
+
+export function normalizeHTTPRecord(
+  record: LogRecord,
+  connector: ResolvedHTTPConnectorConfig,
+  source?: HTTPLogSource
+): HTTPNormalizedRecord {
+  return loadHttpModule().normalizeHTTPRecord(record, connector, source);
 }
 
 export function createBetterStackLogger(
@@ -659,6 +699,10 @@ export function createOtlpLogger(config: OTLPLoggerConfig = { name: '' }): OTLPL
   return loadOtlpModule().createOtlpLogger(config);
 }
 
+export function createHttpLogger(config: HTTPLoggerConfig = { name: '' }): HTTPLogger {
+  return loadHttpModule().createHttpLogger(config);
+}
+
 export function createStructuredOtlpLogger<
   TFields extends Record<string, unknown> = Record<string, unknown>,
 >(
@@ -667,4 +711,14 @@ export function createStructuredOtlpLogger<
   config?: OTLPLoggerConfig
 ): StructuredLog<TFields> {
   return loadOtlpModule().createStructuredOtlpLogger(groupId, initial, config);
+}
+
+export function createStructuredHttpLogger<
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+>(
+  groupId: string,
+  initial?: TFields,
+  config?: HTTPLoggerConfig
+): StructuredLog<TFields> {
+  return loadHttpModule().createStructuredHttpLogger(groupId, initial, config);
 }

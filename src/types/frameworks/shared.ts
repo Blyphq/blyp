@@ -207,12 +207,54 @@ export interface ResolvedOTLPRegistry {
   flush: () => Promise<void>;
 }
 
+export interface ResolvedHTTPConnector {
+  name: string;
+  enabled: boolean;
+  ready: boolean;
+  mode: ConnectorMode;
+  serviceName: string;
+  endpoint?: string;
+  status: 'enabled' | 'missing';
+  send: (
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+}
+
+export interface ResolvedHTTPRegistry {
+  get: (name: string) => ResolvedHTTPConnector;
+  getAutoForwardTargets: () => ResolvedHTTPConnector[];
+  send: (
+    name: string,
+    record: {
+      timestamp: string;
+      level: string;
+      message: string;
+      [key: string]: unknown;
+    },
+    options?: {
+      source?: 'server' | 'client';
+      warnIfUnavailable?: boolean;
+    }
+  ) => void;
+  flush: () => Promise<void>;
+}
+
 export interface ResolvedServerLogger<Ctx> {
   logger: BlypLogger;
   betterstack: ResolvedBetterStackConnector;
   databuddy: ResolvedDatabuddyConnector;
   posthog: ResolvedPostHogConnector;
   sentry: ResolvedSentryConnector;
+  http: ResolvedHTTPRegistry;
   otlp: ResolvedOTLPRegistry;
   resolvedConfig: BlypConfig;
   level: string;

@@ -115,6 +115,7 @@ describe('package surface', () => {
         client: ['dist/frameworks/client/index.d.ts'],
         expo: ['dist/frameworks/expo/index.d.ts'],
         database: ['dist/database/index.d.ts'],
+        http: ['dist/connectors/http/index.d.ts'],
         betterstack: ['dist/connectors/betterstack/index.d.ts'],
         databuddy: ['dist/connectors/databuddy/index.d.ts'],
         posthog: ['dist/connectors/posthog/index.d.ts'],
@@ -247,6 +248,11 @@ describe('package surface', () => {
         types: './dist/database/index.d.ts',
         import: './dist/database.mjs',
         require: './dist/database.js',
+      },
+      './http': {
+        types: './dist/connectors/http/index.d.ts',
+        import: './dist/connectors/http.mjs',
+        require: './dist/connectors/http.js',
       },
       './betterstack': {
         types: './dist/connectors/betterstack/index.d.ts',
