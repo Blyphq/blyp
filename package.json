@@ -32,6 +32,9 @@
       "better-auth": [
         "dist/better-auth/index.d.ts"
       ],
+      "clerk": [
+        "dist/clerk/index.d.ts"
+      ],
       "elysia": [
         "dist/frameworks/elysia/index.d.ts"
       ],
@@ -133,6 +136,11 @@
       "types": "./dist/better-auth/index.d.ts",
       "import": "./dist/better-auth.mjs",
       "require": "./dist/better-auth.js"
+    },
+    "./clerk": {
+      "types": "./dist/clerk/index.d.ts",
+      "import": "./dist/clerk.mjs",
+      "require": "./dist/clerk.js"
     },
     "./elysia": {
       "types": "./dist/frameworks/elysia/index.d.ts",
@@ -289,10 +297,10 @@
     "test:all": "bun test tests/",
     "build": "bun run build:js && bun run build:types",
     "build:js": "tsup",
-    "build:types": "bun run tsc --project tsconfig.build.json",
+    "build:types": "bun x tsc --project tsconfig.build.json",
     "prepare": "bun run build",
     "prepublishOnly": "bun run build",
-    "type-check": "bun run tsc --noEmit",
+    "type-check": "bun x tsc --noEmit",
     "dev": "bun run test:watch",
     "lint": "bun run type-check",
     "clean": "rm -rf dist .log"
@@ -326,6 +334,7 @@
     "tsup": "8.5.1"
   },
   "peerDependencies": {
+    "@clerk/backend": "^2",
     "@better-agent/core": "^0.1.0-beta.1",
     "better-auth": "^1.6.5",
     "@databuddy/sdk": "^2",
@@ -359,6 +368,9 @@
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
+    "@clerk/backend": {
+      "optional": true
+    },
     "@better-agent/core": {
       "optional": true
     },

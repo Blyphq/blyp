@@ -6,7 +6,13 @@ import type {
   LogFileConfig,
   RedactionConfig,
 } from '../core/config';
-import type { BetterAuthIntegrationConfig, BetterAuthLogContext } from '../better-auth';
+import type { BetterAuthLogContext } from '../better-auth';
+import type { ClerkLogContext, ClerkIntegrationConfig } from '../clerk';
+import type {
+  AuthIntegrationConfig,
+  AuthLogContext,
+  LegacyServerAuthConfig,
+} from '../auth';
 import type { BlypLogger } from '../core/logger';
 import type { ClientLogEvent } from '../shared/client-log';
 import type { ConnectorMode } from '../connectors/mode';
@@ -37,7 +43,7 @@ export interface ServerLoggerConfig<Ctx> {
   includePaths?: string[];
   ignorePaths?: string[];
   clientLogging?: boolean | ClientLogIngestionConfig<Ctx>;
-  auth?: BetterAuthIntegrationConfig<Ctx>;
+  auth?: LegacyServerAuthConfig<Ctx>;
   redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
 }
@@ -228,8 +234,14 @@ export interface ResolvedServerLogger<Ctx> {
   resolvedIgnorePaths?: string[];
   resolvedClientLogging: ClientLogIngestionConfig<Ctx> | null;
   ingestionPath: string;
-  resolvedAuth: BetterAuthIntegrationConfig<Ctx> | null;
+  resolvedAuth: AuthIntegrationConfig<Ctx> | null;
 }
 
 export type { HttpRequestLog } from './http';
-export type { BetterAuthLogContext };
+export type {
+  AuthIntegrationConfig,
+  AuthLogContext,
+  BetterAuthLogContext,
+  ClerkIntegrationConfig,
+  ClerkLogContext,
+};

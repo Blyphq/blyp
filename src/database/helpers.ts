@@ -23,6 +23,10 @@ function normalizeBoolean(value: unknown): boolean {
   return value === true;
 }
 
+function normalizeActorKind(value: unknown): string | null {
+  return value === 'user' || value === 'machine' ? value : null;
+}
+
 function parseTimestamp(value: unknown): Date {
   if (typeof value === 'string') {
     const timestamp = new Date(value);
@@ -40,6 +44,9 @@ export function toDatabaseLogRow(record: LogRecord): DatabaseLogRow {
   const authActor = auth?.actor as Record<string, unknown> | undefined;
   const authSession = auth?.session as Record<string, unknown> | undefined;
   const authOrganization = auth?.organization as Record<string, unknown> | undefined;
+  const authLookup = auth?.lookup as Record<string, unknown> | undefined;
+  const authClerk = auth?.clerk as Record<string, unknown> | undefined;
+  const authImpersonator = auth?.impersonator as Record<string, unknown> | undefined;
 
   return {
     id: randomUUID(),
@@ -60,6 +67,9 @@ export function toDatabaseLogRow(record: LogRecord): DatabaseLogRow {
     authActorId: normalizeNullableString(authActor?.id),
     authSessionId: normalizeNullableString(authSession?.id),
     authOrganizationId: normalizeNullableString(authOrganization?.id),
+    authActorKind: normalizeActorKind(authActor?.kind),
+    authTokenType: normalizeNullableString(authClerk?.tokenType ?? authLookup?.tokenType),
+    authImpersonatorId: normalizeNullableString(authImpersonator?.id),
     data: normalizedRecord.data ?? null,
     bindings: (normalizedRecord.bindings as Record<string, unknown> | undefined) ?? null,
     error: (normalizedRecord.error as Record<string, unknown> | undefined) ?? null,

@@ -2,10 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createNextJsLogger } from '../../src/frameworks/nextjs';
+import { clerk } from '../../src/clerk';
 import { resetConfigCache } from '../../src/core/config';
 import { createDrizzleDatabaseAdapter } from '../../src/database';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
+import { createMockClerkClient, createSessionClerkAuth } from '../helpers/clerk';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 
 describe('Next.js Integration', () => {
@@ -229,6 +231,67 @@ describe('Next.js Integration', () => {
       provider: 'better-auth',
       actor: {
         id: 'user_1',
+      },
+    });
+  });
+
+  it('enriches request and client logs with Clerk auth context', async () => {
+    const nextLogger = createNextJsLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        clerk: clerk({
+          clerkClient: createMockClerkClient({
+            auth: createSessionClerkAuth(),
+          }),
+          authorizedParties: ['https://app.example.com'],
+        }),
+      },
+    });
+
+    const handler = nextLogger.withLogger(async (_request, _context, { log }) => {
+      log.info('clerk route log');
+      return new Response('ok', { status: 200 });
+    });
+
+    await handler(new Request('http://localhost/api/clerk-aware'), {});
+    await nextLogger.clientLogHandler(
+      new Request('http://localhost/inngest', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createClientPayload()),
+      })
+    );
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const routeRecord = records.find((record) => record.message === 'clerk route log');
+    const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(routeRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      authenticated: true,
+      actor: {
+        kind: 'user',
+        id: 'user_1',
+      },
+      organization: {
+        id: 'org_1',
+      },
+    });
+    expect(clientRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      actor: {
+        id: 'user_1',
+      },
+    });
+    expect((clientRecord?.data as Record<string, any>)?.serverContext?.auth).toMatchObject({
+      provider: 'clerk',
+      lookup: {
+        actorId: 'user_1',
+        tokenType: 'session_token',
       },
     });
   });

@@ -1,11 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { clerk } from '../../src/clerk';
 import { createNuxtLogger } from '../../src/frameworks/nuxt';
 import type { NuxtLoggerPlugin } from '../../src/types/frameworks/nuxt';
 import { resetConfigCache } from '../../src/core/config';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
+import { createMockClerkClient, createSessionClerkAuth } from '../helpers/clerk';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 
 type HookMap = Map<string, Array<(...args: unknown[]) => unknown>>;
@@ -122,5 +124,47 @@ describe('Nuxt Integration', () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it('enriches request and client ingestion logs with Clerk auth context', async () => {
+    const nuxtLogger = createNuxtLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        clerk: clerk({
+          clerkClient: createMockClerkClient({
+            auth: createSessionClerkAuth(),
+          }),
+        }),
+      },
+    });
+    const hooks = await registerPlugin(nuxtLogger.serverPlugin);
+    const event = createEvent('http://localhost/clerk');
+
+    await runHooks(hooks, 'request', event);
+    nuxtLogger.getLogger(event).info('nuxt clerk route');
+    await runHooks(hooks, 'beforeResponse', event, new Response('ok', { status: 200 }));
+    await runHooks(hooks, 'afterResponse', event);
+    await nuxtLogger.clientLogHandler(
+      createEvent('http://localhost/inngest', 'POST', createClientPayload())
+    );
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const routeRecord = records.find((record) => record.message === 'nuxt clerk route');
+    const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(routeRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      actor: {
+        id: 'user_1',
+      },
+    });
+    expect(clientRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      actor: {
+        id: 'user_1',
+      },
+    });
   });
 });

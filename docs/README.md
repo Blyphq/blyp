@@ -12,6 +12,7 @@ This document contains detailed usage, all framework integrations, configuration
 - [Automatic redaction](#automatic-redaction)
 - [Errors](#errors)
 - [Client](#client)
+- [Clerk auth](#clerk-auth)
 - [AI SDK tracing](#ai-sdk-tracing)
 - [Framework integrations](#framework-integrations)
 - [Database logging](#database-logging)
@@ -261,6 +262,133 @@ npx expo install expo-network
 ```
 
 The Expo logger uses the runtime `fetch` implementation to send logs and reads connectivity metadata from `expo-network`. The `endpoint` must be an absolute `http://` or `https://` URL because Expo apps do not have a browser origin. Failed deliveries are queued in memory and retried by default `3` times with `5000ms` delay, with a default queue limit of `100`.
+
+---
+
+## Clerk auth
+
+Blyp integrates Clerk through `@blyp/core/clerk`. Unlike Better Auth, Clerk does not expose a server plugin surface that Blyp can attach to, so Blyp resolves auth per request with `@clerk/backend` and stores the normalized Clerk auth context on every server record emitted during that request.
+
+### Next.js
+
+```typescript
+import { clerk } from '@blyp/core/clerk';
+import { createLogger } from '@blyp/core/nextjs';
+
+export const nextLogger = createLogger({
+  auth: {
+    clerk: clerk({
+      secretKey: process.env.CLERK_SECRET_KEY!,
+      publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!,
+      jwtKey: process.env.CLERK_JWT_KEY,
+      authorizedParties: ['https://app.example.com'],
+    }),
+  },
+  clientLogging: {
+    path: '/blyp/log',
+  },
+});
+```
+
+### Express
+
+```typescript
+import express from 'express';
+import { clerk } from '@blyp/core/clerk';
+import { createLogger } from '@blyp/core/express';
+
+const app = express();
+
+app.use(createLogger({
+  auth: {
+    clerk: clerk({
+      secretKey: process.env.CLERK_SECRET_KEY!,
+      publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
+      jwtKey: process.env.CLERK_JWT_KEY,
+      authorizedParties: ['https://app.example.com'],
+    }),
+  },
+  clientLogging: {
+    path: '/blyp/log',
+  },
+}));
+```
+
+### React Router
+
+```typescript
+import { clerk } from '@blyp/core/clerk';
+import { createLogger } from '@blyp/core/react-router';
+
+export const routerLogger = createLogger({
+  auth: {
+    clerk: clerk({
+      secretKey: process.env.CLERK_SECRET_KEY!,
+      publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
+      jwtKey: process.env.CLERK_JWT_KEY,
+      authorizedParties: ['https://app.example.com'],
+    }),
+  },
+  clientLogging: {
+    path: '/blyp/log',
+  },
+});
+```
+
+### Client logger
+
+```typescript
+import { createClerkClientLogger } from '@blyp/core/clerk';
+
+const logger = createClerkClientLogger({
+  endpoint: '/blyp/log',
+});
+
+logger.info('clicked upgrade');
+```
+
+The Clerk client helper is intentionally thin. It wraps Blyp's browser logger, defaults to `POST /blyp/log`, and does not trust or send Clerk identity fields by default. The server derives the final identity from the Clerk-authenticated request.
+
+### Machine-authenticated requests
+
+Use Clerk's `authenticateRequest()` options when you need to accept machine tokens:
+
+```typescript
+import { clerk } from '@blyp/core/clerk';
+
+const auth = clerk({
+  secretKey: process.env.CLERK_SECRET_KEY!,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
+  authenticateRequestOptions: ({ source }) => ({
+    acceptsToken: source === 'client_ingestion' ? 'any' : ['session_token', 'oauth_token'],
+  }),
+});
+```
+
+Machine-authenticated requests are normalized with `actor.kind = 'machine'`, the machine actor id, Clerk token type, and any available `scopes` or `clientId`.
+
+### `hydrateUser`
+
+`hydrateUser` is disabled by default because it introduces a Backend API read when a user id is present. Turn it on only if you need email or display name enrichment from Clerk's BAPI:
+
+```typescript
+import { clerk } from '@blyp/core/clerk';
+
+const auth = clerk({
+  secretKey: process.env.CLERK_SECRET_KEY!,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
+  hydrateUser: {
+    cacheTtlMs: 30000,
+  },
+});
+```
+
+If user hydration fails, Blyp still logs the request and leaves the hydrated fields undefined.
+
+### Limitations
+
+- Clerk does not support a Better Auth-style server plugin attached to an `auth.ts` instance, so Blyp integrates through request authentication instead.
+- Clerk-hosted auth UI and API traffic is only logged when it passes through your application as normal app traffic.
 
 ---
 

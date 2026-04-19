@@ -2,11 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createAstroLogger } from '../../src/frameworks/astro';
+import { clerk } from '../../src/clerk';
 import type { AstroMiddlewareContext } from '../../src/types/frameworks/astro';
 import { resetConfigCache } from '../../src/core/config';
 import { createDrizzleDatabaseAdapter } from '../../src/database';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
+import { createMockClerkClient, createSessionClerkAuth } from '../helpers/clerk';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 
 describe('Astro Integration', () => {
@@ -109,6 +111,56 @@ describe('Astro Integration', () => {
     expect(mismatch.status).toBe(500);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
+  });
+
+  it('enriches middleware and client ingestion logs with Clerk auth context', async () => {
+    const astroLogger = createAstroLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        clerk: clerk({
+          clerkClient: createMockClerkClient({
+            auth: createSessionClerkAuth(),
+          }),
+        }),
+      },
+    });
+    const context = createContext('http://localhost/clerk');
+
+    await astroLogger.onRequest(context, async () => {
+      context.locals.blypLog?.info('astro clerk route');
+      return new Response('ok', { status: 200 });
+    });
+    await astroLogger.clientLogHandler({
+      request: new Request('http://localhost/inngest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(createClientPayload()),
+      }),
+      url: new URL('http://localhost/inngest'),
+      locals: {},
+    });
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const routeRecord = records.find((record) => record.message === 'astro clerk route');
+    const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(routeRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      actor: {
+        id: 'user_1',
+      },
+      organization: {
+        id: 'org_1',
+      },
+    });
+    expect(clientRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      actor: {
+        id: 'user_1',
+      },
+    });
   });
 
   it('suppresses default request logs after structured emit and drops mixed root writes', async () => {

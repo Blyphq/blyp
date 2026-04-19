@@ -4,6 +4,12 @@ import {
   normalizeBetterAuthContext,
   withBetterAuthContextOverride,
 } from '../../better-auth/normalize';
+import {
+  createSignedOutClerkContext,
+} from '../../clerk/normalize';
+import {
+  resolveClerkAuthContext,
+} from '../../clerk/integration';
 import { resolveConfig } from '../../core/config';
 import { getMethodColor, getResponseTimeColor, getStatusColor } from '../../core/colors';
 import { resolveStatusCode, shouldIgnorePath } from '../../core/helpers';
@@ -49,10 +55,14 @@ import {
 } from './request-context';
 import type {
   BetterAuthIntegrationConfig,
-  BetterAuthLogContext,
   BetterAuthResolveArgs,
   BetterAuthSessionEnvelope,
 } from '../../types/better-auth';
+import type { AuthIntegrationConfig, AuthLogContext, LegacyServerAuthConfig } from '../../types/auth';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 function buildVerboseLogMessage(
   method: string,
@@ -166,8 +176,35 @@ export function resolveServerLogger<Ctx>(
     resolvedIgnorePaths,
     resolvedClientLogging,
     ingestionPath,
-    resolvedAuth: auth ?? null,
+    resolvedAuth: normalizeServerAuthConfig(auth),
   };
+}
+
+function isLegacyBetterAuthConfig<Ctx>(
+  value: LegacyServerAuthConfig<Ctx> | undefined
+): value is BetterAuthIntegrationConfig<Ctx> {
+  if (!isRecord(value) || !('betterAuth' in value) || 'clerk' in value) {
+    return false;
+  }
+
+  const betterAuth = value.betterAuth;
+  return !isRecord(betterAuth) || !('betterAuth' in betterAuth);
+}
+
+function normalizeServerAuthConfig<Ctx>(
+  value: LegacyServerAuthConfig<Ctx> | undefined
+): AuthIntegrationConfig<Ctx> | null {
+  if (!value) {
+    return null;
+  }
+
+  if (isLegacyBetterAuthConfig(value)) {
+    return {
+      betterAuth: value,
+    };
+  }
+
+  return value;
 }
 
 function hasHeaders(
@@ -201,7 +238,7 @@ export async function resolveRequestAuthContext<Ctx>(options: {
   ctx: Ctx;
   request: RequestLike | { headers?: Headers | Record<string, unknown> };
   source: 'request' | 'client_ingestion';
-}): Promise<BetterAuthLogContext | null> {
+}): Promise<AuthLogContext | null> {
   const existing = getActiveRequestAuthContext();
   if (existing !== undefined || hasResolvedRequestAuth()) {
     return existing ?? null;
@@ -213,28 +250,87 @@ export async function resolveRequestAuthContext<Ctx>(options: {
     return null;
   }
 
-  const session = await getBetterAuthSessionFromRequest(authConfig, options.request);
-  let auth = normalizeBetterAuthContext(session, {
-    includeClaims: authConfig.includeClaims,
-    includeRawSession: authConfig.includeRawSession,
-  });
+  let auth: AuthLogContext | null;
 
-  if (authConfig.enrich) {
-    const extra = await authConfig.enrich({
-      ctx: options.ctx,
-      request: options.request,
-      session,
-      auth: authConfig.betterAuth,
-      source: options.source,
-    } as BetterAuthResolveArgs<Ctx>);
-    auth = withBetterAuthContextOverride(auth, extra);
+  if (authConfig.clerk) {
+    try {
+      auth = await resolveClerkAuthContext(authConfig.clerk, {
+        ctx: options.ctx,
+        request: toWebRequest(options.request),
+        source: options.source,
+      });
+    } catch {
+      auth = createSignedOutClerkContext();
+    }
+  } else if (authConfig.betterAuth) {
+    const session = await getBetterAuthSessionFromRequest(authConfig.betterAuth, options.request);
+    let betterAuth = normalizeBetterAuthContext(session, {
+      includeClaims: authConfig.betterAuth.includeClaims,
+      includeRawSession: authConfig.betterAuth.includeRawSession,
+    });
+
+    if (authConfig.betterAuth.enrich) {
+      const extra = await authConfig.betterAuth.enrich({
+        ctx: options.ctx,
+        request: options.request,
+        session,
+        auth: authConfig.betterAuth.betterAuth,
+        source: options.source,
+      } as BetterAuthResolveArgs<Ctx>);
+      betterAuth = withBetterAuthContextOverride(betterAuth, extra);
+    }
+
+    auth = betterAuth;
+  } else {
+    auth = null;
   }
 
   setActiveRequestAuthContext(auth);
   return auth;
 }
 
-export function getCurrentRequestAuthContext(): BetterAuthLogContext | null {
+function toWebRequest(
+  request: RequestLike | { headers?: Headers | Record<string, unknown> }
+): Request {
+  if (request instanceof Request) {
+    return request;
+  }
+
+  const headers = new Headers();
+  const sourceHeaders = request.headers;
+  if (sourceHeaders instanceof Headers) {
+    sourceHeaders.forEach((value, key) => {
+      headers.set(key, value);
+    });
+  } else if (sourceHeaders && typeof (sourceHeaders as { get?: unknown }).get === 'function') {
+    const getter = sourceHeaders as { get(name: string): string | null };
+    for (const name of ['authorization', 'cookie', 'host', 'origin', 'user-agent', 'x-forwarded-proto']) {
+      const value = getter.get(name);
+      if (value) {
+        headers.set(name, value);
+      }
+    }
+  } else if (isRecord(sourceHeaders)) {
+    for (const [key, value] of Object.entries(sourceHeaders)) {
+      if (Array.isArray(value)) {
+        headers.set(key, value.join(', '));
+      } else if (typeof value === 'string') {
+        headers.set(key, value);
+      }
+    }
+  }
+
+  const requestLike = request as Partial<RequestLike>;
+  return new Request(
+    buildAbsoluteUrl(requestLike.url ?? '/', sourceHeaders as RequestLike['headers']),
+    {
+      method: requestLike.method ?? 'GET',
+      headers,
+    }
+  );
+}
+
+export function getCurrentRequestAuthContext(): AuthLogContext | null {
   return getActiveRequestAuthContext() ?? null;
 }
 
