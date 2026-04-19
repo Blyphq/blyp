@@ -103,6 +103,26 @@ describe('Database logging', () => {
       bindings: { requestId: 'req_1' },
       error: { message: 'boom' },
       events: [{ message: 'start' }],
+      auth: {
+        provider: 'better-auth',
+        authenticated: true,
+        actor: {
+          kind: 'user',
+          id: 'user_1',
+        },
+        session: {
+          id: 'sess_1',
+        },
+        organization: {
+          id: 'org_1',
+        },
+        lookup: {
+          provider: 'better-auth',
+          userId: 'user_1',
+          sessionId: 'sess_1',
+          organizationId: 'org_1',
+        },
+      },
     });
 
     expect(row.message).toBe('boom');
@@ -113,6 +133,11 @@ describe('Database logging', () => {
     expect(row.timestamp).toBeInstanceOf(Date);
     expect(Number.isNaN(row.timestamp.getTime())).toBe(false);
     expect(row.record.path).toBe('/orders');
+    expect(row.authProvider).toBe('better-auth');
+    expect(row.authAuthenticated).toBe(true);
+    expect(row.authActorId).toBe('user_1');
+    expect(row.authSessionId).toBe('sess_1');
+    expect(row.authOrganizationId).toBe('org_1');
   });
 
   it('writes standalone logs to a drizzle database and shares the sink across child loggers', async () => {

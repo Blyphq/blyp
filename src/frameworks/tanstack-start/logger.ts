@@ -15,6 +15,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   runWithRequestContext,
   setActiveRequestTraceId,
@@ -51,6 +52,12 @@ export function createTanStackStartLogger(
           blypTraceId: traceId,
         };
         setActiveRequestTraceId(traceId);
+        await resolveRequestAuthContext({
+          config: shared,
+          ctx: createContext(request, nextContext),
+          request,
+          source: 'request',
+        });
         const scopedLogger = createRequestScopedLogger(shared.logger, {
           resolveStructuredFields: (): Record<string, unknown> => ({
             method: request.method,

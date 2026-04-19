@@ -1,3 +1,5 @@
+import type { BetterAuthLogContext } from '../better-auth';
+
 export interface LogRecord {
   timestamp: string;
   level: string;
@@ -5,6 +7,7 @@ export interface LogRecord {
   caller?: string;
   data?: unknown;
   bindings?: Record<string, unknown>;
+  auth?: BetterAuthLogContext;
   [key: string]: unknown;
 }
 

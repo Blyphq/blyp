@@ -2,12 +2,16 @@ export * from './http';
 export * from './logger';
 export {
   enterRequestContext,
+  getActiveRequestAuthContext,
   getActiveRequestLogger,
   getRequestContextStore,
+  hasResolvedRequestAuth,
   hasStructuredLogBeenEmitted,
+  markRequestAuthResolved,
   markStructuredCollectorActive,
   markStructuredLogEmitted,
   runWithRequestContext,
+  setActiveRequestAuthContext,
   setActiveRequestLogger,
   shouldDropRootLogWrite,
 } from './request-context';

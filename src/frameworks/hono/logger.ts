@@ -11,6 +11,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   runWithRequestContext,
   setActiveRequestTraceId,
@@ -29,6 +30,12 @@ export function createHonoLogger(config: HonoLoggerConfig = {}): MiddlewareHandl
       const traceId = createRequestTraceId();
       let structuredLogEmitted = false;
       setActiveRequestTraceId(traceId);
+      await resolveRequestAuthContext({
+        config: shared,
+        ctx: context,
+        request: context.req.raw,
+        source: 'request',
+      });
       context.set(
         'blypLog',
         createRequestScopedLogger(shared.logger, {

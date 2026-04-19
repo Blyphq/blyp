@@ -19,6 +19,10 @@ function normalizeNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function normalizeBoolean(value: unknown): boolean {
+  return value === true;
+}
+
 function parseTimestamp(value: unknown): Date {
   if (typeof value === 'string') {
     const timestamp = new Date(value);
@@ -32,6 +36,10 @@ function parseTimestamp(value: unknown): Date {
 
 export function toDatabaseLogRow(record: LogRecord): DatabaseLogRow {
   const normalizedRecord = normalizeLogValue(record) as LogRecord;
+  const auth = normalizedRecord.auth as Record<string, unknown> | undefined;
+  const authActor = auth?.actor as Record<string, unknown> | undefined;
+  const authSession = auth?.session as Record<string, unknown> | undefined;
+  const authOrganization = auth?.organization as Record<string, unknown> | undefined;
 
   return {
     id: randomUUID(),
@@ -47,6 +55,11 @@ export function toDatabaseLogRow(record: LogRecord): DatabaseLogRow {
     status: normalizeNullableNumber(record.status),
     duration: normalizeNullableNumber(record.duration),
     hasError: normalizedRecord.error != null,
+    authProvider: normalizeNullableString(auth?.provider),
+    authAuthenticated: normalizeBoolean(auth?.authenticated),
+    authActorId: normalizeNullableString(authActor?.id),
+    authSessionId: normalizeNullableString(authSession?.id),
+    authOrganizationId: normalizeNullableString(authOrganization?.id),
     data: normalizedRecord.data ?? null,
     bindings: (normalizedRecord.bindings as Record<string, unknown> | undefined) ?? null,
     error: (normalizedRecord.error as Record<string, unknown> | undefined) ?? null,

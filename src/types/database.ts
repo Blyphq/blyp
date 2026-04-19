@@ -80,6 +80,11 @@ export interface DatabaseLogRow {
   status: number | null;
   duration: number | null;
   hasError: boolean;
+  authProvider: string | null;
+  authAuthenticated: boolean;
+  authActorId: string | null;
+  authSessionId: string | null;
+  authOrganizationId: string | null;
   data: unknown | null;
   bindings: Record<string, unknown> | null;
   error: Record<string, unknown> | null;

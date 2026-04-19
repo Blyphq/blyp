@@ -15,6 +15,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   runWithRequestContext,
   setActiveRequestTraceId,
@@ -43,6 +44,12 @@ export function createSvelteKitLogger(
       let structuredLogEmitted = false;
       setActiveRequestTraceId(traceId);
       event.locals.blypTraceId = traceId;
+      await resolveRequestAuthContext({
+        config: shared,
+        ctx: createContext(event),
+        request: event.request,
+        source: 'request',
+      });
       event.locals.blypLog = createRequestScopedLogger(shared.logger, {
         resolveStructuredFields: () => ({
           method: event.request.method,

@@ -14,6 +14,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   setActiveRequestTraceId,
   shouldSkipAutoLogging,
@@ -45,6 +46,20 @@ export function createFastifyLogger(
       enterRequestContext();
       const traceId = createRequestTraceId();
       setActiveRequestTraceId(traceId);
+      await resolveRequestAuthContext({
+        config: shared,
+        ctx: {
+          request,
+          reply,
+          error: request.blypError,
+        },
+        request: createRequestLike(
+          request.method,
+          buildAbsoluteUrl(request.url, request.headers),
+          request.headers
+        ),
+        source: 'request',
+      });
       request.blypStartTime = performance.now();
       request.blypTraceId = traceId;
       reply.header(BLYP_TRACE_HEADER, traceId);

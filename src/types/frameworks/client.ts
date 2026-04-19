@@ -23,6 +23,7 @@ import type {
   BlypErrorCodeDefinition,
   BlypErrorLike,
 } from '../shared/errors';
+import type { DeliveryAttemptResult } from '../../shared/remote-delivery';
 
 export interface ClientLoggerState {
   readonly pageId: string;
@@ -38,6 +39,7 @@ export interface ClientLoggerConfig {
   endpoint?: string;
   headers?: Record<string, string>;
   credentials?: RequestCredentials;
+  transport?: (payload: ClientLogEvent) => Promise<DeliveryAttemptResult>;
   localConsole?: boolean;
   remoteSync?: boolean;
   connector?: ClientConnectorRequest;

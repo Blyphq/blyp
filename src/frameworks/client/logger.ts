@@ -221,6 +221,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
     endpoint: config.endpoint ?? DEFAULT_CLIENT_LOG_ENDPOINT,
     headers: config.headers,
     credentials: config.credentials ?? 'same-origin',
+    transport: config.transport,
     localConsole: config.localConsole ?? true,
     remoteSync: config.remoteSync ?? true,
     connector: config.connector,
@@ -235,7 +236,13 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
         ? createRemoteDeliveryManager({
             runtime: 'browser',
             delivery: config.delivery,
-            send: (event) => sendRemoteLog(resolvedConfig, event),
+            send: (event) => {
+              if (resolvedConfig.transport) {
+                return resolvedConfig.transport(event);
+              }
+
+              return sendRemoteLog(resolvedConfig, event);
+            },
             subscribeToResume: (resume) => {
               if (typeof globalThis.addEventListener !== 'function') {
                 return;

@@ -16,6 +16,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   runWithRequestContext,
   setActiveRequestTraceId,
@@ -51,6 +52,12 @@ export function createNextJsLogger(
           const traceId = createRequestTraceId();
           let structuredLogEmitted = false;
           setActiveRequestTraceId(traceId);
+          await resolveRequestAuthContext({
+            config: shared,
+            ctx: createContext(request, context),
+            request,
+            source: 'request',
+          });
           const scopedLogger = createRequestScopedLogger(shared.logger, {
             resolveStructuredFields: () => ({
               method: request.method,

@@ -18,6 +18,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveRequestStatus,
   resolveServerLogger,
   setActiveRequestTraceId,
@@ -34,7 +35,7 @@ export function createElysiaLogger(
   // Elysia's concrete type through this public factory.
   const plugin = new Elysia({ name: 'logger' })
     .decorate('log', shared.logger)
-    .derive({ as: 'scoped' }, (ctx) => {
+    .derive({ as: 'scoped' }, async (ctx) => {
       enterRequestContext();
       const traceId = createRequestTraceId();
       setActiveRequestTraceId(traceId);
@@ -48,6 +49,13 @@ export function createElysiaLogger(
         ...(requestContext.set.headers ?? {}),
         [BLYP_TRACE_HEADER]: traceId,
       };
+
+      await resolveRequestAuthContext({
+        config: shared,
+        ctx: requestContext,
+        request: requestContext.request,
+        source: 'request',
+      });
 
       return {
         startTime: performance.now(),

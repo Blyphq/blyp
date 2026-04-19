@@ -6,6 +6,7 @@ import {
   handleClientLogIngestion,
   enterRequestContext,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   setActiveRequestTraceId,
 } from '../shared';
 import { BLYP_NEST_LOGGER } from './constants';
@@ -36,49 +37,60 @@ export class BlypNestMiddleware implements NestMiddleware {
     response: unknown,
     next: (error?: unknown) => void
   ): void {
-    enterRequestContext();
-    const traceId = createRequestTraceId();
-    setActiveRequestTraceId(traceId);
-    setNestStructuredLogEmitted(request, false);
-    attachNestRequestTraceId(request, traceId);
-    setNestResponseHeaders(response, {
-      [BLYP_TRACE_HEADER]: traceId,
-    });
-    attachNestRequestLogger(
-      request,
-      createRequestScopedLogger(this.state.logger, {
-        resolveStructuredFields: () => {
-          const loggerContext = createNestLoggerContext({
-            request,
-            response,
-          });
+    void (async () => {
+      enterRequestContext();
+      const traceId = createRequestTraceId();
+      setActiveRequestTraceId(traceId);
+      setNestStructuredLogEmitted(request, false);
+      attachNestRequestTraceId(request, traceId);
+      setNestResponseHeaders(response, {
+        [BLYP_TRACE_HEADER]: traceId,
+      });
+      await resolveRequestAuthContext({
+        config: this.state,
+        ctx: createNestLoggerContext({
+          request,
+          response,
+        }),
+        request: buildNestRequestLike(request),
+        source: 'request',
+      });
+      attachNestRequestLogger(
+        request,
+        createRequestScopedLogger(this.state.logger, {
+          resolveStructuredFields: () => {
+            const loggerContext = createNestLoggerContext({
+              request,
+              response,
+            });
 
-          return {
-            method: buildNestRequestLike(request).method,
-            path: getNestRequestPath(request),
-            ...resolveAdditionalProps(this.state, loggerContext),
-          };
-        },
-        onStructuredEmit: () => {
-          setNestStructuredLogEmitted(request, true);
-        },
-      })
-    );
-    setNestRequestStartTime(request, performance.now());
+            return {
+              method: buildNestRequestLike(request).method,
+              path: getNestRequestPath(request),
+              ...resolveAdditionalProps(this.state, loggerContext),
+            };
+          },
+          onStructuredEmit: () => {
+            setNestStructuredLogEmitted(request, true);
+          },
+        })
+      );
+      setNestRequestStartTime(request, performance.now());
 
-    const path = getNestRequestPath(request);
-    const method = getNestRequestMethod(request).toUpperCase();
+      const path = getNestRequestPath(request);
+      const method = getNestRequestMethod(request).toUpperCase();
 
-    if (
-      this.state.resolvedClientLogging &&
-      method === 'POST' &&
-      path === this.state.ingestionPath
-    ) {
-      void this.handleClientLogRequest(request, response, next);
-      return;
-    }
+      if (
+        this.state.resolvedClientLogging &&
+        method === 'POST' &&
+        path === this.state.ingestionPath
+      ) {
+        await this.handleClientLogRequest(request, response, next);
+        return;
+      }
 
-    next();
+      next();
+    })().catch(next);
   }
 
   private async handleClientLogRequest(

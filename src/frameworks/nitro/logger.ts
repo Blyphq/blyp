@@ -17,6 +17,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   setActiveRequestTraceId,
   shouldSkipAutoLogging,
@@ -124,6 +125,12 @@ function buildFactory(shared: ReturnType<typeof resolveServerLogger<NitroLoggerC
           );
         }
         const path = getNitroPath(event);
+        await resolveRequestAuthContext({
+          config: shared,
+          ctx: createContext(event),
+          request: createNitroRequestLike(event),
+          source: 'request',
+        });
         let state = setNitroState(event, {
           startTime: performance.now(),
           path,

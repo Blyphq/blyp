@@ -242,6 +242,28 @@ describe('Client Logger', () => {
     expect(fetchCalls).toEqual(['/custom-inngest']);
   });
 
+  it('supports a transport override for remote delivery', async () => {
+    const deliveries: Array<Record<string, unknown>> = [];
+
+    installBrowserGlobals();
+
+    createClientLogger({
+      transport: async (payload) => {
+        deliveries.push(payload as unknown as Record<string, unknown>);
+        return {
+          outcome: 'success',
+          transport: 'fetch',
+          status: 204,
+        };
+      },
+    }).info('transport override', { source: 'better-auth-client' });
+    await flushAsyncWork();
+
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]?.message).toBe('transport override');
+    expect(deliveries[0]?.data).toEqual({ source: 'better-auth-client' });
+  });
+
   it('normalizes warning level, child bindings, and metadata', async () => {
     let body = '';
 

@@ -17,6 +17,7 @@ import {
   isErrorStatus,
   readNodeRequestBody,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   setActiveRequestTraceId,
   shouldSkipAutoLogging,
@@ -36,80 +37,91 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
   const shared = resolveServerLogger(config);
 
   return (req, res, next) => {
-    enterRequestContext();
-    const traceId = createRequestTraceId();
-    setActiveRequestTraceId(traceId);
-    let structuredLogEmitted = false;
-    req.blypTraceId = traceId;
-    res.setHeader(BLYP_TRACE_HEADER, traceId);
+    void (async () => {
+      enterRequestContext();
+      const traceId = createRequestTraceId();
+      setActiveRequestTraceId(traceId);
+      let structuredLogEmitted = false;
+      req.blypTraceId = traceId;
+      res.setHeader(BLYP_TRACE_HEADER, traceId);
 
-    req.blypLog = createRequestScopedLogger(shared.logger, {
-      resolveStructuredFields: () => ({
-        method: req.method,
-        path: extractPathname(req.originalUrl || req.url || '/'),
-        ...resolveAdditionalProps(shared, buildExpressContext(req, res, res.locals.blypError)),
-      }),
-      onStructuredEmit: () => {
-        structuredLogEmitted = true;
-      },
-    });
-    res.locals.blypStartTime = performance.now();
+      await resolveRequestAuthContext({
+        config: shared,
+        ctx: buildExpressContext(req, res),
+        request: createRequestLike(
+          req.method,
+          buildAbsoluteUrl(req.originalUrl || req.url || '/', req.headers),
+          req.headers
+        ),
+        source: 'request',
+      });
 
-    res.on('finish', () => {
-      const path = extractPathname(req.originalUrl || req.url || '/');
-      const request = createRequestLike(
-        req.method,
-        buildAbsoluteUrl(req.originalUrl || req.url || '/', req.headers),
-        req.headers
-      );
-      const responseTime = Math.round(
-        performance.now() - (res.locals.blypStartTime ?? performance.now())
-      );
-      const context = buildExpressContext(req, res, res.locals.blypError);
+      req.blypLog = createRequestScopedLogger(shared.logger, {
+        resolveStructuredFields: () => ({
+          method: req.method,
+          path: extractPathname(req.originalUrl || req.url || '/'),
+          ...resolveAdditionalProps(shared, buildExpressContext(req, res, res.locals.blypError)),
+        }),
+        onStructuredEmit: () => {
+          structuredLogEmitted = true;
+        },
+      });
+      res.locals.blypStartTime = performance.now();
 
-      if (structuredLogEmitted) {
-        return;
-      }
+      res.on('finish', () => {
+        const path = extractPathname(req.originalUrl || req.url || '/');
+        const request = createRequestLike(
+          req.method,
+          buildAbsoluteUrl(req.originalUrl || req.url || '/', req.headers),
+          req.headers
+        );
+        const responseTime = Math.round(
+          performance.now() - (res.locals.blypStartTime ?? performance.now())
+        );
+        const context = buildExpressContext(req, res, res.locals.blypError);
 
-      if (res.locals.blypError || isErrorStatus(res.statusCode)) {
-        if (!shouldSkipErrorLogging(shared, path)) {
-          emitHttpErrorLog(
+        if (structuredLogEmitted) {
+          return;
+        }
+
+        if (res.locals.blypError || isErrorStatus(res.statusCode)) {
+          if (!shouldSkipErrorLogging(shared, path)) {
+            emitHttpErrorLog(
+              shared.logger,
+              shared.level,
+              request,
+              path,
+              res.statusCode,
+              responseTime,
+              toErrorLike(res.locals.blypError, res.statusCode),
+              resolveAdditionalProps(shared, context),
+              {
+                error: res.locals.blypError,
+              }
+            );
+          }
+          return;
+        }
+
+        if (!shouldSkipAutoLogging(shared, context, path)) {
+          emitHttpRequestLog(
             shared.logger,
             shared.level,
             request,
             path,
             res.statusCode,
             responseTime,
-            toErrorLike(res.locals.blypError, res.statusCode),
-            resolveAdditionalProps(shared, context),
-            {
-              error: res.locals.blypError,
-            }
+            resolveAdditionalProps(shared, context)
           );
         }
-        return;
-      }
+      });
 
-      if (!shouldSkipAutoLogging(shared, context, path)) {
-        emitHttpRequestLog(
-          shared.logger,
-          shared.level,
-          request,
-          path,
-          res.statusCode,
-          responseTime,
-          resolveAdditionalProps(shared, context)
-        );
-      }
-    });
-
-    const path = extractPathname(req.originalUrl || req.url || '/');
-    if (
-      shared.resolvedClientLogging &&
-      req.method.toUpperCase() === 'POST' &&
-      path === shared.ingestionPath
-    ) {
-      void (async () => {
+      const path = extractPathname(req.originalUrl || req.url || '/');
+      if (
+        shared.resolvedClientLogging &&
+        req.method.toUpperCase() === 'POST' &&
+        path === shared.ingestionPath
+      ) {
         const body = req.body === undefined ? await readNodeRequestBody(req) : req.body;
         const result = await handleClientLogIngestion({
           config: shared,
@@ -128,11 +140,11 @@ export function createExpressLogger(config: ExpressLoggerConfig = {}): RequestHa
           }
         }
         res.status(result.status).end();
-      })().catch(next);
-      return;
-    }
+        return;
+      }
 
-    next();
+      next();
+    })().catch(next);
   };
 }
 

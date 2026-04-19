@@ -15,6 +15,7 @@ import {
   handleClientLogIngestion,
   isErrorStatus,
   resolveAdditionalProps,
+  resolveRequestAuthContext,
   resolveServerLogger,
   runWithRequestContext,
   setActiveRequestTraceId,
@@ -45,6 +46,12 @@ export function createAstroLogger(
         let structuredLogEmitted = false;
         setActiveRequestTraceId(traceId);
         context.locals.blypTraceId = traceId;
+        await resolveRequestAuthContext({
+          config: shared,
+          ctx: createContext(context),
+          request: context.request,
+          source: 'request',
+        });
         context.locals.blypLog = createRequestScopedLogger(shared.logger, {
           resolveStructuredFields: () => ({
             method: context.request.method,
