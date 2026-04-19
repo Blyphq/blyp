@@ -119,6 +119,35 @@ const logger = authClient.blyp.createLogger();
 logger.info('mounted');
 ```
 
+## Clerk
+
+Clerk is integrated through Blyp's shared server auth config instead of a plugin. Blyp authenticates the incoming request with `@clerk/backend`, normalizes the auth state onto each server log record, and derives browser log identity on the server when your client logger posts to a Blyp endpoint such as `/blyp/log`.
+
+```ts
+import { clerk, createClerkClientLogger } from '@blyp/core/clerk';
+import { createLogger } from '@blyp/core/nextjs';
+
+export const nextLogger = createLogger({
+  auth: {
+    clerk: clerk({
+      secretKey: process.env.CLERK_SECRET_KEY!,
+      publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!,
+      jwtKey: process.env.CLERK_JWT_KEY,
+      authorizedParties: ['https://app.example.com'],
+    }),
+  },
+  clientLogging: {
+    path: '/blyp/log',
+  },
+});
+
+export const clientLogger = createClerkClientLogger({
+  endpoint: '/blyp/log',
+});
+```
+
+See the [full Clerk integration docs](docs/README.md#clerk-auth) for Next.js, Express, React Router, and machine-authenticated examples.
+
 ## More features
 
 - [Automatic redaction](docs/README.md#automatic-redaction) for common secrets, headers, and custom patterns.

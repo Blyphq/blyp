@@ -6,20 +6,16 @@ import type {
   LogFileConfig,
   RedactionConfig,
 } from '../core/config';
-import type { BetterAuthIntegrationConfig, BetterAuthLogContext } from '../better-auth';
-import type { WorkOsIntegrationConfig, WorkOsLogContext } from '../workos';
-
-export type AuthLogContext = BetterAuthLogContext | WorkOsLogContext;
-
-export type AuthProvidersConfig<Ctx> =
-  | { betterAuth: BetterAuthIntegrationConfig<Ctx>; workos?: never }
-  | { betterAuth?: never; workos: WorkOsIntegrationConfig<Ctx> };
-
-export type AuthConfig<Ctx> = BetterAuthIntegrationConfig<Ctx> | AuthProvidersConfig<Ctx>;
-
-export type ResolvedAuthProvider<Ctx> =
-  | { provider: 'better-auth'; config: BetterAuthIntegrationConfig<Ctx> }
-  | { provider: 'workos'; config: WorkOsIntegrationConfig<Ctx> };
+import type { BetterAuthLogContext } from '../better-auth';
+import type { ClerkLogContext, ClerkIntegrationConfig } from '../clerk';
+import type {
+  AuthConfig,
+  AuthIntegrationConfig,
+  AuthLogContext,
+  LegacyServerAuthConfig,
+  ResolvedAuthProvider,
+} from '../auth';
+import type { WorkOsLogContext } from '../workos';
 import type { BlypLogger } from '../core/logger';
 import type { ClientLogEvent } from '../shared/client-log';
 import type { ConnectorMode } from '../connectors/mode';
@@ -287,5 +283,14 @@ export interface ResolvedServerLogger<Ctx> {
 }
 
 export type { HttpRequestLog } from './http';
-export type { BetterAuthLogContext };
+export type {
+  AuthConfig,
+  AuthIntegrationConfig,
+  AuthLogContext,
+  BetterAuthLogContext,
+  ClerkIntegrationConfig,
+  ClerkLogContext,
+  LegacyServerAuthConfig,
+  ResolvedAuthProvider,
+};
 export type { WorkOsLogContext };

@@ -1,11 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { clerk } from '../../src/clerk';
 import { createReactRouterLogger } from '../../src/frameworks/react-router';
 import { resetConfigCache } from '../../src/core/config';
 import { createDrizzleDatabaseAdapter } from '../../src/database';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
+import { createMockClerkClient, createSessionClerkAuth } from '../helpers/clerk';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 
 describe('React Router Integration', () => {
@@ -150,6 +152,57 @@ describe('React Router Integration', () => {
     expect(mismatch.status).toBe(500);
     const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
     expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
+  });
+
+  it('enriches middleware and client ingestion logs with Clerk auth context', async () => {
+    const reactRouterLogger = createReactRouterLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        clerk: clerk({
+          clerkClient: createMockClerkClient({
+            auth: createSessionClerkAuth(),
+          }),
+        }),
+      },
+    });
+    const context: Record<string, unknown> = {};
+
+    await reactRouterLogger.middleware(
+      {
+        request: new Request('http://localhost/clerk'),
+        context,
+      },
+      async () => {
+        reactRouterLogger.getLogger(context).info('react-router clerk route');
+        return new Response('ok', { status: 200 });
+      }
+    );
+    await reactRouterLogger.clientLogHandler(
+      new Request('http://localhost/inngest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(createClientPayload()),
+      })
+    );
+    await waitForFileFlush();
+
+    const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+    const routeRecord = records.find((record) => record.message === 'react-router clerk route');
+    const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(routeRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      actor: {
+        id: 'user_1',
+      },
+    });
+    expect(clientRecord?.auth).toMatchObject({
+      provider: 'clerk',
+      actor: {
+        id: 'user_1',
+      },
+    });
   });
 
   it('suppresses default request logs after a structured emit and drops mixed root writes', async () => {

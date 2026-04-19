@@ -3,9 +3,11 @@ import path from 'path';
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createFastifyLogger } from '../../src/frameworks/fastify';
+import { clerk } from '../../src/clerk';
 import { resetConfigCache } from '../../src/core/config';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
+import { createMockClerkClient } from '../helpers/clerk';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 
 describe('Fastify Integration', () => {
@@ -139,6 +141,63 @@ describe('Fastify Integration', () => {
     await app.close();
   });
 
+  it('logs signed-out Clerk requests as unauthenticated without crashing', async () => {
+    const app = Fastify();
+    await app.register(createFastifyLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        clerk: clerk({
+          clerkClient: createMockClerkClient(),
+        }),
+      },
+    }));
+    app.get('/clerk-signed-out', async (request) => {
+      request.blypLog.info('fastify clerk signed out');
+      return { ok: true };
+    });
+
+    await app.inject({
+      method: 'GET',
+      url: '/clerk-signed-out',
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/inngest',
+      headers: {
+        'content-type': 'application/json',
+      },
+      payload: createClientPayload(),
+    });
+    await waitForFileFlush();
+
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const routeRecord = records.find((record) => record.message === 'fastify clerk signed out');
+      const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+    expect(routeRecord?.auth).toEqual({
+      provider: 'clerk',
+      authenticated: false,
+      actor: {
+        kind: 'anonymous',
+      },
+      lookup: {
+        provider: 'clerk',
+      },
+    });
+      expect(clientRecord?.auth).toEqual({
+        provider: 'clerk',
+        authenticated: false,
+        actor: {
+          kind: 'anonymous',
+        },
+        lookup: {
+          provider: 'clerk',
+        },
+      });
+    await app.close();
+  });
+
   it('resolves Better Auth ingestion auth with source=client_ingestion', async () => {
     const app = Fastify();
     await app.register(createFastifyLogger({
@@ -231,7 +290,6 @@ describe('Fastify Integration', () => {
     expect((requestRecord?.data as Record<string, unknown>)?.responseTime).toBeGreaterThanOrEqual(15);
     await app.close();
   });
-
   it('emits one structured request record and drops mixed root logger writes', async () => {
     const warnings: unknown[][] = [];
     const originalWarn = console.warn;

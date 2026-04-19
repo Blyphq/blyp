@@ -7,9 +7,11 @@ import {
   createExpressErrorLogger,
   createExpressLogger,
 } from '../../src/frameworks/express';
+import { clerk } from '../../src/clerk';
 import { resetConfigCache } from '../../src/core/config';
 import { logger as rootLogger } from '../../src/frameworks/standalone';
 import { createClientPayload } from '../helpers/client-payload';
+import { createMachineClerkAuth, createMockClerkClient } from '../helpers/clerk';
 import { makeTempDir, readJsonLines, waitForFileFlush } from '../helpers/fs';
 import { listen } from '../helpers/http';
 
@@ -221,6 +223,63 @@ describe('Express Integration', () => {
 
       expect(records.some((record) => record.message === '[client] frontend rendered')).toBe(true);
       expect(duplicateHttpRecord).toBeUndefined();
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('enriches request and client logs with Clerk machine auth context', async () => {
+    const app = express();
+    app.use(createExpressLogger({
+      logDir: tempDir,
+      pretty: false,
+      auth: {
+        clerk: clerk({
+          clerkClient: createMockClerkClient({
+            auth: createMachineClerkAuth(),
+          }),
+        }),
+      },
+    }));
+    app.get('/clerk', (req, res) => {
+      req.blypLog.info('express clerk route');
+      res.status(200).send('ok');
+    });
+
+    const server = await listen(app as unknown as Parameters<typeof listen>[0]);
+    try {
+      await fetch(`${server.baseUrl}/clerk`);
+      await fetch(`${server.baseUrl}/inngest`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createClientPayload()),
+      });
+      await waitForFileFlush();
+
+      const records = readJsonLines(path.join(tempDir, 'log.ndjson'));
+      const routeRecord = records.find((record) => record.message === 'express clerk route');
+      const clientRecord = records.find((record) => record.message === '[client] frontend rendered');
+
+      expect(routeRecord?.auth).toMatchObject({
+        provider: 'clerk',
+        actor: {
+          kind: 'machine',
+          id: 'oauth_1',
+        },
+        lookup: {
+          userId: 'user_1',
+          tokenType: 'oauth_token',
+        },
+      });
+      expect(clientRecord?.auth).toMatchObject({
+        provider: 'clerk',
+        actor: {
+          kind: 'machine',
+          id: 'oauth_1',
+        },
+      });
     } finally {
       await server.close();
     }

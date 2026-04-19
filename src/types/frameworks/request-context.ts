@@ -1,8 +1,7 @@
 import type { BlypLogger } from '../core/logger';
-import type { BetterAuthLogContext } from '../better-auth';
-import type { WorkOsLogContext } from '../workos';
+import type { AuthLogContext } from '../auth';
 
-export type AuthLogContext = BetterAuthLogContext | WorkOsLogContext;
+export type { AuthLogContext } from '../auth';
 
 export interface BlypRequestContextStore {
   requestScopedLoggerActive: boolean;

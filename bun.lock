@@ -41,6 +41,7 @@
       },
       "peerDependencies": {
         "@better-agent/core": "^0.1.0-beta.1",
+        "@clerk/backend": "^2",
         "@databuddy/sdk": "^2",
         "@logtail/node": "^0.5",
         "@nestjs/common": "^10 || ^11",
@@ -58,6 +59,7 @@
         "@tanstack/react-start": "^1",
         "ai": "^6",
         "astro": "^6",
+        "better-auth": "^1.6.5",
         "drizzle-orm": "^0.36 || ^0.37 || ^0.38 || ^0.39 || ^0.40",
         "elysia": "^1.4.27",
         "express": "^5",
@@ -73,6 +75,7 @@
       },
       "optionalPeers": [
         "@better-agent/core",
+        "@clerk/backend",
         "@databuddy/sdk",
         "@logtail/node",
         "@nestjs/common",
@@ -90,6 +93,7 @@
         "@tanstack/react-start",
         "ai",
         "astro",
+        "better-auth",
         "drizzle-orm",
         "elysia",
         "express",

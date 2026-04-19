@@ -140,6 +140,52 @@ describe('Database logging', () => {
     expect(row.authOrganizationId).toBe('org_1');
   });
 
+  it('maps Clerk auth metadata into normalized database columns', () => {
+    const row = toDatabaseLogRow({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: 'machine-log',
+      auth: {
+        provider: 'clerk',
+        authenticated: true,
+        actor: {
+          kind: 'machine',
+          id: 'oauth_1',
+        },
+        session: {
+          id: 'sess_1',
+        },
+        organization: {
+          id: 'org_1',
+        },
+        impersonator: {
+          id: 'admin_1',
+        },
+        lookup: {
+          provider: 'clerk',
+          actorId: 'oauth_1',
+          actorKind: 'machine',
+          userId: 'user_1',
+          sessionId: 'sess_1',
+          organizationId: 'org_1',
+          tokenType: 'oauth_token',
+        },
+        clerk: {
+          tokenType: 'oauth_token',
+        },
+      },
+    });
+
+    expect(row.authProvider).toBe('clerk');
+    expect(row.authAuthenticated).toBe(true);
+    expect(row.authActorId).toBe('oauth_1');
+    expect(row.authSessionId).toBe('sess_1');
+    expect(row.authOrganizationId).toBe('org_1');
+    expect(row.authActorKind).toBe('machine');
+    expect(row.authTokenType).toBe('oauth_token');
+    expect(row.authImpersonatorId).toBe('admin_1');
+  });
+
   it('writes standalone logs to a drizzle database and shares the sink across child loggers', async () => {
     const runtime = createDrizzleRuntime();
     const logger = createStandaloneLogger({

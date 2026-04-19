@@ -94,6 +94,7 @@ describe('package surface', () => {
       '*': {
         standalone: ['dist/frameworks/standalone/index.d.ts'],
         'better-auth': ['dist/better-auth/index.d.ts'],
+        clerk: ['dist/clerk/index.d.ts'],
         workos: ['dist/workos/index.d.ts'],
         elysia: ['dist/frameworks/elysia/index.d.ts'],
         hono: ['dist/frameworks/hono/index.d.ts'],
@@ -145,6 +146,11 @@ describe('package surface', () => {
         types: './dist/better-auth/index.d.ts',
         import: './dist/better-auth.mjs',
         require: './dist/better-auth.js',
+      },
+      './clerk': {
+        types: './dist/clerk/index.d.ts',
+        import: './dist/clerk.mjs',
+        require: './dist/clerk.js',
       },
       './workos': {
         types: './dist/workos/index.d.ts',
@@ -408,6 +414,58 @@ describe('package surface', () => {
     expect(result.status).toBe(0);
   });
 
+  it('publishes Clerk integration types through the subpath export', () => {
+    const result = compileFixture(`
+      import { clerk, createClerkClientLogger, identifyUser } from '@blyp/core/clerk';
+      import { createNextJsLogger } from '@blyp/core/nextjs';
+      import type {
+        ClerkBackendClientLike,
+        ClerkIntegrationConfig,
+      } from '@blyp/core/clerk';
+
+      const clerkClient: ClerkBackendClientLike = {
+        async authenticateRequest() {
+          return {
+            toAuth() {
+              return {
+                userId: 'user_1',
+                sessionId: 'sess_1',
+              };
+            },
+          };
+        },
+      };
+
+      const auth: ClerkIntegrationConfig<{ request: Request }> = clerk({
+        clerkClient,
+        secretKey: 'sk_test',
+        publishableKey: 'pk_test',
+        authorizedParties: ['https://example.com'],
+        authenticateRequestOptions: ({ source }) => ({
+          acceptsToken: source === 'client_ingestion' ? 'any' : 'session_token',
+        }),
+      });
+
+      createNextJsLogger({
+        auth: {
+          clerk: auth,
+        },
+      });
+
+      createClerkClientLogger({
+        endpoint: '/blyp/log',
+      });
+
+      identifyUser({
+        authProvider: 'clerk',
+        authActorId: 'user_1',
+        authActorKind: 'user',
+      });
+    `);
+
+    expect(result.status).toBe(0);
+  });
+
   it('rejects invalid typed blyp.config authoring through the published declarations', () => {
     const result = compileFixture(`
       import { defineConfig } from '@blyp/core';
@@ -430,6 +488,7 @@ describe('package surface', () => {
     const packageJson = readPackageJson();
 
     const optionalPeers = [
+      '@clerk/backend',
       '@better-agent/core',
       'better-auth',
       '@databuddy/sdk',

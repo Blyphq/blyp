@@ -85,6 +85,9 @@ export interface DatabaseLogRow {
   authActorId: string | null;
   authSessionId: string | null;
   authOrganizationId: string | null;
+  authActorKind: string | null;
+  authTokenType: string | null;
+  authImpersonatorId: string | null;
   data: unknown | null;
   bindings: Record<string, unknown> | null;
   error: Record<string, unknown> | null;
