@@ -23,6 +23,7 @@ interface HydratedUserCacheEntry {
 
 const resolvedClientCache = new WeakMap<object, ClerkBackendClientLike>();
 const hydratedUserCache = new Map<string, HydratedUserCacheEntry>();
+const DEFAULT_HYDRATED_USER_CACHE_MAX_ENTRIES = 1_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -53,6 +54,37 @@ function normalizeHydratedUser(user: ClerkUserLike): Record<string, unknown> | u
   };
 }
 
+function pruneHydratedUserCache(now: number, maxEntries: number): void {
+  for (const [cacheKey, entry] of hydratedUserCache) {
+    if (entry.expiresAt <= now) {
+      hydratedUserCache.delete(cacheKey);
+    }
+  }
+
+  while (hydratedUserCache.size > maxEntries) {
+    const oldestKey = hydratedUserCache.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    hydratedUserCache.delete(oldestKey);
+  }
+}
+
+function setHydratedUserCacheEntry(
+  userId: string,
+  entry: HydratedUserCacheEntry,
+  now: number,
+  maxEntries: number
+): void {
+  if (maxEntries <= 0) {
+    return;
+  }
+
+  pruneHydratedUserCache(now, maxEntries - 1);
+  hydratedUserCache.delete(userId);
+  hydratedUserCache.set(userId, entry);
+}
+
 async function hydrateUser(
   config: ClerkIntegrationConfig<unknown>,
   clerkClient: ClerkBackendClientLike,
@@ -69,25 +101,34 @@ async function hydrateUser(
   }
 
   const cacheTtlMs = config.hydrateUser.cacheTtlMs ?? 30_000;
+  const maxEntries = Math.max(
+    config.hydrateUser.maxEntries ?? DEFAULT_HYDRATED_USER_CACHE_MAX_ENTRIES,
+    0
+  );
   const cached = hydratedUserCache.get(userId);
   const now = Date.now();
   if (cached && cached.expiresAt > now) {
+    hydratedUserCache.delete(userId);
+    hydratedUserCache.set(userId, cached);
     return cached.value;
+  }
+  if (cached) {
+    hydratedUserCache.delete(userId);
   }
 
   try {
     const user = await getUser(userId);
     const normalized = normalizeHydratedUser(user);
-    hydratedUserCache.set(userId, {
+    setHydratedUserCacheEntry(userId, {
       value: normalized,
       expiresAt: now + cacheTtlMs,
-    });
+    }, now, maxEntries);
     return normalized;
   } catch {
-    hydratedUserCache.set(userId, {
+    setHydratedUserCacheEntry(userId, {
       value: undefined,
       expiresAt: now + cacheTtlMs,
-    });
+    }, now, maxEntries);
     return undefined;
   }
 }

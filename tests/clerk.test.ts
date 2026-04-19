@@ -4,6 +4,7 @@ import {
   createClerkClientLogger,
   identifyUser,
   normalizeClerkAuthContext,
+  resolveClerkAuthContext,
 } from '../src/clerk';
 import { createMachineClerkAuth, createSessionClerkAuth } from './helpers/clerk';
 
@@ -233,19 +234,221 @@ describe('Clerk integration', () => {
     } finally {
       if (originalFetch) {
         Object.defineProperty(globalThis, 'fetch', originalFetch);
+      } else {
+        delete (globalThis as Record<string, unknown>).fetch;
       }
       if (originalNavigator) {
         Object.defineProperty(globalThis, 'navigator', originalNavigator);
+      } else {
+        delete (globalThis as Record<string, unknown>).navigator;
       }
       if (originalLocation) {
         Object.defineProperty(globalThis, 'location', originalLocation);
+      } else {
+        delete (globalThis as Record<string, unknown>).location;
       }
       if (originalDocument) {
         Object.defineProperty(globalThis, 'document', originalDocument);
+      } else {
+        delete (globalThis as Record<string, unknown>).document;
       }
       if (originalSessionStorage) {
         Object.defineProperty(globalThis, 'sessionStorage', originalSessionStorage);
+      } else {
+        delete (globalThis as Record<string, unknown>).sessionStorage;
       }
     }
+  });
+
+  it('hydrates Clerk users once per TTL window and reuses the cached value', async () => {
+    const getUserCalls: string[] = [];
+    const clerkClient = {
+      async authenticateRequest() {
+        return {
+          isAuthenticated: true,
+          toAuth() {
+            return createSessionClerkAuth({
+              userId: 'user_cache_reuse',
+              sessionId: 'sess_cache_reuse',
+              claims: {
+                sub: 'user_cache_reuse',
+              },
+            });
+          },
+        };
+      },
+      users: {
+        async getUser(userId: string) {
+          getUserCalls.push(userId);
+          return {
+            id: userId,
+            fullName: 'Ada Lovelace',
+            primaryEmailAddress: {
+              emailAddress: 'ada@example.com',
+            },
+          };
+        },
+      },
+    };
+    const integration = clerk({
+      clerkClient,
+      hydrateUser: {
+        cacheTtlMs: 1_000,
+        maxEntries: 8,
+      },
+    });
+
+    const first = await resolveClerkAuthContext(integration, {
+      ctx: undefined,
+      request: new Request('http://localhost/cache-reuse'),
+      source: 'request',
+    });
+    const second = await resolveClerkAuthContext(integration, {
+      ctx: undefined,
+      request: new Request('http://localhost/cache-reuse'),
+      source: 'request',
+    });
+
+    expect(getUserCalls).toEqual(['user_cache_reuse']);
+    expect(first.actor).toMatchObject({
+      kind: 'user',
+      id: 'user_cache_reuse',
+      email: 'ada@example.com',
+      name: 'Ada Lovelace',
+    });
+    expect(second.actor).toMatchObject({
+      kind: 'user',
+      id: 'user_cache_reuse',
+      email: 'ada@example.com',
+      name: 'Ada Lovelace',
+    });
+  });
+
+  it('refreshes hydrated Clerk users after the cache TTL expires', async () => {
+    const getUserCalls: string[] = [];
+    const clerkClient = {
+      async authenticateRequest() {
+        return {
+          isAuthenticated: true,
+          toAuth() {
+            return createSessionClerkAuth({
+              userId: 'user_cache_expire',
+              sessionId: 'sess_cache_expire',
+              claims: {
+                sub: 'user_cache_expire',
+              },
+            });
+          },
+        };
+      },
+      users: {
+        async getUser(userId: string) {
+          getUserCalls.push(userId);
+          return {
+            id: userId,
+            fullName: 'Grace Hopper',
+          };
+        },
+      },
+    };
+    const integration = clerk({
+      clerkClient,
+      hydrateUser: {
+        cacheTtlMs: 1,
+        maxEntries: 8,
+      },
+    });
+
+    await resolveClerkAuthContext(integration, {
+      ctx: undefined,
+      request: new Request('http://localhost/cache-expire'),
+      source: 'request',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const refreshed = await resolveClerkAuthContext(integration, {
+      ctx: undefined,
+      request: new Request('http://localhost/cache-expire'),
+      source: 'request',
+    });
+
+    expect(getUserCalls).toEqual(['user_cache_expire', 'user_cache_expire']);
+    expect(refreshed.actor).toMatchObject({
+      kind: 'user',
+      id: 'user_cache_expire',
+      name: 'Grace Hopper',
+    });
+  });
+
+  it('evicts older hydrated Clerk users when the cache reaches its max size', async () => {
+    const getUserCalls: string[] = [];
+    const authByPath: Record<string, ReturnType<typeof createSessionClerkAuth>> = {
+      '/first': createSessionClerkAuth({
+        userId: 'user_cache_first',
+        sessionId: 'sess_cache_first',
+        claims: {
+          sub: 'user_cache_first',
+        },
+      }),
+      '/second': createSessionClerkAuth({
+        userId: 'user_cache_second',
+        sessionId: 'sess_cache_second',
+        claims: {
+          sub: 'user_cache_second',
+        },
+      }),
+    };
+    const clerkClient = {
+      async authenticateRequest(request: Request) {
+        return {
+          isAuthenticated: true,
+          toAuth() {
+            return authByPath[new URL(request.url).pathname];
+          },
+        };
+      },
+      users: {
+        async getUser(userId: string) {
+          getUserCalls.push(userId);
+          return {
+            id: userId,
+            fullName: `Name for ${userId}`,
+          };
+        },
+      },
+    };
+    const integration = clerk({
+      clerkClient,
+      hydrateUser: {
+        cacheTtlMs: 1_000,
+        maxEntries: 1,
+      },
+    });
+
+    await resolveClerkAuthContext(integration, {
+      ctx: undefined,
+      request: new Request('http://localhost/first'),
+      source: 'request',
+    });
+    await resolveClerkAuthContext(integration, {
+      ctx: undefined,
+      request: new Request('http://localhost/second'),
+      source: 'request',
+    });
+    const rehydrated = await resolveClerkAuthContext(integration, {
+      ctx: undefined,
+      request: new Request('http://localhost/first'),
+      source: 'request',
+    });
+
+    expect(getUserCalls).toEqual([
+      'user_cache_first',
+      'user_cache_second',
+      'user_cache_first',
+    ]);
+    expect(rehydrated.actor).toMatchObject({
+      kind: 'user',
+      id: 'user_cache_first',
+      name: 'Name for user_cache_first',
+    });
   });
 });

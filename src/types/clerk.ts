@@ -101,6 +101,7 @@ export interface ClerkLogContext {
 
 export interface ClerkHydrateUserOptions {
   cacheTtlMs?: number;
+  maxEntries?: number;
 }
 
 export interface ClerkResolveArgs<Ctx = unknown> {
