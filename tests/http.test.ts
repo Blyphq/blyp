@@ -3,6 +3,7 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { resetConfigCache, resolveConfig } from '../src/core/config';
 import {
+  createHTTPRegistry,
   resetHTTPTestHooks,
   setHTTPTestHooks,
 } from '../src/connectors/http/sender';
@@ -112,6 +113,27 @@ describe('HTTP Connector', () => {
 
     expect(resolved.connectors?.http).toHaveLength(1);
     expect(resolved.connectors?.http?.[0]?.name).toBe('audit');
+  });
+
+  it('registers HTTP shutdown hooks only once across repeated registry creation', () => {
+    const beforeExitListeners = process.listenerCount('beforeExit');
+    const sigintListeners = process.listenerCount('SIGINT');
+    const sigtermListeners = process.listenerCount('SIGTERM');
+
+    for (let index = 0; index < 3; index += 1) {
+      createHTTPRegistry([
+        {
+          name: `webhook-${index}`,
+          enabled: true,
+          endpoint: `https://logs.example.test/ingest/${index}`,
+          serviceName: 'svc',
+        },
+      ]);
+    }
+
+    expect(process.listenerCount('beforeExit')).toBe(beforeExitListeners + 1);
+    expect(process.listenerCount('SIGINT')).toBe(sigintListeners + 1);
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermListeners + 1);
   });
 
   it('auto-forwards server logs to every ready HTTP auto target and skips client_log records', () => {

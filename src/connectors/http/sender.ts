@@ -37,6 +37,11 @@ import {
 const warnedKeys = new Set<string>();
 let testHooks: HTTPTestHooks = {};
 const warnOnce = createErrorOnceLogger(warnedKeys);
+const shutdownRegistries = new Set<WeakRef<Pick<HTTPRegistry, 'flush'>>>();
+const shutdownEvents: Array<NodeJS.Signals | 'beforeExit'> = ['beforeExit', 'SIGINT', 'SIGTERM'];
+let shutdownHandlers:
+  | Map<NodeJS.Signals | 'beforeExit', (...args: unknown[]) => void>
+  | null = null;
 
 export function normalizeHTTPRecord(
   record: LogRecord,
@@ -117,24 +122,51 @@ export function normalizeHTTPRecord(
   };
 }
 
-function registerShutdownHooks(key: string, shutdown: () => Promise<void>): void {
-  const handlers: Array<NodeJS.Signals | 'beforeExit'> = ['beforeExit', 'SIGINT', 'SIGTERM'];
+async function flushShutdownRegistries(key: string): Promise<void> {
+  const pending: Promise<void>[] = [];
 
-  for (const event of handlers) {
-    process.once(event, async () => {
-      try {
-        await shutdown();
-      } catch (error) {
-        warnOnce(
-          `${key}:shutdown`,
-          '[Blyp] Failed to flush HTTP logs during shutdown.',
-          error
-        );
-      }
+  for (const registryRef of shutdownRegistries) {
+    const registry = registryRef.deref();
+
+    if (!registry) {
+      shutdownRegistries.delete(registryRef);
+      continue;
+    }
+
+    pending.push(registry.flush());
+  }
+
+  try {
+    await Promise.all(pending);
+  } catch (error) {
+    warnOnce(
+      `${key}:shutdown`,
+      '[Blyp] Failed to flush HTTP logs during shutdown.',
+      error
+    );
+  }
+}
+
+function registerShutdownHooks(key: string, registry: Pick<HTTPRegistry, 'flush'>): void {
+  shutdownRegistries.add(new WeakRef(registry));
+
+  if (shutdownHandlers) {
+    return;
+  }
+
+  shutdownHandlers = new Map();
+
+  for (const event of shutdownEvents) {
+    const handler = async (): Promise<void> => {
+      await flushShutdownRegistries(key);
+
       if (event !== 'beforeExit') {
         process.exit(0);
       }
-    });
+    };
+
+    shutdownHandlers.set(event, handler);
+    process.once(event, handler);
   }
 }
 
@@ -450,7 +482,7 @@ export function createHTTPRegistry(
     },
   };
 
-  registerShutdownHooks('http-registry', () => registry.flush());
+  registerShutdownHooks('http-registry', registry);
 
   return registry;
 }
@@ -462,4 +494,15 @@ export function setHTTPTestHooks(hooks: HTTPTestHooks): void {
 export function resetHTTPTestHooks(): void {
   testHooks = {};
   warnedKeys.clear();
+  shutdownRegistries.clear();
+
+  if (!shutdownHandlers) {
+    return;
+  }
+
+  for (const [event, handler] of shutdownHandlers) {
+    process.removeListener(event, handler);
+  }
+
+  shutdownHandlers = null;
 }
