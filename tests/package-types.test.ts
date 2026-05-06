@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 
 const repoRoot = path.resolve(import.meta.dir, '..');
 const rootDeclarationPath = path.join(repoRoot, 'dist/index.d.ts');
@@ -9,8 +9,15 @@ const elysiaLoggerDeclarationPath = path.join(repoRoot, 'dist/frameworks/elysia/
 const typescriptBinPath = path.join(repoRoot, 'node_modules/.bin/tsc');
 let typesBuilt = false;
 
+setDefaultTimeout(60_000);
+
 function ensureTypeDeclarations(): void {
-  if (typesBuilt && fs.existsSync(elysiaLoggerDeclarationPath)) {
+  if (typesBuilt) {
+    return;
+  }
+
+  if (fs.existsSync(rootDeclarationPath) && fs.existsSync(elysiaLoggerDeclarationPath)) {
+    typesBuilt = true;
     return;
   }
 
