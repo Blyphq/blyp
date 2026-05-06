@@ -41,6 +41,19 @@ export interface ClientLoggingConfig {
   path?: string;
 }
 
+export interface CloudDestinationConfig {
+  /** Project key from Cloud Studio — blyp_proj_xxxx */
+  projectKey: string;
+  /** Data region. Auto-detected from server response on first call; you can pre-set to avoid one round-trip. */
+  region?: 'us' | 'eu';
+  /** Override the ingest base URL. Defaults to https://ingest.blyp.cloud */
+  host?: string;
+  /** Batch up to this many events per HTTP request. Default: 25 */
+  batchSize?: number;
+  /** Flush interval in milliseconds. Default: 2000 */
+  flushIntervalMs?: number;
+}
+
 export interface RedactionConfig {
   keys?: string[];
   paths?: string[];
@@ -281,6 +294,7 @@ export interface BlypConfig {
   logDir?: string;
   file?: LogFileConfig;
   database?: DatabaseLoggerConfig;
+  cloud?: CloudDestinationConfig;
   clientLogging?: ClientLoggingConfig;
   redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
@@ -302,6 +316,7 @@ export interface ResolvedBlypConfig extends BlypConfig {
   destination: BlypDestination;
   file: Required<LogFileConfig>;
   database?: ResolvedDatabaseLoggerConfig;
+  cloud?: CloudDestinationConfig;
   clientLogging: Required<ClientLoggingConfig>;
   redact: ResolvedRedactionConfig;
   connectors: ResolvedBlypConnectorsConfig;

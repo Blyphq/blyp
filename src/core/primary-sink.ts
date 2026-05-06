@@ -28,6 +28,10 @@ class NoopPrimarySink implements BlypPrimarySink {
 const warnOnce = createWarnOnceLogger(new Set<string>());
 
 export function createPrimarySink(config: BlypConfig): BlypPrimarySink {
+  if (config.destination === 'cloud') {
+    return new NoopPrimarySink();
+  }
+
   if (config.destination !== 'database') {
     return createFilePrimarySink(config);
   }
