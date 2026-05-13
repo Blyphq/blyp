@@ -3,7 +3,7 @@ import { loadOptionalModule } from './optional-module';
 import { loadPinoPretty } from './pino-pretty-loader';
 import { shouldDropRootLogWrite } from '../frameworks/shared/request-context';
 import { sanitizeLogValue } from '../shared/redaction';
-import { type BlypConfig, resolveConfig } from './config';
+import { type BlypConfig, type ResolvedBlypConfig, resolveConfig } from './config';
 import {
   buildRecord,
   buildStructuredRecord,
@@ -15,6 +15,7 @@ import { createPrimarySink } from './primary-sink';
 import type { BlypPrimarySink } from './primary-sink';
 import { getRecordType } from '../connectors/shared';
 import { ConnectorDeliveryManager } from '../connectors/delivery/manager';
+import { createCloudSender } from '../connectors/cloud/sender';
 import type { ConnectorBatchDispatchTarget } from '../connectors/delivery/types';
 import type { BetterStackSender } from '../types/connectors/betterstack';
 import type { DatabuddySender } from '../types/connectors/databuddy';
@@ -22,6 +23,7 @@ import type { PostHogSender } from '../types/connectors/posthog';
 import type { SentrySender } from '../types/connectors/sentry';
 import type { HTTPRegistry } from '../types/connectors/http';
 import type { OTLPRegistry } from '../types/connectors/otlp';
+import type { CloudSender } from '../types/connectors/cloud';
 import type { ResolvedRedactionConfig } from '../types/core/config';
 import { runtime } from './runtime';
 import {
@@ -212,6 +214,18 @@ function createOTLPRegistryStub(): OTLPRegistry {
   };
 }
 
+function createCloudSenderStub(): CloudSender {
+  return {
+    enabled: false,
+    ready: false,
+    mode: 'auto',
+    status: 'missing',
+    config: { projectKey: '' },
+    send: () => {},
+    flush: async () => {},
+  };
+}
+
 function createBetterStackSenderForConfig(config: BlypConfig): BetterStackSender {
   if (!config.connectors?.betterstack?.enabled) {
     return createBetterStackSenderStub();
@@ -293,6 +307,14 @@ function createOTLPRegistryForConfig(config: BlypConfig): OTLPRegistry {
     ],
     '../connectors/otlp/sender'
   ).createOTLPRegistry(config);
+}
+
+function createCloudSenderForConfig(config: ResolvedBlypConfig): CloudSender {
+  if (config.destination !== 'cloud') {
+    return createCloudSenderStub();
+  }
+
+  return createCloudSender(config);
 }
 
 function summarizeClientConsoleData(data: unknown): Record<string, unknown> | null {
@@ -600,6 +622,17 @@ function maybeSendToHTTP(
   }
 }
 
+function maybeSendToCloud(
+  cloud: CloudSender,
+  record: ReturnType<typeof buildRecord> | ReturnType<typeof buildStructuredRecord>
+): void {
+  if (isClientLogRecord(record) || !cloud.enabled) {
+    return;
+  }
+
+  cloud.send(record, { warnIfUnavailable: true });
+}
+
 function createLoggerInstance(
   rootRawLogger: any,
   sink: BlypPrimarySink,
@@ -610,6 +643,7 @@ function createLoggerInstance(
   sentry: SentrySender,
   http: HTTPRegistry,
   otlp: OTLPRegistry,
+  cloud: CloudSender,
   redact: ResolvedRedactionConfig,
   bindings: Record<string, unknown> = {},
   source: InternalLoggerSource = 'root'
@@ -658,6 +692,7 @@ function createLoggerInstance(
     maybeSendToSentry(sentry, record);
     maybeSendToHTTP(http, record);
     maybeSendToOTLP(otlp, record);
+    maybeSendToCloud(cloud, record);
   };
 
   const writeStructuredRecord = (
@@ -693,6 +728,7 @@ function createLoggerInstance(
     maybeSendToSentry(sentry, record);
     maybeSendToHTTP(http, record);
     maybeSendToOTLP(otlp, record);
+    maybeSendToCloud(cloud, record);
   };
 
   const logger: InternalBlypLogger = {
@@ -744,6 +780,7 @@ function createLoggerInstance(
         sentry.flush(),
         http.flush(),
         otlp.flush(),
+        cloud.flush(),
       ]);
     },
 
@@ -759,6 +796,7 @@ function createLoggerInstance(
         sentry.flush(),
         http.flush(),
         otlp.flush(),
+        cloud.flush(),
       ]);
     },
 
@@ -783,6 +821,7 @@ function createLoggerInstance(
         sentry,
         http,
         otlp,
+        cloud,
         redact,
         mergedBindings,
         source
@@ -797,6 +836,7 @@ function createLoggerInstance(
       sentry,
       http,
       otlp,
+      cloud,
       redact,
       sink,
       create: (
@@ -813,6 +853,7 @@ function createLoggerInstance(
           sentry,
           http,
           otlp,
+          cloud,
           redact,
           nextBindings,
           nextSource
@@ -847,6 +888,7 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   const sentry = createSentrySenderForConfig(resolvedConfig);
   const http = createHTTPRegistryForConfig(resolvedConfig);
   const otlp = createOTLPRegistryForConfig(resolvedConfig);
+  const cloud = createCloudSenderForConfig(resolvedConfig);
   const connectorDelivery = resolvedConfig.connectors.delivery.enabled
     ? new ConnectorDeliveryManager(resolvedConfig.connectors.delivery)
     : null;
@@ -864,6 +906,8 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
     for (const sender of otlp.getAutoForwardTargets()) {
       connectorDelivery.bindTarget(sender as unknown as ConnectorBatchDispatchTarget);
     }
+
+    connectorDelivery.bindTarget(cloud as unknown as ConnectorBatchDispatchTarget);
   }
 
   const instance = createLoggerInstance(
@@ -876,6 +920,7 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
     sentry,
     http,
     otlp,
+    cloud,
     resolvedConfig.redact
   );
 

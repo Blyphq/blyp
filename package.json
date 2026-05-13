@@ -107,6 +107,9 @@
       "http": [
         "dist/connectors/http/index.d.ts"
       ],
+      "cloud": [
+        "dist/connectors/cloud/index.d.ts"
+      ],
       "betterstack": [
         "dist/connectors/betterstack/index.d.ts"
       ],
@@ -267,6 +270,11 @@
       "types": "./dist/connectors/http/index.d.ts",
       "import": "./dist/connectors/http.mjs",
       "require": "./dist/connectors/http.js"
+    },
+    "./cloud": {
+      "types": "./dist/connectors/cloud/index.d.ts",
+      "import": "./dist/connectors/cloud.mjs",
+      "require": "./dist/connectors/cloud.js"
     },
     "./betterstack": {
       "types": "./dist/connectors/betterstack/index.d.ts",

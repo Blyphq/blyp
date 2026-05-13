@@ -44,6 +44,8 @@ export interface ClientLoggingConfig {
 export interface CloudDestinationConfig {
   /** Project key from Cloud Studio — blyp_proj_xxxx */
   projectKey: string;
+  /** API key used as Bearer token for POST /ingest. */
+  apiKey?: string;
   /** Data region. Auto-detected from server response on first call; you can pre-set to avoid one round-trip. */
   region?: 'us' | 'eu';
   /** Override the ingest base URL. Defaults to https://ingest.blyp.cloud */

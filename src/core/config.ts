@@ -994,6 +994,13 @@ function validateResolvedConfig(resolvedConfig: ResolvedBlypConfig): void {
       '[blyp] cloud.projectKey looks invalid. It should start with "blyp_proj_".'
     );
   }
+
+  const apiKey = resolvedConfig.cloud?.apiKey ?? process.env.BLYP_CLOUD_API_KEY;
+  if (!hasNonEmptyString(apiKey)) {
+    throw new Error(
+      '[blyp] destination is "cloud" but cloud.apiKey is missing. Add cloud.apiKey to blyp.config.ts or set BLYP_CLOUD_API_KEY.'
+    );
+  }
 }
 
 export function defineConfig(config: BlypUserConfig): BlypUserConfig {
