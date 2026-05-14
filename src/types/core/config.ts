@@ -15,6 +15,7 @@ export type {
   DatabaseLoggerConfig,
   DatabaseRetryConfig,
   DrizzleDatabaseAdapterConfig,
+  MongooseDatabaseAdapterConfig,
   PrismaDatabaseAdapterConfig,
   ResolvedDatabaseDeliveryConfig,
   ResolvedDatabaseLoggerConfig,

@@ -217,6 +217,7 @@ export type {
   DatabaseLoggerConfig,
   DatabaseRetryConfig,
   DrizzleDatabaseAdapterConfig,
+  MongooseDatabaseAdapterConfig,
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
@@ -249,6 +250,7 @@ export type { ReadLogFileOptions } from './core/log-reader';
 export type { LogRecord } from './core/file-logger';
 export {
   createDrizzleDatabaseAdapter,
+  createMongooseDatabaseAdapter,
   createPrismaDatabaseAdapter,
 } from './database';
 export * from './core/helpers';

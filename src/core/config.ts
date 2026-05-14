@@ -25,6 +25,7 @@ import type {
   HTTPConnectorConfig,
   LogFileConfig,
   LogRotationConfig,
+  MongooseDatabaseAdapterConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
@@ -67,6 +68,7 @@ export type {
   HTTPConnectorConfig,
   LogFileConfig,
   LogRotationConfig,
+  MongooseDatabaseAdapterConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
@@ -403,6 +405,12 @@ function isDrizzleAdapter(
   return !!value && typeof value === 'object' && value.type === 'drizzle';
 }
 
+function isMongooseAdapter(
+  value: DatabaseLoggerConfig['adapter']
+): value is MongooseDatabaseAdapterConfig {
+  return !!value && typeof value === 'object' && value.type === 'mongoose';
+}
+
 function mergeDatabaseRetryConfig(
   base: DatabaseRetryConfig | undefined,
   override: DatabaseRetryConfig | undefined
@@ -439,6 +447,10 @@ function hasDrizzleAdapterShape(adapter: DrizzleDatabaseAdapterConfig): boolean 
   return !!db && typeof db.insert === 'function' && adapter.table !== undefined;
 }
 
+function hasMongooseAdapterShape(adapter: MongooseDatabaseAdapterConfig): boolean {
+  return !!adapter.mongoose || !!adapter.connection;
+}
+
 function resolveDatabaseLoggerConfig(
   config: DatabaseLoggerConfig | undefined,
   sourceType?: ConfigFileMatch['type']
@@ -455,6 +467,15 @@ function resolveDatabaseLoggerConfig(
       'database-json-config',
       '[Blyp] Warning: Database logging requires an executable blyp config file. Database destination remains disabled until you move this config to blyp.config.ts/js.'
     );
+  } else if (isMongooseAdapter(adapter)) {
+    ready = hasMongooseAdapterShape(adapter);
+
+    if (!ready) {
+      warnOnce(
+        'database-mongoose-missing',
+        '[Blyp] Warning: Mongoose adapter requires either a mongoUrl or an existing connection. Database logging is disabled.'
+      );
+    }
   } else if (config.dialect !== 'postgres' && config.dialect !== 'mysql') {
     warnOnce(
       `database-dialect:${String(config.dialect)}`,

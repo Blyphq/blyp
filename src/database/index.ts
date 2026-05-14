@@ -4,6 +4,9 @@ export {
 export {
   createDrizzleDatabaseAdapter,
 } from './adapters/drizzle';
+export {
+  createMongooseDatabaseAdapter,
+} from './adapters/mongoose';
 export type {
   BlypDestination,
   DatabaseAdapterConfig,
@@ -13,6 +16,7 @@ export type {
   DatabaseLoggerConfig,
   DatabaseRetryConfig,
   DrizzleDatabaseAdapterConfig,
+  MongooseDatabaseAdapterConfig,
   PrismaDatabaseAdapterConfig,
   ResolvedDatabaseDeliveryConfig,
   ResolvedDatabaseLoggerConfig,

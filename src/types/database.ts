@@ -4,7 +4,7 @@ export type BlypDestination = 'file' | 'database';
 
 export type DatabaseDialect = 'postgres' | 'mysql';
 
-export type DatabaseAdapterKind = 'prisma' | 'drizzle';
+export type DatabaseAdapterKind = 'prisma' | 'drizzle' | 'mongoose';
 
 export interface DatabaseRetryConfig {
   maxRetries?: number;
@@ -48,9 +48,18 @@ export interface DrizzleDatabaseAdapterConfig {
   table: unknown;
 }
 
+export interface MongooseDatabaseAdapterConfig {
+  type: 'mongoose';
+  mongoose?: unknown;
+  mongoUrl?: string;
+  connection?: unknown;
+  collection?: string;
+}
+
 export type DatabaseAdapterConfig =
   | PrismaDatabaseAdapterConfig
-  | DrizzleDatabaseAdapterConfig;
+  | DrizzleDatabaseAdapterConfig
+  | MongooseDatabaseAdapterConfig;
 
 export interface DatabaseLoggerConfig {
   dialect?: DatabaseDialect;

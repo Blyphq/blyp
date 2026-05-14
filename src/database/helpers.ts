@@ -5,10 +5,12 @@ import type {
   DatabaseLogRow,
   PrismaDatabaseAdapterConfig,
   DrizzleDatabaseAdapterConfig,
+  MongooseDatabaseAdapterConfig,
   ResolvedDatabaseLoggerConfig,
 } from '../types/database';
 import type { LogRecord } from '../core/file-logger';
 import { createDrizzleRowWriter } from './adapters/drizzle';
+import { createMongooseRowWriter } from './adapters/mongoose';
 import { createPrismaRowWriter, type DatabaseRowWriter } from './adapters/prisma';
 
 function normalizeNullableNumber(value: unknown): number | null {
@@ -91,6 +93,12 @@ function isDrizzleAdapter(
   return !!adapter && adapter.type === 'drizzle';
 }
 
+function isMongooseAdapter(
+  adapter: DatabaseAdapterConfig | undefined
+): adapter is MongooseDatabaseAdapterConfig {
+  return !!adapter && adapter.type === 'mongoose';
+}
+
 export function createDatabaseRowWriter(
   config: ResolvedDatabaseLoggerConfig
 ): DatabaseRowWriter {
@@ -100,6 +108,10 @@ export function createDatabaseRowWriter(
 
   if (isDrizzleAdapter(config.adapter)) {
     return createDrizzleRowWriter(config.adapter);
+  }
+
+  if (isMongooseAdapter(config.adapter)) {
+    return createMongooseRowWriter(config.adapter);
   }
 
   throw new Error('[Blyp] Unsupported database adapter configuration.');
