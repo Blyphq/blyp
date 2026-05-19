@@ -71,6 +71,7 @@ export type {
   MongooseDatabaseAdapterConfig,
   OTLPConnectorConfig,
   PostHogConnectorConfig,
+  CloudDestinationConfig,
   PrismaDatabaseAdapterConfig,
   RedactionConfig,
   ResolvedBlypConfig,
@@ -975,16 +976,52 @@ export function mergeBlypConfig(
   override: BlypUserConfig = {},
   options: { configFileType?: ConfigFileMatch['type'] } = {}
 ): ResolvedBlypConfig {
-  return {
+  const merged: ResolvedBlypConfig = {
     ...base,
     ...override,
     destination: override.destination ?? base.destination ?? 'file',
     file: mergeFileConfig(base.file, override.file),
     database: mergeDatabaseLoggerConfig(base.database, override.database, options.configFileType),
+    cloud: override.cloud ?? base.cloud,
     clientLogging: mergeClientLoggingConfig(base.clientLogging, override.clientLogging),
     redact: mergeRedactionConfig(base.redact, override.redact),
     connectors: mergeConnectorsConfig(base.connectors, override.connectors),
   };
+
+  if (
+    merged.destination === 'cloud' &&
+    override.connectors?.delivery?.enabled === undefined
+  ) {
+    merged.connectors.delivery.enabled = true;
+  }
+
+  return merged;
+}
+
+function validateResolvedConfig(resolvedConfig: ResolvedBlypConfig): void {
+  if (resolvedConfig.destination !== 'cloud') {
+    return;
+  }
+
+  const projectKey = resolvedConfig.cloud?.projectKey;
+  if (!projectKey) {
+    throw new Error(
+      '[blyp] destination is "cloud" but cloud.projectKey is missing. Add it to your blyp.config.ts: cloud: { projectKey: "blyp_proj_..." }'
+    );
+  }
+
+  if (!/^blyp_proj_[A-Za-z0-9_-]+$/.test(projectKey)) {
+    throw new Error(
+      '[blyp] cloud.projectKey looks invalid. It should start with "blyp_proj_".'
+    );
+  }
+
+  const apiKey = resolvedConfig.cloud?.apiKey ?? process.env.BLYP_CLOUD_API_KEY;
+  if (!hasNonEmptyString(apiKey)) {
+    throw new Error(
+      '[blyp] destination is "cloud" but cloud.apiKey is missing. Add cloud.apiKey to blyp.config.ts or set BLYP_CLOUD_API_KEY.'
+    );
+  }
 }
 
 export function defineConfig(config: BlypUserConfig): BlypUserConfig {
@@ -1008,11 +1045,14 @@ export function loadConfig(): ResolvedBlypConfig {
     cachedConfig = mergeBlypConfig(DEFAULT_CONFIG);
   }
 
+  validateResolvedConfig(cachedConfig);
   return cachedConfig;
 }
 
 export function resolveConfig(overrides: BlypUserConfig = {}): ResolvedBlypConfig {
-  return mergeBlypConfig(loadConfig(), overrides);
+  const merged = mergeBlypConfig(loadConfig(), overrides);
+  validateResolvedConfig(merged);
+  return merged;
 }
 
 export function getConfig(): ResolvedBlypConfig {

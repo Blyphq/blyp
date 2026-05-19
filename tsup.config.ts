@@ -29,6 +29,7 @@ export default defineConfig([
       'ai/fetch': 'src/ai/shared/fetch.ts',
       database: 'src/database/index.ts',
       'connectors/http': 'src/connectors/http/index.ts',
+      'connectors/cloud': 'src/connectors/cloud/index.ts',
       'connectors/betterstack': 'src/connectors/betterstack/index.ts',
       'connectors/databuddy': 'src/connectors/databuddy/index.ts',
       'connectors/posthog': 'src/connectors/posthog/index.ts',

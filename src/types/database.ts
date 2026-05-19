@@ -1,6 +1,6 @@
 import type { LogRecord } from './core/file-logger';
 
-export type BlypDestination = 'file' | 'database';
+export type BlypDestination = 'file' | 'database' | 'cloud';
 
 export type DatabaseDialect = 'postgres' | 'mysql';
 

@@ -3,6 +3,7 @@ import type {
   BlypDestination,
   BlypConnectorsConfig,
   ClientLoggingConfig,
+  CloudDestinationConfig,
   DatabaseLoggerConfig,
   LogFileConfig,
   LogRotationConfig,
@@ -18,6 +19,7 @@ export interface StandaloneLoggerConfig {
   logDir?: string;
   file?: LogFileConfig;
   database?: DatabaseLoggerConfig;
+  cloud?: CloudDestinationConfig;
   clientLogging?: ClientLoggingConfig;
   redact?: RedactionConfig;
   connectors?: BlypConnectorsConfig;
@@ -35,6 +37,7 @@ export type {
   BlypConnectorsConfig,
   BlypDestination,
   ClientLoggingConfig,
+  CloudDestinationConfig,
   DatabaseLoggerConfig,
   LogFileConfig,
   LogRotationConfig,

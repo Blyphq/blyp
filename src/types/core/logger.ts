@@ -4,6 +4,7 @@ import type { PostHogSender } from '../connectors/posthog';
 import type { SentrySender } from '../connectors/sentry';
 import type { HTTPRegistry } from '../connectors/http';
 import type { OTLPRegistry } from '../connectors/otlp';
+import type { CloudSender } from '../connectors/cloud';
 import type { BlypPrimarySink } from '../../core/primary-sink';
 import type { StructuredLog, StructuredLogPayload } from './structured-log';
 import type { ResolvedRedactionConfig } from './config';
@@ -44,6 +45,7 @@ export interface LoggerFactoryHandle {
   sentry: SentrySender;
   http: HTTPRegistry;
   otlp: OTLPRegistry;
+  cloud: CloudSender;
   redact: ResolvedRedactionConfig;
   sink: BlypPrimarySink;
   create: (source: InternalLoggerSource, bindings?: Record<string, unknown>) => BlypLogger;
