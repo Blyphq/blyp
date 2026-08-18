@@ -18,6 +18,7 @@ The test suite is split by concern instead of using one mixed catch-all file.
 - `frameworks/express.test.ts` - Express integration coverage
 - `frameworks/fastify.test.ts` - Fastify integration coverage
 - `frameworks/nextjs.test.ts` - Next.js App Router integration coverage
+- `frameworks/farmjs.test.ts` - Farm.js request, lifecycle, telemetry, and client-hook coverage
 - `frameworks/react-router.test.ts` - React Router integration coverage
 - `frameworks/tanstack-start.test.ts` - TanStack Start integration coverage
 - `frameworks/sveltekit.test.ts` - SvelteKit integration coverage
@@ -72,6 +73,7 @@ The test suite covers:
 - Express
 - Fastify
 - Next.js App Router
+- Farm.js
 - React Router
 - TanStack Start
 - SvelteKit

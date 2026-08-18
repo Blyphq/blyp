@@ -238,6 +238,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
     remoteSync: config.remoteSync ?? true,
     connector: config.connector,
     metadata: config.metadata,
+    pageContext: config.pageContext ?? 'full',
   };
 
   const delivery = state.delivery ??
@@ -307,6 +308,7 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
       normalizeMetadata(resolvedConfig.metadata),
       runtimeRedaction
     ) as Record<string, unknown> | undefined;
+    const pageContext = getBrowserPageContext();
     const payload: ClientLogEvent = {
       type: 'client_log',
       source: 'client',
@@ -320,7 +322,9 @@ function buildClientLogger(config: ClientLoggerConfig, state: ClientLoggerState)
         ? sanitizeLogValue(state.bindings, runtimeRedaction) as Record<string, unknown>
         : undefined,
       clientTimestamp: new Date().toISOString(),
-      page: getBrowserPageContext(),
+      page: resolvedConfig.pageContext === 'path-only'
+        ? { pathname: pageContext.pathname }
+        : pageContext,
       browser: getBrowserContext(),
       session: {
         pageId: state.pageId,

@@ -44,6 +44,8 @@ export interface ClientLoggerConfig {
   remoteSync?: boolean;
   connector?: ClientConnectorRequest;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
+  /** Browser page fields included in remote payloads. @default "full" */
+  pageContext?: 'full' | 'path-only';
   delivery?: RemoteDeliveryConfig;
   traceId?: string;
 }

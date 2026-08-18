@@ -29,6 +29,7 @@ try {
       "./frameworks/astro.test.ts",
       "./frameworks/nitro.test.ts",
       "./frameworks/nuxt.test.ts",
+      "./frameworks/farmjs.test.ts",
     ],
     outdir: "./dist",
     target: "bun"
@@ -47,4 +48,4 @@ console.log("   - Color Functions: ✅ Working");
 console.log("   - Standalone Logger: ✅ Working");
 console.log("   - Client Logger: ✅ Working");
 console.log("   - File Logging: ✅ Working");
-console.log("   - Server Frameworks: ✅ Elysia / Hono / Express / Fastify / Next.js / TanStack Start / SolidStart / SvelteKit");
+console.log("   - Server Frameworks: ✅ Elysia / Hono / Express / Fastify / Next.js / TanStack Start / SolidStart / SvelteKit / Farm.js");

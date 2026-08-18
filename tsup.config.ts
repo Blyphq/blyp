@@ -14,6 +14,7 @@ export default defineConfig([
       fastify: 'src/frameworks/fastify/index.ts',
       nestjs: 'src/frameworks/nestjs/index.ts',
       nextjs: 'src/frameworks/nextjs/index.ts',
+      farmjs: 'src/frameworks/farmjs/index.ts',
       'react-router': 'src/frameworks/react-router/index.ts',
       'tanstack-start': 'src/frameworks/tanstack-start/index.ts',
       'solid-start': 'src/frameworks/solid-start/index.ts',
@@ -87,6 +88,10 @@ export default defineConfig([
       '@opentelemetry/resources',
       '@opentelemetry/sdk-logs',
       'jiti',
+      '@farm.js/core',
+      '@farm.js/core/observability',
+      '@farm.js/core/request',
+      '@blyp/core/client',
     ],
     noExternal: [],
     esbuildOptions(options) {

@@ -109,6 +109,7 @@ describe('package surface', () => {
         fastify: ['dist/frameworks/fastify/index.d.ts'],
         nestjs: ['dist/frameworks/nestjs/index.d.ts'],
         nextjs: ['dist/frameworks/nextjs/index.d.ts'],
+        farmjs: ['dist/frameworks/farmjs/index.d.ts'],
         'react-router': ['dist/frameworks/react-router/index.d.ts'],
         'tanstack-start': ['dist/frameworks/tanstack-start/index.d.ts'],
         'solid-start': ['dist/frameworks/solid-start/index.d.ts'],
@@ -193,6 +194,11 @@ describe('package surface', () => {
         types: './dist/frameworks/nextjs/index.d.ts',
         import: './dist/nextjs.mjs',
         require: './dist/nextjs.js',
+      },
+      './farmjs': {
+        types: './dist/frameworks/farmjs/index.d.ts',
+        import: './dist/farmjs.mjs',
+        require: './dist/farmjs.js',
       },
       './react-router': {
         types: './dist/frameworks/react-router/index.d.ts',
@@ -473,6 +479,42 @@ describe('package surface', () => {
     expect(result.status).toBe(0);
   });
 
+  it('publishes the typed Farm.js plugin and request-aware logger', () => {
+    const result = compileFixture(`
+      import { defineConfig } from '@farm.js/core';
+      import {
+        blypPlugin,
+        logger,
+        type FarmJsLoggerContext,
+      } from '@blyp/core/farmjs';
+
+      const plugin = blypPlugin({
+        traceHeader: 'x-app-trace-id',
+        customProps(ctx: FarmJsLoggerContext) {
+          return {
+            kind: ctx.kind,
+            route: ctx.route?.pattern,
+          };
+        },
+        telemetry: {
+          events: ['server.ready', 'build.error'],
+          browser: {
+            sampleRate: 0.25,
+            connector: { type: 'otlp', name: 'browser' },
+          },
+        },
+      });
+
+      logger.child({ feature: 'catalog' }).info('loaded');
+
+      export default defineConfig({
+        plugins: [plugin],
+      });
+    `);
+
+    expect(result.status).toBe(0);
+  });
+
   it('rejects invalid typed blyp.config authoring through the published declarations', () => {
     const result = compileFixture(`
       import { defineConfig } from '@blyp/core';
@@ -495,6 +537,7 @@ describe('package surface', () => {
     const packageJson = readPackageJson();
 
     const optionalPeers = [
+      '@farm.js/core',
       '@clerk/backend',
       '@better-agent/core',
       'better-auth',
@@ -535,6 +578,7 @@ describe('package surface', () => {
     }
 
     expect(packageJson.peerDependencies?.['@databuddy/sdk']).toBe('^2');
+    expect(packageJson.peerDependencies?.['@farm.js/core']).toBe('>=0.1.0-beta.40 <0.2.0');
     expect(packageJson.peerDependencies?.['better-auth']).toBe('^1.6.5');
     expect(packageJson.peerDependencies?.['@logtail/node']).toBe('^0.5');
     expect(packageJson.peerDependencies?.['@opentelemetry/api-logs']).toBe('^0.206');

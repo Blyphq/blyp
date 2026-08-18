@@ -1,11 +1,12 @@
 {
   "name": "@blyp/core",
   "version": "0.1.25",
-  "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, and SvelteKit.",
+  "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, Farm.js, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, and SvelteKit.",
   "keywords": [
     "logger",
     "pino",
     "elysia",
+    "farmjs",
     "standalone",
     "bun",
     "typescript",
@@ -55,6 +56,9 @@
       ],
       "nextjs": [
         "dist/frameworks/nextjs/index.d.ts"
+      ],
+      "farmjs": [
+        "dist/frameworks/farmjs/index.d.ts"
       ],
       "react-router": [
         "dist/frameworks/react-router/index.d.ts"
@@ -182,6 +186,11 @@
       "types": "./dist/frameworks/nextjs/index.d.ts",
       "import": "./dist/nextjs.mjs",
       "require": "./dist/nextjs.js"
+    },
+    "./farmjs": {
+      "types": "./dist/frameworks/farmjs/index.d.ts",
+      "import": "./dist/farmjs.mjs",
+      "require": "./dist/farmjs.js"
     },
     "./react-router": {
       "types": "./dist/frameworks/react-router/index.d.ts",
@@ -322,6 +331,7 @@
     "clean": "rm -rf dist .log"
   },
   "devDependencies": {
+    "@farm.js/core": "0.1.0-beta.40",
     "@better-agent/core": "0.1.0-beta.1",
     "@databuddy/sdk": "2.3.29",
     "@logtail/node": "0.5.8",
@@ -350,6 +360,7 @@
     "tsup": "8.5.1"
   },
   "peerDependencies": {
+    "@farm.js/core": ">=0.1.0-beta.40 <0.2.0",
     "@clerk/backend": "^2",
     "@better-agent/core": "^0.1.0-beta.1",
     "better-auth": "^1.6.5",
@@ -385,6 +396,9 @@
     "typescript": "^5"
   },
   "peerDependenciesMeta": {
+    "@farm.js/core": {
+      "optional": true
+    },
     "@clerk/backend": {
       "optional": true
     },

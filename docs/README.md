@@ -235,6 +235,8 @@ logger.child({ feature: 'checkout' }).warn('Client validation failed');
 
 The client logger logs to the browser console by default and queues remote events in memory when delivery fails. By default it retries offline, network, `429`, and `5xx` failures up to `3` times with a `5000ms` delay and keeps up to `100` pending events before dropping the oldest queued item. It uses `POST /inngest` by default, but you can override the path and delivery policy.
 
+Set `pageContext: 'path-only'` to send only `window.location.pathname` as page context. The default, `'full'`, also includes the current URL, query string, hash, title, and referrer.
+
 ### Expo Logger Sync
 
 ```typescript
@@ -1452,6 +1454,78 @@ export const GET = nextLogger.withLogger(async (_request, _context, { log }) => 
 export const POST = nextLogger.clientLogHandler;
 ```
 
+### Farm.js
+
+Install Blyp alongside Farm and register the plugin once:
+
+```typescript
+// farm.config.ts
+import { defineConfig } from '@farm.js/core';
+import { blypPlugin } from '@blyp/core/farmjs';
+
+export default defineConfig({
+  plugins: [
+    blypPlugin({
+      level: 'info',
+      telemetry: {
+        events: 'curated',
+        browser: {
+          sampleRate: 0.1,
+        },
+      },
+    }),
+  ],
+});
+```
+
+Use the request-aware Farm logger from server pages, API routes, middleware, and server actions:
+
+```typescript
+import { logger } from '@blyp/core/farmjs';
+
+export async function GET() {
+  logger.info('loaded products');
+
+  const checkout = logger.createStructuredLog('checkout', {
+    cartId: 'cart_123',
+  });
+  checkout.info('validated cart');
+  checkout.emit();
+
+  return Response.json({ ok: true });
+}
+```
+
+The plugin adds `x-blyp-trace-id` to responses, reuses an incoming Blyp trace or active Farm/OpenTelemetry trace when available, and associates handler logs with the same request. Structured emits suppress the automatic HTTP record, matching the other promise-based framework adapters.
+
+`telemetry.events` accepts:
+
+- `'curated'` (default): server/build milestones, route summaries, validation and not-found events, warnings, and errors.
+- `'all'`: every non-request Farm event. Farm `request.*` events remain excluded because Blyp emits richer `http_request` and `http_error` records.
+- A `FarmEventType[]`: an explicit allowlist.
+- `false`: no Farm event forwarding.
+
+Browser telemetry is enabled by default. It records completed hydration and navigation timing, browser/hydration/navigation errors, and allowlisted Web Vital-style performance entries. Non-error events are sampled once per page session at 100% in development and 10% in production; errors are never sampled out. Disable or customize it with:
+
+```typescript
+blypPlugin({
+  telemetry: {
+    browser: {
+      hydration: false,
+      navigation: true,
+      performance: true,
+      errors: true,
+      sampleRate: 0.25,
+      connector: { type: 'otlp', name: 'browser' },
+    },
+  },
+});
+```
+
+Farm browser events post to Blyp's configured `clientLogging.path` (default `/inngest`), which the plugin handles without a separate API route. Browser lifecycle payloads include pathnames, route patterns, timings, deployment/navigation identifiers, and normalized errors. Query strings, hashes, titles, referrers, request bodies, route data, and arbitrary resource URLs are omitted. Normal Blyp redaction, retries, connector forwarding, and beacon fallback still apply.
+
+The Farm.js adapter currently supports Node and Bun presets. Known edge-only presets fail during configuration with an explicit error instead of bundling Node-only logger behavior.
+
 ### React Router
 
 ```typescript
@@ -1802,6 +1876,7 @@ interface ClientLoggerConfig {
   localConsole?: boolean;
   remoteSync?: boolean;
   metadata?: Record<string, unknown> | (() => Record<string, unknown>);
+  pageContext?: 'full' | 'path-only';
   delivery?: RemoteDeliveryConfig;
 }
 

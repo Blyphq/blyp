@@ -65,7 +65,7 @@ Inside framework handlers, `createStructuredLog(...)` binds to the active reques
 
 ## Framework example
 
-Blyp supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, SvelteKit, and Cloudflare Workers.
+Blyp supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, Farm.js, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, SvelteKit, and Cloudflare Workers.
 
 ```ts
 import { Elysia } from 'elysia';
@@ -78,6 +78,30 @@ const app = new Elysia()
 ```
 
 See the [framework integration docs](docs/README.md#framework-integrations) for the full adapter matrix and framework-specific examples.
+
+### Farm.js
+
+```ts
+// farm.config.ts
+import { defineConfig } from '@farm.js/core';
+import { blypPlugin } from '@blyp/core/farmjs';
+
+export default defineConfig({
+  plugins: [blypPlugin()],
+});
+```
+
+```ts
+// src/app/api/products/route.ts
+import { logger } from '@blyp/core/farmjs';
+
+export async function GET() {
+  logger.info('loaded products');
+  return Response.json({ ok: true });
+}
+```
+
+The plugin automatically records requests, errors, selected Farm lifecycle events, browser navigation and performance telemetry, and browser errors. It currently supports Farm's Node and Bun server runtimes.
 
 ## Better Auth
 
