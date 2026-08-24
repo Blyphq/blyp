@@ -121,4 +121,20 @@ export default defineConfig([
     platform: 'browser',
     external: ['expo-network'],
   },
+  {
+    entry: {
+      convex: 'src/frameworks/convex/index.ts',
+    },
+    format: ['cjs', 'esm'],
+    dts: false,
+    splitting: false,
+    sourcemap: false,
+    clean: false,
+    outDir: 'dist',
+    target: 'es2020',
+    minify: true,
+    treeshake: true,
+    platform: 'neutral',
+    external: ['async_hooks', 'node:async_hooks'],
+  },
 ])

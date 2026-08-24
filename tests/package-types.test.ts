@@ -133,6 +133,7 @@ describe('package surface', () => {
         otlp: ['dist/connectors/otlp/index.d.ts'],
         sentry: ['dist/connectors/sentry/index.d.ts'],
         workers: ['dist/frameworks/workers/index.d.ts'],
+        convex: ['dist/frameworks/convex/index.d.ts'],
       },
     });
   });
@@ -314,6 +315,11 @@ describe('package surface', () => {
         types: './dist/frameworks/workers/index.d.ts',
         import: './dist/workers.mjs',
         require: './dist/workers.js',
+      },
+      './convex': {
+        types: './dist/frameworks/convex/index.d.ts',
+        import: './dist/convex.mjs',
+        require: './dist/convex.js',
       },
     };
 
@@ -510,6 +516,43 @@ describe('package surface', () => {
       export default defineConfig({
         plugins: [plugin],
       });
+    `);
+
+    expect(result.status).toBe(0);
+  });
+
+  it('publishes the Convex isolate logger through the subpath export', () => {
+    const result = compileFixture(`
+      import {
+        logger,
+        createConvexLogger,
+        configureConvexLogger,
+      } from '@blyp/core/convex';
+
+      configureConvexLogger({
+        serviceName: 'api',
+        otlp: {
+          endpoint: 'https://otlp.example/v1/logs',
+        },
+      });
+
+      const billing = createConvexLogger({
+        serviceName: 'billing',
+        function: 'billing:charge',
+      });
+
+      logger.info('started');
+      billing.child({ requestId: 'req_1' }).info('charged');
+
+      const handler = logger.wrap(async (
+        ctx: { runQuery: () => Promise<null>; runMutation: () => Promise<null> },
+        args: { id: string }
+      ) => {
+        logger.bind(ctx).info('wrapped', args);
+        return args.id;
+      });
+
+      handler;
     `);
 
     expect(result.status).toBe(0);
