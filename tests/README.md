@@ -25,6 +25,8 @@ The test suite is split by concern instead of using one mixed catch-all file.
 - `frameworks/astro.test.ts` - Astro integration coverage
 - `frameworks/nitro.test.ts` - Nitro integration coverage
 - `frameworks/nuxt.test.ts` - Nuxt integration coverage
+- `frameworks/workers.test.ts` - Cloudflare Workers integration coverage
+- `frameworks/convex.test.ts` - Convex isolate logger, bind/wrap, and action-only OTLP coverage
 - `helpers/` - shared fixtures and temp-dir utilities
 - `run-tests.ts` - lightweight test runner helper
 
