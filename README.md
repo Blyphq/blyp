@@ -65,7 +65,7 @@ Inside framework handlers, `createStructuredLog(...)` binds to the active reques
 
 ## Framework example
 
-Blyp supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, Farm.js, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, SvelteKit, and Cloudflare Workers.
+Blyp supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, Farm.js, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, SvelteKit, Cloudflare Workers, and Convex.
 
 ```ts
 import { Elysia } from 'elysia';

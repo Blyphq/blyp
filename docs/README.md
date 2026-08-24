@@ -1687,6 +1687,62 @@ try {
 
 The Workers integration is console-based. It does not use file logging, does not read project config files, and does not include client-log ingestion in this first version. Use the subpath import `@blyp/core/workers`.
 
+### Convex
+
+Convex's default runtime is an isolate, not Node or Bun. Import `@blyp/core/convex` instead of the root logger so Convex does not bundle pino, filesystems, or the OpenTelemetry Node SDK.
+
+Use the default logger in queries, mutations, and actions. Keep importing `mutation` / `query` / `action` from `convex/server` — Blyp does not re-export those builders.
+
+```typescript
+import { mutation } from 'convex/server';
+import { v } from 'convex/values';
+import { logger } from '@blyp/core/convex';
+
+export const send = mutation({
+  args: { body: v.string() },
+  handler: async (ctx, args) => {
+    logger.info('send started', { body: args.body });
+  },
+});
+```
+
+Configure the default instance once if you want action logs to export over OTLP:
+
+```typescript
+import { configureConvexLogger, logger } from '@blyp/core/convex';
+
+configureConvexLogger({
+  serviceName: 'api',
+  otlp: {
+    endpoint: process.env.BLYP_OTLP_ENDPOINT,
+  },
+});
+
+export { logger };
+```
+
+`createConvexLogger()` is only for a second instance (tests, another service name, or a different OTLP endpoint). `logger.child({ function: 'messages:send' })` adds bindings without creating a new logger.
+
+Queries and mutations can only write `console.*` (Convex dashboard / `npx convex logs`). Actions can also `fetch` OTLP. Bind `ctx` so Blyp can tell them apart:
+
+```typescript
+import { action } from 'convex/server';
+import { v } from 'convex/values';
+import { logger } from '@blyp/core/convex';
+
+export const importFeed = action({
+  args: { url: v.string() },
+  handler: logger.wrap(async (ctx, args) => {
+    logger.info('import started', { url: args.url });
+    // ...
+  }),
+});
+```
+
+`wrap` does not wrap Convex's `action` helper. It wraps your handler: it binds `ctx` for that call and `await`s OTLP `flush()` when the handler is an action. If you keep a stock handler, call `logger.bind(ctx)` and `await logger.flush()` yourself at the end of actions.
+
+This adapter does not read `blyp.config.ts`, does not write Convex tables or file storage, and does not ingest Convex Pro log streams. Use the subpath import `@blyp/core/convex`.
+
 ---
 
 ## Advanced configuration
