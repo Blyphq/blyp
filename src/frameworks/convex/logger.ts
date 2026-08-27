@@ -15,6 +15,10 @@ import type {
   ResolvedConvexOtlpConfig,
 } from '../../types/frameworks/convex';
 import {
+  applyConvexBlypConfig,
+  shouldEmitConvexLevel,
+} from './config';
+import {
   canSendRemoteLogs,
   createConvexRuntimeStorage,
   createConvexRuntimeStore,
@@ -32,93 +36,6 @@ interface ConvexLoggerState {
   readonly otlp: ResolvedConvexOtlpConfig;
   readonly storage: ReturnType<typeof createConvexRuntimeStorage>;
   readonly pending: Promise<void>[];
-}
-
-function getEnv(name: string): string | undefined {
-  try {
-    if (typeof process === 'undefined' || typeof process.env !== 'object' || !process.env) {
-      return undefined;
-    }
-
-    const value = process.env[name];
-    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function isAbsoluteHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-function withLogsPath(endpoint: string): string {
-  if (/\/v1\/logs\/?$/.test(endpoint)) {
-    return endpoint;
-  }
-
-  return endpoint.endsWith('/') ? `${endpoint}v1/logs` : `${endpoint}/v1/logs`;
-}
-
-function resolveServiceName(config: ConvexLoggerConfig): string {
-  const otlpName = config.otlp && config.otlp !== false
-    ? config.otlp.serviceName
-    : undefined;
-
-  return config.serviceName
-    ?? otlpName
-    ?? getEnv('BLYP_SERVICE_NAME')
-    ?? 'convex';
-}
-
-function resolveOtlpHeaders(config: ConvexLoggerConfig): Record<string, string> {
-  const otlp = config.otlp && config.otlp !== false ? config.otlp : undefined;
-  const headers = {
-    ...(otlp?.headers ?? {}),
-  };
-
-  if (headers.Authorization === undefined) {
-    const auth = otlp?.auth ?? getEnv('BLYP_OTLP_AUTH');
-    if (auth) {
-      headers.Authorization = auth;
-    }
-  }
-
-  return headers;
-}
-
-function resolveOtlpEndpoint(config: ConvexLoggerConfig): string | undefined {
-  if (config.otlp === false) {
-    return undefined;
-  }
-
-  const configured = config.otlp?.endpoint
-    ?? getEnv('BLYP_OTLP_ENDPOINT')
-    ?? getEnv('OTEL_EXPORTER_OTLP_LOGS_ENDPOINT');
-
-  if (configured) {
-    return configured;
-  }
-
-  const rootEndpoint = getEnv('OTEL_EXPORTER_OTLP_ENDPOINT');
-  return rootEndpoint ? withLogsPath(rootEndpoint) : undefined;
-}
-
-function resolveOtlpConfig(config: ConvexLoggerConfig): ResolvedConvexOtlpConfig {
-  const serviceName = resolveServiceName(config);
-  const endpoint = resolveOtlpEndpoint(config);
-  const enabled = Boolean(endpoint && isAbsoluteHttpUrl(endpoint));
-
-  return {
-    enabled,
-    endpoint: enabled ? endpoint : undefined,
-    headers: resolveOtlpHeaders(config),
-    serviceName,
-  };
 }
 
 function getConsoleMethod(level: ConvexLogLevel): ConvexConsoleMethod {
@@ -230,6 +147,10 @@ function buildConvexLogger(state: ConvexLoggerState): ConvexLogger {
   };
 
   const emit = (level: ConvexLogLevel, message: unknown, args: unknown[]): void => {
+    if (!shouldEmitConvexLevel(level, state.config.level)) {
+      return;
+    }
+
     const runtime = resolveRuntime(state);
     const data = sanitizeLogValue(
       normalizeStructuredData(message, args),
@@ -275,6 +196,10 @@ function buildConvexLogger(state: ConvexLoggerState): ConvexLogger {
       emit('critical', message, args);
     },
     table: (message, data) => {
+      if (!shouldEmitConvexLevel('table', state.config.level)) {
+        return;
+      }
+
       emit('table', message, data === undefined ? [] : [data]);
       if (typeof console !== 'undefined' && typeof console.table === 'function' && data !== undefined) {
         console.table(sanitizeLogValue(data, state.redact));
@@ -295,7 +220,7 @@ function buildConvexLogger(state: ConvexLoggerState): ConvexLogger {
         boundCtx: ctx,
       });
     },
-    wrap: (handler) => {
+    wrap: ((handler) => {
       return async (ctx, ...args) => {
         const store = createConvexRuntimeStore(ctx);
         try {
@@ -306,7 +231,7 @@ function buildConvexLogger(state: ConvexLoggerState): ConvexLogger {
           }
         }
       };
-    },
+    }) as ConvexLogger['wrap'],
     flush: async () => {
       if (state.pending.length === 0) {
         return;
@@ -327,8 +252,12 @@ function buildConvexLogger(state: ConvexLoggerState): ConvexLogger {
           ...state.bindings,
         }),
         write: (payload, message) => {
-          const runtime = resolveRuntime(state);
           const writeLevel = payload.level === 'warning' ? 'warning' : payload.level;
+          if (!shouldEmitConvexLevel(writeLevel, state.config.level)) {
+            return;
+          }
+
+          const runtime = resolveRuntime(state);
           const record = sanitizeLogValue({
             blyp: 1,
             msg: message,
@@ -353,11 +282,13 @@ function buildConvexLogger(state: ConvexLoggerState): ConvexLogger {
 }
 
 function createLoggerState(config: ConvexLoggerConfig = {}): ConvexLoggerState {
+  const applied = applyConvexBlypConfig(config);
+
   return {
     config,
     bindings: createInitialBindings(config),
-    redact: resolveRedactionConfig(undefined, config.redact),
-    otlp: resolveOtlpConfig(config),
+    redact: resolveRedactionConfig(undefined, applied.redact),
+    otlp: applied.otlp,
     storage: createConvexRuntimeStorage(),
     pending: [],
   };

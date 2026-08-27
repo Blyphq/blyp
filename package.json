@@ -131,6 +131,9 @@
       ],
       "convex": [
         "dist/frameworks/convex/index.d.ts"
+      ],
+      "config": [
+        "dist/config.d.ts"
       ]
     }
   },
@@ -314,6 +317,11 @@
       "types": "./dist/frameworks/convex/index.d.ts",
       "import": "./dist/convex.mjs",
       "require": "./dist/convex.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.js"
     }
   },
   "files": [

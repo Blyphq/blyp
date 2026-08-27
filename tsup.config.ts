@@ -124,6 +124,7 @@ export default defineConfig([
   {
     entry: {
       convex: 'src/frameworks/convex/index.ts',
+      config: 'src/config.ts',
     },
     format: ['cjs', 'esm'],
     dts: false,

@@ -122,36 +122,127 @@ export function buildOtlpLogsBody(
   });
 }
 
+function payloadFromRecord(record: ConvexOtlpRecord): unknown {
+  const raw = record.attributes['blyp.payload'];
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  return {
+    level: record.level,
+    message: record.message,
+    ...record.attributes,
+  };
+}
+
+function buildHttpLogBody(record: ConvexOtlpRecord, target: NonNullable<ResolvedConvexOtlpConfig['targets']>[number]): string {
+  return JSON.stringify({
+    timestamp: record.timestamp,
+    level: record.level,
+    message: record.message,
+    source: 'server',
+    serviceName: target.serviceName,
+    target: target.name ?? 'http',
+    payload: payloadFromRecord(record),
+  });
+}
+
+function buildDatabuddyTrackBody(record: ConvexOtlpRecord, target: NonNullable<ResolvedConvexOtlpConfig['targets']>[number]): string {
+  return JSON.stringify({
+    name: 'log',
+    websiteId: target.websiteId,
+    ...(target.namespace ? { namespace: target.namespace } : {}),
+    source: target.source ?? 'convex',
+    timestamp: record.timestamp,
+    properties: {
+      blyp_level: record.level,
+      blyp_source: 'convex',
+      message: record.message,
+      service_name: target.serviceName,
+      blyp_payload: record.attributes['blyp.payload'] ?? JSON.stringify(payloadFromRecord(record)),
+      ...(typeof record.attributes['blyp.function_kind'] === 'string'
+        ? { function_kind: record.attributes['blyp.function_kind'] }
+        : {}),
+      ...(typeof record.attributes['blyp.function'] === 'string'
+        ? { function: record.attributes['blyp.function'] }
+        : {}),
+    },
+  });
+}
+
+function buildExportBody(
+  record: ConvexOtlpRecord,
+  target: NonNullable<ResolvedConvexOtlpConfig['targets']>[number]
+): string {
+  if (target.format === 'http') {
+    return buildHttpLogBody(record, target);
+  }
+
+  if (target.format === 'databuddy') {
+    return buildDatabuddyTrackBody(record, target);
+  }
+
+  return buildOtlpLogsBody(record, {
+    enabled: true,
+    endpoint: target.endpoint,
+    headers: target.headers,
+    serviceName: target.serviceName,
+    targets: [target],
+  });
+}
+
 export async function sendOtlpLog(
   record: ConvexOtlpRecord,
   config: ResolvedConvexOtlpConfig,
   transport?: (body: string, endpoint: string) => Promise<ConvexOtlpTransportResult>
 ): Promise<void> {
-  if (!config.enabled || !config.endpoint) {
+  const targets = config.targets?.length
+    ? config.targets
+    : config.endpoint
+      ? [{
+          endpoint: config.endpoint,
+          headers: config.headers,
+          serviceName: config.serviceName,
+        }]
+      : [];
+
+  if (!config.enabled || targets.length === 0) {
     return;
   }
 
-  const body = buildOtlpLogsBody(record, config);
+  await Promise.all(targets.map(async (target) => {
+    const body = buildExportBody(record, target);
 
-  try {
-    const result = transport
-      ? await transport(body, config.endpoint)
-      : await postOtlp(config, body);
+    try {
+      const result = transport
+        ? await transport(body, target.endpoint)
+        : await postOtlp({
+            enabled: true,
+            endpoint: target.endpoint,
+            headers: target.headers,
+            serviceName: target.serviceName,
+            targets: [target],
+          }, body);
 
-    if (!result.ok) {
+      if (!result.ok) {
+        warnOnce(
+          `export:${target.endpoint}`,
+          `[Blyp] Convex export failed${result.status ? ` (${result.status})` : ''}.`,
+          result.error
+        );
+      }
+    } catch (error) {
       warnOnce(
-        `otlp:${config.endpoint}`,
-        `[Blyp] Convex OTLP export failed${result.status ? ` (${result.status})` : ''}.`,
-        result.error
+        `export:${target.endpoint}`,
+        '[Blyp] Convex export failed.',
+        error
       );
     }
-  } catch (error) {
-    warnOnce(
-      `otlp:${config.endpoint}`,
-      '[Blyp] Convex OTLP export failed.',
-      error
-    );
-  }
+  }));
 }
 
 async function postOtlp(

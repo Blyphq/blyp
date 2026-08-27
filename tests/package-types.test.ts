@@ -134,6 +134,7 @@ describe('package surface', () => {
         sentry: ['dist/connectors/sentry/index.d.ts'],
         workers: ['dist/frameworks/workers/index.d.ts'],
         convex: ['dist/frameworks/convex/index.d.ts'],
+        config: ['dist/config.d.ts'],
       },
     });
   });
@@ -320,6 +321,11 @@ describe('package surface', () => {
         types: './dist/frameworks/convex/index.d.ts',
         import: './dist/convex.mjs',
         require: './dist/convex.js',
+      },
+      './config': {
+        types: './dist/config.d.ts',
+        import: './dist/config.mjs',
+        require: './dist/config.js',
       },
     };
 
@@ -527,13 +533,35 @@ describe('package surface', () => {
         logger,
         createConvexLogger,
         configureConvexLogger,
+        defineConfig,
       } from '@blyp/core/convex';
+      import { defineConfig as defineIsolateConfig } from '@blyp/core/config';
+
+      const shared = defineIsolateConfig({
+        destination: 'file',
+        connectors: {
+          otlp: [{
+            name: 'axiom',
+            endpoint: 'https://api.axiom.co/v1/logs',
+            auth: 'Bearer axiom',
+          }],
+        },
+      });
+
+      configureConvexLogger(shared);
+      defineConfig(shared);
 
       configureConvexLogger({
         serviceName: 'api',
-        otlp: {
-          endpoint: 'https://otlp.example/v1/logs',
+        posthog: { projectKey: 'phc_test' },
+        axiom: { token: 'axiom', dataset: 'convex' },
+        betterstack: {
+          sourceToken: 'src',
+          ingestingHost: 'https://in.logs.betterstack.com',
         },
+        sentry: { dsn: 'https://public@o1.ingest.sentry.io/1' },
+        databuddy: { apiKey: 'db', websiteId: 'site' },
+        http: [{ name: 'webhook', endpoint: 'https://hooks.example/logs' }],
       });
 
       const billing = createConvexLogger({

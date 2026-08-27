@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import {
+  applyConvexBlypConfig,
   configureConvexLogger,
   createConvexLogger,
   logger,
+  resetConvexConfigWarningsForTests,
   resolveConvexFunctionKind,
 } from '../../src/frameworks/convex';
 import {
@@ -32,6 +34,20 @@ const ENV_KEYS = [
   'BLYP_SERVICE_NAME',
   'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT',
   'OTEL_EXPORTER_OTLP_ENDPOINT',
+  'POSTHOG_PROJECT_KEY',
+  'POSTHOG_HOST',
+  'AXIOM_TOKEN',
+  'AXIOM_API_TOKEN',
+  'AXIOM_DATASET',
+  'AXIOM_URL',
+  'SOURCE_TOKEN',
+  'BETTERSTACK_SOURCE_TOKEN',
+  'INGESTING_HOST',
+  'BETTERSTACK_INGESTING_HOST',
+  'SENTRY_DSN',
+  'DATABUDDY_API_KEY',
+  'DATABUDDY_WEBSITE_ID',
+  'DATABUDDY_API_URL',
 ] as const;
 
 const originalEnv: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
@@ -193,6 +209,7 @@ describe('Convex logger', () => {
     restoreConsole();
     installConsoleSpies(calls);
     resetConvexOtlpWarningsForTests();
+    resetConvexConfigWarningsForTests();
     configureConvexLogger({ otlp: false });
   });
 
@@ -442,9 +459,9 @@ describe('Convex logger', () => {
       },
     });
 
-    const handler = logger.wrap(async (ctx: ReturnType<typeof actionCtx>, args: { id: string }) => {
+    const handler = logger.wrap(async (_ctx: ReturnType<typeof actionCtx>, args: { id: string }) => {
       logger.info('wrapped', { id: args.id });
-      return ctx.runQuery ? args.id : 'missing';
+      return args.id;
     });
 
     const result = await handler(actionCtx(), { id: 'abc' });
@@ -629,7 +646,7 @@ describe('Convex logger', () => {
     await log.flush();
 
     const warnings = calls.warn.map((args) => String(args[0]));
-    expect(warnings.filter((message) => message.includes('Convex OTLP export failed'))).toHaveLength(1);
+    expect(warnings.filter((message) => message.includes('Convex export failed'))).toHaveLength(1);
   });
 
   it('shutdown flushes pending action logs', async () => {
@@ -647,17 +664,512 @@ describe('Convex logger', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('does not import node logger internals', async () => {
-    const source = await Bun.file(
-      new URL('../../src/frameworks/convex/logger.ts', import.meta.url)
-    ).text();
+  it('uses auto OTLP targets from a shared blyp.config object', async () => {
+    const sent: string[] = [];
+    const log = createConvexLogger({
+      destination: 'file',
+      connectors: {
+        posthog: {
+          enabled: true,
+          projectKey: 'phc_test',
+        },
+        otlp: [
+          {
+            name: 'axiom',
+            endpoint: 'https://api.axiom.co/v1/logs',
+            auth: 'Bearer axiom-token',
+            headers: {
+              'X-Axiom-Dataset': 'convex',
+            },
+          },
+          {
+            name: 'posthog',
+            endpoint: 'https://us.i.posthog.com/i/v1/logs',
+            auth: 'Bearer phc_test',
+          },
+          {
+            name: 'manual-only',
+            mode: 'manual',
+            endpoint: 'https://manual.example/v1/logs',
+          },
+        ],
+      },
+      transport: async (_body, endpoint) => {
+        sent.push(endpoint);
+        return { ok: true, status: 200 };
+      },
+    });
 
-    expect(source).not.toContain("from '../../core/logger'");
-    expect(source).not.toContain("from '../../core/file-logger'");
-    expect(source).not.toContain("from '../../connectors/otlp/sender'");
-    expect(source).not.toContain("from 'pino'");
-    expect(source).not.toContain('convex/server');
-    expect(source).not.toContain('from \'zod\'');
+    log.bind(actionCtx()).info('shared config');
+    await log.flush();
+
+    expect(sent.sort()).toEqual([
+      'https://api.axiom.co/v1/logs',
+      'https://us.i.posthog.com/i/v1/logs',
+    ]);
+
+    const warnings = calls.warn.map((args) => String(args[0]));
+    expect(warnings.some((message) => message.includes('ignores file logging'))).toBe(true);
+    expect(warnings.some((message) => message.includes('ignores connectors.posthog'))).toBe(false);
+    expect(warnings.some((message) => message.includes('no remote sink'))).toBe(false);
+  });
+
+  it('maps connectors.posthog to PostHog logs OTLP', async () => {
+    const sent: Array<{ endpoint: string }> = [];
+    const log = createConvexLogger({
+      connectors: {
+        posthog: {
+          enabled: true,
+          projectKey: 'phc_test',
+        },
+      },
+      transport: async (_body, endpoint) => {
+        sent.push({ endpoint });
+        return { ok: true, status: 200 };
+      },
+    });
+
+    log.bind(actionCtx()).info('posthog shared');
+    await log.flush();
+
+    expect(sent.map((entry) => entry.endpoint)).toEqual([
+      'https://us.i.posthog.com/i/v1/logs',
+    ]);
+    expect(calls.warn.some((args) => String(args[0]).includes('no remote sink'))).toBe(false);
+  });
+
+  it('exports Convex-local posthog and axiom configs over OTLP', async () => {
+    const sent: string[] = [];
+    const log = createConvexLogger({
+      serviceName: 'api',
+      posthog: {
+        projectKey: 'phc_test',
+      },
+      axiom: {
+        token: 'axiom-token',
+        dataset: 'convex',
+      },
+      transport: async (_body, endpoint) => {
+        sent.push(endpoint);
+        return { ok: true, status: 200 };
+      },
+    });
+
+    log.bind(actionCtx()).info('vendors');
+    await log.flush();
+
+    expect(sent.sort()).toEqual([
+      'https://api.axiom.co/v1/logs',
+      'https://us.i.posthog.com/i/v1/logs',
+    ]);
+
+    const resolved = applyConvexBlypConfig({
+      serviceName: 'api',
+      posthog: { projectKey: 'phc_test' },
+      axiom: { token: 'axiom-token', dataset: 'convex' },
+    });
+
+    expect(resolved.otlp.targets).toEqual([
+      {
+        name: 'posthog',
+        endpoint: 'https://us.i.posthog.com/i/v1/logs',
+        headers: { Authorization: 'Bearer phc_test' },
+        serviceName: 'api',
+      },
+      {
+        name: 'axiom',
+        endpoint: 'https://api.axiom.co/v1/logs',
+        headers: {
+          Authorization: 'Bearer axiom-token',
+          'X-Axiom-Dataset': 'convex',
+        },
+        serviceName: 'api',
+      },
+    ]);
+  });
+
+  it('reads posthog and axiom env vars from empty vendor objects', () => {
+    process.env.POSTHOG_PROJECT_KEY = 'phc_from_env';
+    process.env.POSTHOG_HOST = 'https://eu.i.posthog.com';
+    process.env.AXIOM_TOKEN = 'axiom-from-env';
+    process.env.AXIOM_DATASET = 'convex-env';
+    process.env.AXIOM_URL = 'https://api.eu.axiom.co';
+
+    const resolved = applyConvexBlypConfig({
+      posthog: {},
+      axiom: {},
+    });
+
+    expect(resolved.otlp.targets).toEqual([
+      {
+        name: 'posthog',
+        endpoint: 'https://eu.i.posthog.com/i/v1/logs',
+        headers: { Authorization: 'Bearer phc_from_env' },
+        serviceName: 'convex',
+      },
+      {
+        name: 'axiom',
+        endpoint: 'https://api.eu.axiom.co/v1/logs',
+        headers: {
+          Authorization: 'Bearer axiom-from-env',
+          'X-Axiom-Dataset': 'convex-env',
+        },
+        serviceName: 'convex',
+      },
+    ]);
+  });
+
+  it('lets otlp: false disable every vendor target', () => {
+    const resolved = applyConvexBlypConfig({
+      otlp: false,
+      posthog: { projectKey: 'phc_test' },
+      axiom: { token: 'axiom-token', dataset: 'convex' },
+      betterstack: {
+        sourceToken: 'src_token',
+        ingestingHost: 'https://in.logs.betterstack.com',
+      },
+      sentry: { dsn: 'https://public@o1.ingest.sentry.io/99' },
+      databuddy: { apiKey: 'db_key', websiteId: 'site_1' },
+      http: [{ name: 'webhook', endpoint: 'https://hooks.example/logs' }],
+    });
+
+    expect(resolved.otlp.enabled).toBe(false);
+    expect(resolved.otlp.targets).toEqual([]);
+  });
+
+  it('lets vendor false skip the matching shared connector', () => {
+    const resolved = applyConvexBlypConfig({
+      posthog: false,
+      betterstack: false,
+      sentry: false,
+      databuddy: false,
+      http: false,
+      connectors: {
+        posthog: {
+          enabled: true,
+          projectKey: 'phc_test',
+        },
+        betterstack: {
+          enabled: true,
+          sourceToken: 'src_token',
+          ingestingHost: 'https://in.logs.betterstack.com',
+        },
+        sentry: {
+          enabled: true,
+          dsn: 'https://public@o1.ingest.sentry.io/99',
+        },
+        databuddy: {
+          enabled: true,
+          apiKey: 'db_key',
+          websiteId: 'site_1',
+        },
+        http: [{
+          name: 'webhook',
+          endpoint: 'https://hooks.example/logs',
+        }],
+      },
+    });
+
+    expect(resolved.otlp.enabled).toBe(false);
+    expect(resolved.otlp.targets).toEqual([]);
+  });
+
+  it('maps Convex-local betterstack, sentry, databuddy, and http configs', async () => {
+    const sent: Array<{ endpoint: string; body: string }> = [];
+    const log = createConvexLogger({
+      serviceName: 'api',
+      betterstack: {
+        sourceToken: 'src_token',
+        ingestingHost: 'https://in.logs.betterstack.com',
+      },
+      sentry: {
+        dsn: 'https://public@o123.ingest.sentry.io/456',
+      },
+      databuddy: {
+        apiKey: 'db_key',
+        websiteId: 'site_1',
+        namespace: 'convex',
+      },
+      http: [{
+        name: 'webhook',
+        endpoint: 'https://hooks.example/logs',
+        auth: 'Bearer hook-token',
+      }],
+      transport: async (body, endpoint) => {
+        sent.push({ body, endpoint });
+        return { ok: true, status: 200 };
+      },
+    });
+
+    log.bind(actionCtx()).info('vendors');
+    await log.flush();
+
+    expect(sent.map((entry) => entry.endpoint).sort()).toEqual([
+      'https://basket.databuddy.cc/track',
+      'https://hooks.example/logs',
+      'https://in.logs.betterstack.com/v1/logs',
+      'https://o123.ingest.sentry.io/api/456/integration/otlp/v1/logs',
+    ]);
+
+    const resolved = applyConvexBlypConfig({
+      serviceName: 'api',
+      betterstack: {
+        sourceToken: 'src_token',
+        ingestingHost: 'https://in.logs.betterstack.com',
+      },
+      sentry: {
+        dsn: 'https://public@o123.ingest.sentry.io/456',
+      },
+      databuddy: {
+        apiKey: 'db_key',
+        websiteId: 'site_1',
+        namespace: 'convex',
+      },
+      http: [{
+        name: 'webhook',
+        endpoint: 'https://hooks.example/logs',
+        auth: 'Bearer hook-token',
+      }],
+    });
+
+    expect(resolved.otlp.targets).toEqual([
+      {
+        name: 'betterstack',
+        endpoint: 'https://in.logs.betterstack.com/v1/logs',
+        headers: { Authorization: 'Bearer src_token' },
+        serviceName: 'api',
+      },
+      {
+        name: 'sentry',
+        endpoint: 'https://o123.ingest.sentry.io/api/456/integration/otlp/v1/logs',
+        headers: { 'x-sentry-auth': 'sentry sentry_key=public' },
+        serviceName: 'api',
+      },
+      {
+        name: 'databuddy',
+        endpoint: 'https://basket.databuddy.cc/track',
+        headers: { Authorization: 'Bearer db_key' },
+        serviceName: 'api',
+        format: 'databuddy',
+        websiteId: 'site_1',
+        namespace: 'convex',
+        source: 'convex',
+      },
+      {
+        name: 'webhook',
+        endpoint: 'https://hooks.example/logs',
+        headers: { Authorization: 'Bearer hook-token' },
+        serviceName: 'api',
+        format: 'http',
+      },
+    ]);
+
+    const databuddyBody = JSON.parse(
+      sent.find((entry) => entry.endpoint.includes('basket.databuddy.cc'))!.body
+    ) as { name: string; websiteId: string; properties: { message: string } };
+    expect(databuddyBody).toMatchObject({
+      name: 'log',
+      websiteId: 'site_1',
+      properties: { message: 'vendors' },
+    });
+
+    const httpBody = JSON.parse(
+      sent.find((entry) => entry.endpoint === 'https://hooks.example/logs')!.body
+    ) as { source: string; target: string; message: string };
+    expect(httpBody).toMatchObject({
+      source: 'server',
+      target: 'webhook',
+      message: 'vendors',
+    });
+
+    const sentryBody = sent.find((entry) => entry.endpoint.includes('ingest.sentry.io'))!.body;
+    expect(parseOtlp(sentryBody).severityText).toBe('INFO');
+  });
+
+  it('maps shared betterstack, sentry, databuddy, and http connectors', () => {
+    const resolved = applyConvexBlypConfig({
+      connectors: {
+        betterstack: {
+          enabled: true,
+          sourceToken: 'src_token',
+          ingestingHost: 'https://in.logs.betterstack.com',
+        },
+        sentry: {
+          enabled: true,
+          dsn: 'https://public@example.ingest.sentry.io/1',
+        },
+        databuddy: {
+          enabled: true,
+          apiKey: 'db_key',
+          websiteId: 'site_1',
+        },
+        http: [{
+          name: 'webhook',
+          endpoint: 'https://hooks.example/logs',
+        }],
+      },
+    });
+
+    expect(resolved.otlp.targets?.map((target) => target.name)).toEqual([
+      'betterstack',
+      'sentry',
+      'databuddy',
+      'webhook',
+    ]);
+    expect(calls.warn.some((args) => String(args[0]).includes('ignores connectors.'))).toBe(false);
+  });
+
+  it('reads sentry and databuddy env vars from empty vendor objects', () => {
+    process.env.SENTRY_DSN = 'https://key@o9.ingest.sentry.io/77';
+    process.env.DATABUDDY_API_KEY = 'db_from_env';
+    process.env.DATABUDDY_WEBSITE_ID = 'site_env';
+
+    const resolved = applyConvexBlypConfig({
+      sentry: {},
+      databuddy: {},
+    });
+
+    expect(resolved.otlp.targets).toEqual([
+      {
+        name: 'sentry',
+        endpoint: 'https://o9.ingest.sentry.io/api/77/integration/otlp/v1/logs',
+        headers: { 'x-sentry-auth': 'sentry sentry_key=key' },
+        serviceName: 'convex',
+      },
+      {
+        name: 'databuddy',
+        endpoint: 'https://basket.databuddy.cc/track',
+        headers: { Authorization: 'Bearer db_from_env' },
+        serviceName: 'convex',
+        format: 'databuddy',
+        websiteId: 'site_env',
+        source: 'convex',
+      },
+    ]);
+  });
+
+  it('keeps two Axiom datasets as separate targets', () => {
+    const resolved = applyConvexBlypConfig({
+      axiom: {
+        token: 'shared-token',
+        dataset: 'frontend',
+      },
+      connectors: {
+        otlp: [{
+          name: 'axiom-backend',
+          endpoint: 'https://api.axiom.co/v1/logs',
+          auth: 'Bearer shared-token',
+          headers: {
+            'X-Axiom-Dataset': 'backend',
+          },
+        }],
+      },
+    });
+
+    expect(resolved.otlp.targets).toEqual([
+      {
+        name: 'axiom-backend',
+        endpoint: 'https://api.axiom.co/v1/logs',
+        headers: {
+          Authorization: 'Bearer shared-token',
+          'X-Axiom-Dataset': 'backend',
+        },
+        serviceName: 'convex',
+      },
+      {
+        name: 'axiom',
+        endpoint: 'https://api.axiom.co/v1/logs',
+        headers: {
+          Authorization: 'Bearer shared-token',
+          'X-Axiom-Dataset': 'frontend',
+        },
+        serviceName: 'convex',
+      },
+    ]);
+  });
+
+  it('warns and stays console-only when a shared config has no remote sink', () => {
+    const log = createConvexLogger({
+      destination: 'file',
+      connectors: {
+        delivery: {
+          enabled: true,
+        },
+      },
+    });
+
+    log.bind(actionCtx()).info('console only');
+
+    expect(firstPayload(calls)).toMatchObject({
+      msg: 'console only',
+      source: 'convex',
+    });
+
+    const warnings = calls.warn.map((args) => String(args[0]));
+    expect(warnings.some((message) => message.includes('ignores file logging'))).toBe(true);
+    expect(warnings.some((message) => message.includes('ignores connector delivery queues'))).toBe(true);
+    expect(warnings.some((message) => message.includes('no remote sink configured'))).toBe(true);
+  });
+
+  it('does not warn about unused sinks for Convex-only otlp config', () => {
+    createConvexLogger({
+      otlp: { endpoint: 'https://otlp.example/v1/logs' },
+    });
+
+    expect(calls.warn).toEqual([]);
+  });
+
+  it('respects level from a shared blyp config', () => {
+    const log = createConvexLogger({
+      level: 'error',
+      otlp: false,
+    });
+
+    log.debug('hidden');
+    log.info('also hidden');
+    log.error('visible');
+
+    expect(calls.info).toEqual([]);
+    expect(firstPayload(calls, 'error').msg).toBe('visible');
+  });
+
+  it('lets otlp: false disable shared connectors.otlp targets', () => {
+    const resolved = applyConvexBlypConfig({
+      otlp: false,
+      connectors: {
+        otlp: [{
+          name: 'axiom',
+          endpoint: 'https://api.axiom.co/v1/logs',
+        }],
+      },
+    });
+
+    expect(resolved.otlp.enabled).toBe(false);
+    expect(resolved.otlp.targets).toEqual([]);
+  });
+
+  it('does not import node logger internals', async () => {
+    const files = [
+      '../../src/frameworks/convex/logger.ts',
+      '../../src/frameworks/convex/config.ts',
+      '../../src/frameworks/convex/otlp.ts',
+      '../../src/frameworks/convex/index.ts',
+      '../../src/config.ts',
+      '../../src/core/define-config.ts',
+    ];
+
+    for (const file of files) {
+      const source = await Bun.file(new URL(file, import.meta.url)).text();
+      expect(source).not.toContain("from '../../core/logger'");
+      expect(source).not.toContain("from '../../core/file-logger'");
+      expect(source).not.toContain("from '../../core/config'");
+      expect(source).not.toContain("from '../../connectors/otlp/sender'");
+      expect(source).not.toContain("from 'pino'");
+      expect(source).not.toContain('convex/server');
+      expect(source).not.toContain('from \'zod\'');
+      expect(source).not.toContain("from 'fs'");
+      expect(source).not.toContain("from 'jiti'");
+    }
   });
 });
 

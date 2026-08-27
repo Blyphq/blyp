@@ -1706,20 +1706,63 @@ export const send = mutation({
 });
 ```
 
-Configure the default instance once if you want action logs to export over OTLP:
+In a monorepo, share `blyp.config.ts` with the HTTP API. Import `defineConfig` from `@blyp/core/config` so Convex can load that file, then pass the object into `configureConvexLogger()`:
 
 ```typescript
-import { configureConvexLogger, logger } from '@blyp/core/convex';
+// blyp.config.ts
+import { defineConfig } from '@blyp/core/config';
 
-configureConvexLogger({
-  serviceName: 'api',
-  otlp: {
-    endpoint: process.env.BLYP_OTLP_ENDPOINT,
+export default defineConfig({
+  destination: 'file',
+  connectors: {
+    posthog: {
+      enabled: true,
+      projectKey: process.env.POSTHOG_PROJECT_KEY,
+    },
+    sentry: {
+      enabled: true,
+      dsn: process.env.SENTRY_DSN,
+    },
+    otlp: [
+      {
+        name: 'grafana',
+        endpoint: process.env.GRAFANA_OTLP_ENDPOINT,
+        auth: process.env.GRAFANA_OTLP_AUTH,
+      },
+    ],
   },
 });
+```
+
+```typescript
+// convex/logger.ts
+import blypConfig from '../blyp.config';
+import { configureConvexLogger, logger } from '@blyp/core/convex';
+
+configureConvexLogger(blypConfig);
 
 export { logger };
 ```
+
+Convex-only setup can pass vendor objects directly:
+
+```typescript
+configureConvexLogger({
+  serviceName: 'api',
+  posthog: {
+    projectKey: process.env.POSTHOG_PROJECT_KEY,
+  },
+  axiom: {
+    token: process.env.AXIOM_TOKEN,
+    dataset: process.env.AXIOM_DATASET,
+  },
+  sentry: {
+    dsn: process.env.SENTRY_DSN,
+  },
+});
+```
+
+Convex uses `level`, `redact`, and isolate-safe HTTP export for `posthog`, `axiom`, `betterstack`, `sentry`, `databuddy`, `http`, and auto `connectors.otlp` targets. File logging, database destinations, delivery queues, client ingestion, and vendor exception SDKs are ignored with a one-time warning. Without a remote sink, Convex stays console-only and warns once.
 
 `createConvexLogger()` is only for a second instance (tests, another service name, or a different OTLP endpoint). `logger.child({ function: 'messages:send' })` adds bindings without creating a new logger.
 
@@ -1741,7 +1784,7 @@ export const importFeed = action({
 
 `wrap` does not wrap Convex's `action` helper. It wraps your handler: it binds `ctx` for that call and `await`s OTLP `flush()` when the handler is an action. If you keep a stock handler, call `logger.bind(ctx)` and `await logger.flush()` yourself at the end of actions.
 
-This adapter does not read `blyp.config.ts`, does not write Convex tables or file storage, and does not ingest Convex Pro log streams. Use the subpath import `@blyp/core/convex`.
+This adapter does not write Convex tables or file storage, and does not ingest Convex Pro log streams. Use the subpath import `@blyp/core/convex`.
 
 ---
 

@@ -987,9 +987,7 @@ export function mergeBlypConfig(
   };
 }
 
-export function defineConfig(config: BlypUserConfig): BlypUserConfig {
-  return config;
-}
+export { defineConfig } from './define-config';
 
 export function loadConfig(): ResolvedBlypConfig {
   if (cachedConfig !== null) {

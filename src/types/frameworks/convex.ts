@@ -1,4 +1,8 @@
-import type { RedactionConfig, ResolvedRedactionConfig } from '../core/config';
+import type {
+  BlypUserConfig,
+  RedactionConfig,
+  ResolvedRedactionConfig,
+} from '../core/config';
 import type { StructuredLog } from '../core/structured-log';
 
 export type ConvexFunctionKind = 'query' | 'mutation' | 'action' | 'unknown';
@@ -22,18 +26,86 @@ export interface ConvexOtlpConfig {
   serviceName?: string;
 }
 
+export interface ConvexPostHogConfig {
+  enabled?: boolean;
+  projectKey?: string;
+  host?: string;
+  serviceName?: string;
+}
+
+export interface ConvexAxiomConfig {
+  enabled?: boolean;
+  token?: string;
+  dataset?: string;
+  endpoint?: string;
+  serviceName?: string;
+}
+
+export interface ConvexBetterStackConfig {
+  enabled?: boolean;
+  sourceToken?: string;
+  ingestingHost?: string;
+  serviceName?: string;
+}
+
+export interface ConvexSentryConfig {
+  enabled?: boolean;
+  dsn?: string;
+  serviceName?: string;
+}
+
+export interface ConvexDatabuddyConfig {
+  enabled?: boolean;
+  apiKey?: string;
+  websiteId?: string;
+  apiUrl?: string;
+  namespace?: string;
+  source?: string;
+  serviceName?: string;
+}
+
+export interface ConvexHttpConfig {
+  name: string;
+  enabled?: boolean;
+  endpoint?: string;
+  headers?: Record<string, string>;
+  auth?: string;
+  serviceName?: string;
+}
+
 export interface ConvexOtlpTransportResult {
   ok: boolean;
   status?: number;
   error?: string;
 }
 
-export interface ConvexLoggerConfig {
+export interface ConvexLoggerOptions {
   serviceName?: string;
   function?: string;
   otlp?: ConvexOtlpConfig | false;
+  posthog?: ConvexPostHogConfig | false;
+  axiom?: ConvexAxiomConfig | false;
+  betterstack?: ConvexBetterStackConfig | false;
+  sentry?: ConvexSentryConfig | false;
+  databuddy?: ConvexDatabuddyConfig | false;
+  http?: ConvexHttpConfig[] | false;
   redact?: RedactionConfig;
   transport?: (body: string, endpoint: string) => Promise<ConvexOtlpTransportResult>;
+}
+
+export type ConvexLoggerConfig = ConvexLoggerOptions & BlypUserConfig;
+
+export type ConvexRemoteFormat = 'otlp' | 'http' | 'databuddy';
+
+export interface ResolvedConvexOtlpTarget {
+  name?: string;
+  endpoint: string;
+  headers: Record<string, string>;
+  serviceName: string;
+  format?: ConvexRemoteFormat;
+  websiteId?: string;
+  namespace?: string;
+  source?: string;
 }
 
 export interface ResolvedConvexOtlpConfig {
@@ -41,6 +113,7 @@ export interface ResolvedConvexOtlpConfig {
   endpoint?: string;
   headers: Record<string, string>;
   serviceName: string;
+  targets?: ResolvedConvexOtlpTarget[];
 }
 
 export interface ConvexRuntimeStore {
