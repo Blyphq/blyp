@@ -410,14 +410,14 @@ function warnIgnoredSinks(config: ConvexLoggerConfig): void {
   if (fileEnabled) {
     warnOnce(
       'convex:file',
-      '[Blyp] Convex ignores file logging. Action logs only export over HTTP.'
+      '[Blyp] Convex ignores file logging. Action and HTTP-action logs only export over HTTP.'
     );
   }
 
   if (config.destination === 'database' || config.database !== undefined) {
     warnOnce(
       'convex:database',
-      '[Blyp] Convex ignores database logging. Action logs only export over HTTP.'
+      '[Blyp] Convex ignores database logging. Action and HTTP-action logs only export over HTTP.'
     );
   }
 
@@ -667,7 +667,7 @@ export function applyConvexBlypConfig(config: ConvexLoggerConfig = {}): {
   if (isSharedBlypConfig(config) && !otlp.enabled) {
     warnOnce(
       'convex:no-otlp',
-      '[Blyp] Convex has no remote sink configured. Queries, mutations, and actions will write console only.'
+      '[Blyp] Convex has no remote sink configured. Queries, mutations, actions, and HTTP actions will write console only.'
     );
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "@blyp/core",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, Farm.js, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, and SvelteKit.",
   "keywords": [
     "logger",
@@ -337,7 +337,7 @@
     "test:watch": "bun test tests/ --watch",
     "test:all": "bun test tests/",
     "build": "bun run build:js && bun run build:types",
-    "build:js": "tsup",
+    "build:js": "tsup && bun scripts/verify-convex-bundle.ts",
     "build:types": "bun x tsc --project tsconfig.build.json",
     "prepare": "bun run build",
     "prepublishOnly": "bun run build",
@@ -364,6 +364,7 @@
     "@types/express": "5.0.6",
     "ai": "6.0.137",
     "better-auth": "1.6.5",
+    "convex": "1.39.1",
     "elysia": "1.4.27",
     "expo-network": "55.0.8",
     "express": "5.2.1",
@@ -380,6 +381,7 @@
     "@clerk/backend": "^2",
     "@better-agent/core": "^0.1.0-beta.1",
     "better-auth": "^1.6.5",
+    "convex": ">=1.39.0",
     "@databuddy/sdk": "^2",
     "@logtail/node": "^0.5",
     "@nestjs/common": "^10 || ^11",
@@ -422,6 +424,9 @@
       "optional": true
     },
     "better-auth": {
+      "optional": true
+    },
+    "convex": {
       "optional": true
     },
     "@databuddy/sdk": {

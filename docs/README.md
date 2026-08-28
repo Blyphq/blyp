@@ -1689,12 +1689,12 @@ The Workers integration is console-based. It does not use file logging, does not
 
 ### Convex
 
-Convex's default runtime is an isolate, not Node or Bun. Import `@blyp/core/convex` instead of the root logger so Convex does not bundle pino, filesystems, or the OpenTelemetry Node SDK.
+Convex's default runtime is an isolate, not Node or Bun. With `convex@1.39.0` or newer, import `@blyp/core/convex` instead of the root logger so Convex does not bundle pino, filesystems, or the OpenTelemetry Node SDK. Blyp uses the `node:async_hooks` compatibility API that Convex provides in its default runtime to keep `logger.wrap()` context isolated across concurrent calls.
 
-Use the default logger in queries, mutations, and actions. Keep importing `mutation` / `query` / `action` from `convex/server` — Blyp does not re-export those builders.
+Use the default logger in queries, mutations, and actions. Keep importing `mutation` / `query` / `action` from your generated `./_generated/server` module — Blyp does not re-export those builders.
 
 ```typescript
-import { mutation } from 'convex/server';
+import { mutation } from './_generated/server';
 import { v } from 'convex/values';
 import { logger } from '@blyp/core/convex';
 
@@ -1766,10 +1766,15 @@ Convex uses `level`, `redact`, and isolate-safe HTTP export for `posthog`, `axio
 
 `createConvexLogger()` is only for a second instance (tests, another service name, or a different OTLP endpoint). `logger.child({ function: 'messages:send' })` adds bindings without creating a new logger.
 
-Queries and mutations can only write `console.*` (Convex dashboard / `npx convex logs`). Actions can also `fetch` OTLP. Bind `ctx` so Blyp can tell them apart:
+There are two supported remote-delivery modes:
+
+- **Direct mode:** queries and mutations write structured `console.*` records (Convex dashboard / `npx convex logs`), while actions and HTTP actions can also use Blyp's configured HTTP/OTLP sinks. Bind `ctx` so Blyp can tell deterministic functions from actions.
+- **Unified Convex Pro mode:** configure a Convex Log Stream to send console events from queries, mutations, actions, and HTTP actions to Axiom, Datadog, PostHog, or a custom webhook. Set `otlp: false` on the Convex logger so action records are not delivered once by Blyp and again by the Log Stream. Log Streams are configured in the Convex dashboard and require a Convex Pro plan.
+
+Direct mode for an action looks like this:
 
 ```typescript
-import { action } from 'convex/server';
+import { action } from './_generated/server';
 import { v } from 'convex/values';
 import { logger } from '@blyp/core/convex';
 
@@ -1784,7 +1789,16 @@ export const importFeed = action({
 
 `wrap` does not wrap Convex's `action` helper. It wraps your handler: it binds `ctx` for that call and `await`s OTLP `flush()` when the handler is an action. If you keep a stock handler, call `logger.bind(ctx)` and `await logger.flush()` yourself at the end of actions.
 
-This adapter does not write Convex tables or file storage, and does not ingest Convex Pro log streams. Use the subpath import `@blyp/core/convex`.
+For unified Log Stream delivery, disable Blyp's direct exporters while keeping the same structured console output:
+
+```typescript
+configureConvexLogger({
+  ...blypConfig,
+  otlp: false,
+});
+```
+
+This adapter does not write Convex tables or file storage, and does not ingest Convex Pro log streams itself. Use the subpath import `@blyp/core/convex`.
 
 ---
 

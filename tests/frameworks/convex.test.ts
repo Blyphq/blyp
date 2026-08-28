@@ -1148,10 +1148,11 @@ describe('Convex logger', () => {
     expect(resolved.otlp.targets).toEqual([]);
   });
 
-  it('does not import node logger internals', async () => {
+  it('only imports Convex-supported runtime APIs', async () => {
     const files = [
       '../../src/frameworks/convex/logger.ts',
       '../../src/frameworks/convex/config.ts',
+      '../../src/frameworks/convex/context.ts',
       '../../src/frameworks/convex/otlp.ts',
       '../../src/frameworks/convex/index.ts',
       '../../src/config.ts',
@@ -1169,7 +1170,14 @@ describe('Convex logger', () => {
       expect(source).not.toContain('from \'zod\'');
       expect(source).not.toContain("from 'fs'");
       expect(source).not.toContain("from 'jiti'");
+      expect(source).not.toMatch(/from ['"]async_hooks['"]/);
+      expect(source).not.toMatch(/from ['"]node:(?!async_hooks['"])/);
     }
+
+    const contextSource = await Bun.file(
+      new URL('../../src/frameworks/convex/context.ts', import.meta.url)
+    ).text();
+    expect(contextSource).toContain("from 'node:async_hooks'");
   });
 });
 

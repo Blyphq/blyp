@@ -136,6 +136,10 @@ export default defineConfig([
     minify: true,
     treeshake: true,
     platform: 'neutral',
-    external: ['async_hooks', 'node:async_hooks'],
+    removeNodeProtocol: false,
+    // Convex 1.39+ provides this Node-compatible API in its default isolate
+    // runtime. Preserve the canonical specifier so Convex can replace it with
+    // its runtime shim while bundling user functions.
+    external: ['node:async_hooks'],
   },
 ])

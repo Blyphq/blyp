@@ -612,6 +612,7 @@ describe('package surface', () => {
       '@clerk/backend',
       '@better-agent/core',
       'better-auth',
+      'convex',
       '@databuddy/sdk',
       '@logtail/node',
       '@nestjs/common',
@@ -651,6 +652,7 @@ describe('package surface', () => {
     expect(packageJson.peerDependencies?.['@databuddy/sdk']).toBe('^2');
     expect(packageJson.peerDependencies?.['@farm.js/core']).toBe('>=0.1.0-beta.40 <0.2.0');
     expect(packageJson.peerDependencies?.['better-auth']).toBe('^1.6.5');
+    expect(packageJson.peerDependencies?.convex).toBe('>=1.39.0');
     expect(packageJson.peerDependencies?.['@logtail/node']).toBe('^0.5');
     expect(packageJson.peerDependencies?.['@opentelemetry/api-logs']).toBe('^0.206');
     expect(packageJson.peerDependencies?.['@opentelemetry/exporter-logs-otlp-http']).toBe('^0.206');
