@@ -51,6 +51,8 @@ function ensureBuildArtifacts(): void {
     'node',
     '--target',
     'es2020',
+    '--config',
+    'false',
     '--out-dir',
     tempOutDir,
     '--silent',

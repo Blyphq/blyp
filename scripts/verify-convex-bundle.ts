@@ -43,7 +43,7 @@ function assertArtifactRuntimeImports(filePath: string): void {
   const runtimeSpecifiers = Array.from(
     source.matchAll(/(?:from\s*|require\()['"]([^'"]+)['"]/g),
     (match) => match[1]
-  );
+  ).filter((specifier): specifier is string => specifier !== undefined);
   assert(
     source.includes('node:async_hooks'),
     `${path.basename(filePath)} must preserve the Convex-supported node:async_hooks import.`
@@ -65,6 +65,10 @@ function assertArtifactRuntimeImports(filePath: string): void {
 
 assertArtifactRuntimeImports(esmArtifact);
 assertArtifactRuntimeImports(cjsArtifact);
+assert(
+  fs.existsSync(convexBundlerPath),
+  'Convex integration verification requires the pinned dev dependency. Run `bun install` before building or publishing.'
+);
 
 const tempDir = fs.mkdtempSync(path.join(repoRoot, '.tmp-convex-bundle-'));
 const fixturePath = path.join(tempDir, 'mixed.ts');
