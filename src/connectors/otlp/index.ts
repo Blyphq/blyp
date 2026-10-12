@@ -92,8 +92,8 @@ function createOTLPLoggerInstance(
     table: (message: string, data?: unknown) => {
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
-    flush: async () => {},
-    shutdown: async () => {},
+    flush: () => sender.flush(),
+    shutdown: () => sender.flush(),
     createStructuredLog: (
       groupId: string,
       initial?: Record<string, unknown>

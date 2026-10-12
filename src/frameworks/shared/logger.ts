@@ -1,3 +1,4 @@
+import { NEW_RELIC_TARGET_NAME } from '../../connectors/newrelic/config';
 import { DEFAULT_CLIENT_LOG_ENDPOINT, isClientLogEvent, normalizeEndpointPath } from '../../shared/client-log';
 import type { ClientLogEvent } from '../../shared/client-log';
 import {
@@ -1016,10 +1017,14 @@ export async function handleClientLogIngestion<Ctx>(options: {
         source: 'client',
       });
     }
-  } else if (sanitizedPayload.connector?.type === 'otlp') {
-    const sender = config.otlp.get(sanitizedPayload.connector.name);
+  } else if (sanitizedPayload.connector === 'newrelic' || sanitizedPayload.connector?.type === 'otlp') {
+    const isNewRelic = sanitizedPayload.connector === 'newrelic';
+    const name = sanitizedPayload.connector === 'newrelic'
+      ? NEW_RELIC_TARGET_NAME
+      : sanitizedPayload.connector.name;
+    const sender = config.otlp.get(name);
 
-    headers['x-blyp-otlp-status'] = sender.ready ? 'enabled' : 'missing';
+    headers[isNewRelic ? 'x-blyp-newrelic-status' : 'x-blyp-otlp-status'] = sender.ready ? 'enabled' : 'missing';
 
     if (sender.ready) {
       sender.send({

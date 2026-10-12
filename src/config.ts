@@ -4,5 +4,6 @@ export type {
   BlypConnectorsConfig,
   BlypUserConfig,
   OTLPConnectorConfig,
+  NewRelicConnectorConfig,
   RedactionConfig,
 } from './types/core/config';

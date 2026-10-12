@@ -41,6 +41,7 @@ export type ClientConnectorRequest =
   | 'databuddy'
   | 'posthog'
   | 'sentry'
+  | 'newrelic'
   | { type: 'http'; name: string }
   | { type: 'otlp'; name: string };
 

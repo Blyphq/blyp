@@ -33,6 +33,7 @@ export default defineConfig([
       'connectors/betterstack': 'src/connectors/betterstack/index.ts',
       'connectors/databuddy': 'src/connectors/databuddy/index.ts',
       'connectors/posthog': 'src/connectors/posthog/index.ts',
+      'connectors/newrelic': 'src/connectors/newrelic/index.ts',
       'connectors/otlp': 'src/connectors/otlp/index.ts',
       'connectors/sentry': 'src/connectors/sentry/index.ts',
     },

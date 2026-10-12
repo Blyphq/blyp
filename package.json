@@ -1,6 +1,6 @@
 {
   "name": "@blyp/core",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, Farm.js, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, and SvelteKit.",
   "keywords": [
     "logger",
@@ -134,6 +134,9 @@
       ],
       "config": [
         "dist/config.d.ts"
+      ],
+      "newrelic": [
+        "dist/connectors/newrelic/index.d.ts"
       ]
     }
   },
@@ -322,6 +325,11 @@
       "types": "./dist/config.d.ts",
       "import": "./dist/config.mjs",
       "require": "./dist/config.js"
+    },
+    "./newrelic": {
+      "types": "./dist/connectors/newrelic/index.d.ts",
+      "import": "./dist/connectors/newrelic.mjs",
+      "require": "./dist/connectors/newrelic.js"
     }
   },
   "files": [
@@ -518,7 +526,7 @@
     }
   },
   "dependencies": {
-    "fflate": "0.8.2",
+    "fflate": "0.8.3",
     "jiti": "2.6.1",
     "pino": "9.14.0",
     "pino-pretty": "11.3.0",

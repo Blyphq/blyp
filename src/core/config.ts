@@ -1,3 +1,4 @@
+import { resolveNewRelicConnector } from '../connectors/newrelic/config';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { createJiti } from 'jiti';
 import { dirname, resolve } from 'path';
@@ -27,6 +28,8 @@ import type {
   LogRotationConfig,
   MongooseDatabaseAdapterConfig,
   OTLPConnectorConfig,
+  NewRelicConnectorConfig,
+  ResolvedNewRelicConnectorConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
   RedactionConfig,
@@ -70,6 +73,8 @@ export type {
   LogRotationConfig,
   MongooseDatabaseAdapterConfig,
   OTLPConnectorConfig,
+  NewRelicConnectorConfig,
+  ResolvedNewRelicConnectorConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
   RedactionConfig,
@@ -959,13 +964,36 @@ function mergeConnectorsConfig(
   base: BlypConnectorsConfig | undefined,
   override: BlypConnectorsConfig | undefined
 ): ResolvedBlypConnectorsConfig {
+  const newrelicConfig = base?.newrelic || override?.newrelic
+    ? { ...base?.newrelic, ...override?.newrelic }
+    : undefined;
+  // A resolved base contains the generated endpoint. Recompute that default
+  // on region changes while retaining user-specified collector URLs.
+  if (newrelicConfig && override?.newrelic?.region !== undefined
+      && override.newrelic.endpoint === undefined && base?.newrelic
+      && base.newrelic.endpoint === resolveNewRelicConnector({ region: base.newrelic.region }, '').endpoint) {
+    newrelicConfig.endpoint = undefined;
+  }
+  const newrelic = newrelicConfig
+    ? resolveNewRelicConnector(newrelicConfig, resolveDefaultConnectorServiceName())
+    : undefined;
+  let otlp = mergeOTLPConnectorsConfig(base?.otlp, override?.otlp);
+
+  if (newrelic) {
+    // The preset owns this name, including when disabled or missing credentials.
+    // Re-resolving a resolved config must not duplicate the generated target.
+    otlp = otlp.filter((target) => target.name !== newrelic.name);
+    otlp.push(newrelic);
+  }
+
   return {
+    ...(newrelic ? { newrelic } : {}),
     betterstack: mergeBetterStackConnectorConfig(base?.betterstack, override?.betterstack),
     databuddy: mergeDatabuddyConnectorConfig(base?.databuddy, override?.databuddy),
     posthog: mergePostHogConnectorConfig(base?.posthog, override?.posthog),
     sentry: mergeSentryConnectorConfig(base?.sentry, override?.sentry),
     http: mergeHTTPConnectorsConfig(base?.http, override?.http),
-    otlp: mergeOTLPConnectorsConfig(base?.otlp, override?.otlp),
+    otlp,
     delivery: mergeConnectorDeliveryConfig(base?.delivery, override?.delivery),
   };
 }

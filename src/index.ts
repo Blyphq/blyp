@@ -1,3 +1,5 @@
+import { NEW_RELIC_TARGET_NAME } from './connectors/newrelic/config';
+import type { NewRelicLoggerConfig } from './connectors/newrelic';
 import { logger } from './frameworks/standalone';
 import { loadOptionalModule } from './core/optional-module';
 import { getActiveRequestLogger } from './frameworks/shared/request-context';
@@ -221,6 +223,8 @@ export type {
   LogFileConfig,
   LogRotationConfig,
   OTLPConnectorConfig,
+  NewRelicConnectorConfig,
+  ResolvedNewRelicConnectorConfig,
   PostHogErrorTrackingConfig,
   PostHogConnectorConfig,
   PrismaDatabaseAdapterConfig,
@@ -723,4 +727,17 @@ export function createStructuredHttpLogger<
   config?: HTTPLoggerConfig
 ): StructuredLog<TFields> {
   return loadHttpModule().createStructuredHttpLogger(groupId, initial, config);
+}
+
+export type { NewRelicLoggerConfig } from './connectors/newrelic';
+export type { OTLPLogger as NewRelicLogger } from './types/connectors/otlp';
+
+export function createNewRelicLogger(config: NewRelicLoggerConfig = {}): OTLPLogger {
+  return createOtlpLogger({ ...config, name: NEW_RELIC_TARGET_NAME });
+}
+
+export function createStructuredNewRelicLogger<
+  TFields extends Record<string, unknown> = Record<string, unknown>,
+>(groupId: string, initial?: TFields, config: NewRelicLoggerConfig = {}): StructuredLog<TFields> {
+  return createStructuredOtlpLogger(groupId, initial, { ...config, name: NEW_RELIC_TARGET_NAME });
 }

@@ -16,6 +16,7 @@ This document contains detailed usage, all framework integrations, configuration
 - [AI SDK tracing](#ai-sdk-tracing)
 - [Framework integrations](#framework-integrations)
 - [Database logging](#database-logging)
+- [New Relic connector](#new-relic-connector)
 - [Advanced configuration](#advanced-configuration)
 - [Frontend + Backend log sync](#frontend--backend-log-sync)
 - [Runtime detection](#runtime-detection)
@@ -1212,6 +1213,70 @@ const logger = createExpoLogger({
 The browser and Expo HTTP connector does not send directly to the external target. It continues to send to Blyp's ingestion endpoint and Blyp forwards to the requested named HTTP target when the server connector is configured and ready. Workers are still out of scope for this connector.
 
 ---
+
+## New Relic Connector
+
+Blyp exports logs to New Relic using its existing OTLP/HTTP pipeline. This includes ordinary and structured logs, framework request/error records, auth context, AI records, and browser/Expo logs forwarded through your backend. Existing redaction runs before export. This integration exports **logs**; it does not install the New Relic APM agent or create native spans, metrics, infrastructure monitoring, or New Relic Errors Inbox events. AI and request traces remain log records with correlation fields.
+
+Install the optional OpenTelemetry dependencies on your server:
+
+```bash
+bun add @opentelemetry/api-logs @opentelemetry/exporter-logs-otlp-http @opentelemetry/resources @opentelemetry/sdk-logs
+```
+
+```ts
+// blyp.config.ts
+import { defineConfig } from '@blyp/core';
+
+export default defineConfig({
+  connectors: {
+    newrelic: {
+      enabled: true,
+      licenseKey: process.env.NEW_RELIC_LICENSE_KEY,
+      region: 'us', // 'eu' for EU accounts
+      serviceName: 'web-api',
+      mode: 'auto',
+    },
+  },
+});
+```
+
+Use a New Relic **ingest license key**, not a user API key. Blyp sends it in the `api-key` header and does not read environment variables automatically. Keep the key in server configuration. The default logs URL is `https://otlp.nr-data.net/v1/logs` (US) or `https://otlp.eu01.nr-data.net/v1/logs` (EU); `endpoint` can override it with a full OTLP/HTTP logs URL for a proxy or collector. See [New Relic's OTLP requirements](https://docs.newrelic.com/docs/opentelemetry/best-practices/opentelemetry-otlp/).
+
+The connector defaults to disabled. When enabled, it needs a nonempty key and a valid endpoint. `auto` forwards server records; `manual` sends only records explicitly written through the connector API. `connectors.delivery` provides the same optional delivery queue as other OTLP targets. `newrelic` is reserved as the OTLP target name while this preset is configured; avoid defining a second target with that name in `connectors.otlp`.
+
+```ts
+import { createNewRelicLogger, createStructuredNewRelicLogger } from '@blyp/core/newrelic';
+
+const log = createNewRelicLogger();
+log.child({ tenantId: 'tenant-1' }).info('order received', { orderId: 'ord-123' });
+createStructuredNewRelicLogger('checkout', { orderId: 'ord-123' }).emit({ status: 200 });
+await log.flush(); // flush before a short-lived process exits
+```
+
+Browser and Expo loggers send to your Blyp backend, which holds the license key:
+
+```ts
+import { createClientLogger } from '@blyp/core/client';
+
+const log = createClientLogger({
+  endpoint: '/inngest', // match the backend's client ingestion path
+  connector: 'newrelic',
+});
+log.info('checkout opened');
+```
+
+For Expo, use `createExpoLogger` from `@blyp/core/expo`, the same `connector: 'newrelic'`, and an absolute backend URL. The ingestion response includes `x-blyp-newrelic-status: enabled` or `missing`. Client records are forwarded once when this selector is present.
+
+Convex accepts the same `connectors.newrelic` configuration through `configureConvexLogger`. It uses isolate-safe HTTP export without installing OpenTelemetry packages. Existing Convex restrictions apply: remote export runs in actions/HTTP actions, and `otlp: false` disables remote exports.
+
+In New Relic, query the service's logs:
+
+```sql
+SELECT * FROM Log WHERE `service.name` = 'web-api' SINCE 30 minutes ago
+```
+
+The log body contains the message. Attributes include `blyp.level`, `blyp.source`, `blyp.type`, `blyp.group_id`, `blyp.trace_id`, HTTP fields, and client session/page fields where available. `blyp.payload` holds the redacted record as JSON, including structured, auth, and AI context. New Relic attribute size limits still apply, so large records may be truncated by the destination.
 
 ## OTLP connector
 

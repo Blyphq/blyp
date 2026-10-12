@@ -131,6 +131,7 @@ describe('package surface', () => {
         databuddy: ['dist/connectors/databuddy/index.d.ts'],
         posthog: ['dist/connectors/posthog/index.d.ts'],
         otlp: ['dist/connectors/otlp/index.d.ts'],
+        newrelic: ['dist/connectors/newrelic/index.d.ts'],
         sentry: ['dist/connectors/sentry/index.d.ts'],
         workers: ['dist/frameworks/workers/index.d.ts'],
         convex: ['dist/frameworks/convex/index.d.ts'],
@@ -301,6 +302,11 @@ describe('package surface', () => {
         types: './dist/connectors/posthog/index.d.ts',
         import: './dist/connectors/posthog.mjs',
         require: './dist/connectors/posthog.js',
+      },
+      './newrelic': {
+        types: './dist/connectors/newrelic/index.d.ts',
+        import: './dist/connectors/newrelic.mjs',
+        require: './dist/connectors/newrelic.js',
       },
       './otlp': {
         types: './dist/connectors/otlp/index.d.ts',
@@ -586,6 +592,25 @@ describe('package surface', () => {
     expect(result.status).toBe(0);
   });
 
+  it('supports the published New Relic config and logger APIs', () => {
+    const result = compileFixture(`
+      import { defineConfig, type NewRelicConnectorConfig } from '@blyp/core';
+      import { createNewRelicLogger, createStructuredNewRelicLogger } from '@blyp/core/newrelic';
+      import { createClientLogger } from '@blyp/core/client';
+      const newrelic: NewRelicConnectorConfig = {
+        enabled: true, licenseKey: 'test', region: 'eu', serviceName: 'api',
+      };
+      defineConfig({ connectors: { newrelic } });
+      createNewRelicLogger({ connectors: { newrelic } }).child({ tenant: '1' }).info('ready');
+      createStructuredNewRelicLogger('checkout', { total: 10 }).emit();
+      createClientLogger({ connector: 'newrelic' });
+      // @ts-expect-error only supported account regions
+      defineConfig({ connectors: { newrelic: { region: 'asia' } } });
+    `);
+    if (result.status !== 0) throw new Error(String(result.stdout || result.stderr));
+    expect(result.status).toBe(0);
+  });
+
   it('rejects invalid typed blyp.config authoring through the published declarations', () => {
     const result = compileFixture(`
       import { defineConfig } from '@blyp/core';
@@ -666,7 +691,7 @@ describe('package surface', () => {
     const packageJson = readPackageJson();
 
     expect(packageJson.dependencies).toEqual({
-      fflate: '0.8.2',
+      fflate: '0.8.3',
       jiti: '2.6.1',
       pino: '9.14.0',
       'pino-pretty': '11.3.0',

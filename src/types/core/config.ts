@@ -221,6 +221,22 @@ export interface ResolvedSentryConnectorConfig {
   status: 'enabled' | 'missing';
 }
 
+/** New Relic log export over OTLP/HTTP. Credentials stay on the server. */
+export interface NewRelicConnectorConfig {
+  enabled?: boolean;
+  mode?: ConnectorMode;
+  licenseKey?: string;
+  region?: 'us' | 'eu';
+  /** Full OTLP logs URL, including /v1/logs, for proxies or collectors. */
+  endpoint?: string;
+  serviceName?: string;
+}
+
+export interface ResolvedNewRelicConnectorConfig extends ResolvedOTLPConnectorConfig {
+  licenseKey?: string;
+  region: 'us' | 'eu';
+}
+
 export interface OTLPConnectorConfig {
   name: string;
   enabled?: boolean;
@@ -270,6 +286,7 @@ export interface BlypConnectorsConfig {
   databuddy?: DatabuddyConnectorConfig;
   posthog?: PostHogConnectorConfig;
   sentry?: SentryConnectorConfig;
+  newrelic?: NewRelicConnectorConfig;
   http?: HTTPConnectorConfig[];
   otlp?: OTLPConnectorConfig[];
   delivery?: ConnectorDeliveryConfig;
@@ -294,6 +311,7 @@ export interface ResolvedBlypConnectorsConfig {
   databuddy: ResolvedDatabuddyConnectorConfig;
   posthog: ResolvedPostHogConnectorConfig;
   sentry: ResolvedSentryConnectorConfig;
+  newrelic?: ResolvedNewRelicConnectorConfig;
   http: ResolvedHTTPConnectorConfig[];
   otlp: ResolvedOTLPConnectorConfig[];
   delivery: ResolvedConnectorDeliveryConfig;

@@ -1,3 +1,4 @@
+import { NEW_RELIC_TARGET_NAME, resolveNewRelicConnector } from '../../connectors/newrelic/config';
 import { createWarnOnceLogger } from '../../shared/once';
 import type {
   BetterStackConnectorConfig,
@@ -535,7 +536,15 @@ export function resolveConvexOtlpTargets(config: ConvexLoggerConfig): ResolvedCo
     });
   }
 
-  for (const target of config.connectors?.otlp ?? []) {
+  const newrelic = config.connectors?.newrelic
+    ? resolveNewRelicConnector(config.connectors.newrelic, fallbackServiceName)
+    : undefined;
+  const otlpTargets = (config.connectors?.otlp ?? []).filter(
+    (target) => !newrelic || target.name !== NEW_RELIC_TARGET_NAME
+  );
+  if (newrelic?.ready) otlpTargets.push(newrelic);
+
+  for (const target of otlpTargets) {
     if (!isAutoOtlpTarget(target) || !target.endpoint) {
       continue;
     }

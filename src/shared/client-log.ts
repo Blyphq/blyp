@@ -63,6 +63,7 @@ const clientConnectorRequestSchema = z.union([
   z.literal('databuddy'),
   z.literal('posthog'),
   z.literal('sentry'),
+  z.literal('newrelic'),
   z.undefined(),
   z.object({
     type: z.literal('http'),
