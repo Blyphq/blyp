@@ -1,3 +1,4 @@
+import { boundedFlush, type FlushOptions, type ConnectorFlushResult, type TelemetryFlushResult } from '../connectors/flush';
 import pino from 'pino';
 import { loadOptionalModule } from './optional-module';
 import { loadPinoPretty } from './pino-pretty-loader';
@@ -237,7 +238,7 @@ function createDatabuddySenderForConfig(config: BlypConfig): DatabuddySender {
 }
 
 function createPostHogSenderForConfig(config: BlypConfig): PostHogSender {
-  if (!config.connectors?.posthog?.enabled) {
+  if (!config.connectors?.posthog?.enabled || !config.connectors.posthog.projectKey?.trim()) {
     return createPostHogSenderStub();
   }
 
@@ -250,6 +251,7 @@ function createPostHogSenderForConfig(config: BlypConfig): PostHogSender {
       '@opentelemetry/resources',
       '@opentelemetry/sdk-logs',
     ],
+    '@blyp/core/posthog',
     '../connectors/posthog/sender'
   ).createPostHogSender(config);
 }
@@ -259,11 +261,20 @@ function createSentrySenderForConfig(config: BlypConfig): SentrySender {
     return createSentrySenderStub();
   }
 
-  return loadOptionalModule<SentrySenderModule>(
-    'sentry',
-    ['@sentry/node'],
-    '../connectors/sentry/sender'
-  ).createSentrySender(config);
+  try {
+    return loadOptionalModule<SentrySenderModule>(
+      'sentry',
+      ['@sentry/node'],
+      '@blyp/core/sentry',
+      '../connectors/sentry/sender'
+    ).createSentrySender(config);
+  } catch (error) {
+    if (!config.connectors.sentry.dsn?.trim() && error instanceof Error &&
+        error.message.startsWith('[Blyp] Optional connector dependencies missing')) {
+      return createSentrySenderStub();
+    }
+    throw error;
+  }
 }
 
 function createHTTPRegistryForConfig(config: BlypConfig): HTTPRegistry {
@@ -695,6 +706,28 @@ function createLoggerInstance(
     maybeSendToOTLP(otlp, record);
   };
 
+  const flushAll = async (options: FlushOptions = {}): Promise<TelemetryFlushResult> => {
+    // Start every barrier before awaiting sinks, so pre-existing connector work is included.
+    const destinations: Record<string, ConnectorFlushResult> = {};
+    const tasks = {
+      sink: () => sink.flush(),
+      delivery: () => connectorDelivery?.flush() ?? Promise.resolve(),
+      betterstack: () => betterstack.flush(),
+      databuddy: () => databuddy.flush(),
+      posthog: () => posthog.flush(options),
+      sentry: () => sentry.flush(options),
+      http: () => http.flush(),
+      otlp: () => otlp.flush(),
+    };
+    await Promise.all(Object.entries(tasks).map(async ([name, task]) => {
+      const report: { value?: ConnectorFlushResult } = {};
+      const bounded = await boundedFlush(async () => { const result = await task(); if (result) report.value = result; }, options);
+      destinations[name] = report.value ?? bounded;
+    }));
+    const statuses = Object.values(destinations).map(value => value.status);
+    return { status: statuses.includes('timed_out') ? 'timed_out' : statuses.includes('failed') ? 'failed' : 'delivered', destinations };
+  };
+
   const logger: InternalBlypLogger = {
     success: (message: unknown, ...args: unknown[]) => {
       writeRecord('success', message, args);
@@ -732,34 +765,24 @@ function createLoggerInstance(
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
 
-    flush: async () => {
-      await sink.flush();
-      if (connectorDelivery) {
-        await connectorDelivery.flush();
-      }
-      await Promise.allSettled([
-        betterstack.flush(),
-        databuddy.flush(),
-        posthog.flush(),
-        sentry.flush(),
-        http.flush(),
-        otlp.flush(),
-      ]);
-    },
-
-    shutdown: async () => {
-      await sink.shutdown();
-      if (connectorDelivery) {
-        await connectorDelivery.shutdown();
-      }
-      await Promise.allSettled([
-        betterstack.flush(),
-        databuddy.flush(),
-        posthog.flush(),
-        sentry.flush(),
-        http.flush(),
-        otlp.flush(),
-      ]);
+    flush: options => flushAll(options),
+    shutdown: async (options = {}) => {
+      const start = Date.now();
+      const result = await flushAll(options);
+      if (result.status !== 'delivered') return result;
+      const remaining = { timeoutMs: Math.max(0, (options.timeoutMs ?? 5000) - (Date.now() - start)) };
+      const teardown = await boundedFlush(async () => {
+        await sink.shutdown();
+        await connectorDelivery?.shutdown();
+        const closed = await Promise.all([posthog.shutdown?.(remaining), sentry.shutdown?.(remaining)]);
+        for (const [index, value] of closed.entries()) {
+          if (value) result.destinations[index === 0 ? 'posthog' : 'sentry'] = value;
+        }
+      }, remaining);
+      result.destinations.shutdown = teardown;
+      const statuses = Object.values(result.destinations).map(value => value.status);
+      result.status = statuses.includes('timed_out') ? 'timed_out' : statuses.includes('failed') ? 'failed' : 'delivered';
+      return result;
     },
 
     createStructuredLog: (
@@ -886,4 +909,17 @@ export function createBaseLogger(config?: Partial<BlypConfig>): BlypLogger {
   return instance;
 }
 
-export const logger = createBaseLogger();
+/** Keep entrypoint imports and module introspection free of logger side effects. */
+export function createLazyLogger<T extends BlypLogger>(resolve: () => T): T {
+  const methods = new Set(['debug', 'info', 'error', 'warn', 'warning', 'success', 'critical', 'table', 'flush', 'shutdown', 'createStructuredLog', 'child']);
+  return new Proxy({} as T, {
+    get(_target, key) {
+      if (key !== LOGGER_FACTORY && (typeof key !== 'string' || !methods.has(key))) return undefined;
+      const instance = resolve();
+      const value = Reflect.get(instance, key);
+      return typeof value === 'function' ? value.bind(instance) : value;
+    },
+  });
+}
+
+export const logger = createLazyLogger(() => createBaseLogger());

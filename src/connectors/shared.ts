@@ -18,20 +18,14 @@ export function getField<T extends string | number>(
   record: LogRecord,
   key: string
 ): T | undefined {
-  if (key in record) {
-    const direct = record[key];
-    if (typeof direct === 'string' || typeof direct === 'number') {
-      return direct as T;
-    }
-  }
-
   const payload = getPrimaryPayload(record);
   const nested = payload[key];
-  if (typeof nested === 'string' || typeof nested === 'number') {
-    return nested as T;
-  }
+  if (typeof nested === 'string' || typeof nested === 'number') return nested as T;
+  const direct = record[key];
+  if (typeof direct === 'string' || typeof direct === 'number') return direct as T;
 
-  return undefined;
+  const binding = isPlainObject(record.bindings) ? record.bindings[key] : undefined;
+  return typeof binding === 'string' || typeof binding === 'number' ? binding as T : undefined;
 }
 
 export function getClientPageField(

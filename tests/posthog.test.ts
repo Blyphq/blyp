@@ -494,7 +494,7 @@ describe('PostHog Connector', () => {
 
     expect(result.status).toBe(204);
     expect(runtime.exceptionCalls).toHaveLength(1);
-    expect(runtime.exceptionCalls[0]?.distinctId).toBe('person_123');
+    expect(runtime.exceptionCalls[0]?.distinctId).toBeUndefined(); // browser metadata is unverified
     expect(runtime.exceptionCalls[0]?.additionalProperties).toMatchObject({
       'blyp.source': 'client',
       'blyp.type': 'client_log',

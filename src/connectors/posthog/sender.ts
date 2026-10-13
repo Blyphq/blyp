@@ -1,3 +1,5 @@
+import { exceptionFields, recordException, restoreException, stripSourceContext } from '../exception';
+import { boundedFlush } from '../flush';
 import { SeverityNumber } from '@opentelemetry/api-logs';
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
@@ -12,7 +14,6 @@ import type {
   ResolvedPostHogConnectorConfig,
 } from '../../core/config';
 import type { LogRecord } from '../../core/file-logger';
-import { serializeLogRecord } from '../../core/file-logger';
 import type {
   ConnectorBatchDispatchTarget,
   ConnectorDeliveryBinder,
@@ -41,7 +42,6 @@ import {
 import {
   getClientPageField,
   getClientSessionField,
-  getField,
   getRecordType,
   isBlypConfig,
 } from '../shared';
@@ -83,7 +83,7 @@ function createSyntheticError(
   message: string,
   source: Record<string, unknown>
 ): Error {
-  const error = new Error(message);
+  const error = restoreException({ ...source, message }) ?? new Error(message);
   const name = hasNonEmptyString(source.name) ? source.name : 'Error';
   error.name = name;
 
@@ -91,7 +91,7 @@ function createSyntheticError(
     error.stack = source.stack;
   }
 
-  assignExceptionField(error, 'cause', source.cause);
+  assignExceptionField(error, 'cause', restoreException(source.cause) ?? source.cause);
   assignExceptionField(error, 'status', source.status);
   assignExceptionField(error, 'statusCode', source.statusCode);
   assignExceptionField(error, 'code', source.code);
@@ -214,20 +214,19 @@ function resolveSeverity(level: string): { text: string; number: SeverityNumber 
   }
 }
 
-function registerShutdownHooks(key: string, shutdown: () => Promise<void>): void {
+function registerShutdownHooks(key: string, shutdown: () => Promise<void>): () => void {
   const handlers: Array<NodeJS.Signals | 'beforeExit'> = ['beforeExit', 'SIGINT', 'SIGTERM'];
 
-  for (const event of handlers) {
-    process.once(event, () => {
+  const callbacks = handlers.map(event => {
+    const callback = () => {
       void shutdown().catch((error) => {
-        warnOnce(
-          `${key}:shutdown`,
-          '[Blyp] Failed to flush PostHog telemetry during shutdown.',
-          error
-        );
+        warnOnce(`${key}:shutdown`, '[Blyp] Failed to flush PostHog telemetry during shutdown.', error);
       });
-    });
-  }
+    };
+    process.once(event, callback);
+    return { event, callback };
+  });
+  return () => { for (const { event, callback } of callbacks) process.removeListener(event, callback); };
 }
 
 function createDefaultTransport(
@@ -268,18 +267,44 @@ function createDefaultTransport(
 function createDefaultExceptionClient(
   connector: ResolvedPostHogConnectorConfig
 ): PostHogExceptionClient {
-  const client = new PostHog(connector.projectKey ?? '', {
+  // SDK 5.x captureExceptionImmediate resolves before buildEventMessage/delivery.
+  // addPendingPromise is a public SDK method; intercept the work it registers.
+  class ExceptionClient extends PostHog {
+    readonly work = new Set<Promise<unknown>>();
+    override addPendingPromise<T>(promise: Promise<T>): Promise<T> {
+      this.work.add(promise);
+      void promise.then(() => this.work.delete(promise), () => this.work.delete(promise));
+      return super.addPendingPromise(promise);
+    }
+  }
+  const hooks = connector.errorTracking.beforeSend;
+  const client = new ExceptionClient(connector.projectKey ?? '', {
     host: connector.host,
+    requestTimeout: connector.errorTracking.requestTimeoutMs ?? 5000,
+    fetchRetryCount: 0,
     enableExceptionAutocapture: connector.errorTracking.enableExceptionAutocapture,
+    before_send: [
+      ...(Array.isArray(hooks) ? hooks : hooks ? [hooks] : []),
+      (event) => {
+        if (event && !connector.errorTracking.includeSourceContext) stripSourceContext(event);
+        return event;
+      },
+    ],
   });
+
+  let deliveryError: unknown;
+  client.on('error', error => { deliveryError = error; });
 
   return {
     captureException(error, distinctId, additionalProperties) {
-      return client.captureExceptionImmediate(error, distinctId, additionalProperties);
+      const previous = new Set(client.work);
+      const result = client.captureExceptionImmediate(error, distinctId, additionalProperties);
+      return Promise.all([result, ...[...client.work].filter(p => !previous.has(p))]).then(() => {
+        if (deliveryError !== undefined) throw deliveryError;
+      });
     },
-    shutdown() {
-      return client._shutdown();
-    },
+    flush() { return client.flush(); },
+    shutdown() { return client.shutdown(); },
   };
 }
 
@@ -305,6 +330,9 @@ function resolveConnectorConfig(
     host: normalizeHost(connector?.host),
     serviceName: connector?.serviceName ?? 'blyp-app',
     errorTracking: {
+      beforeSend: connector?.errorTracking?.beforeSend,
+      includeSourceContext: connector?.errorTracking?.includeSourceContext ?? false,
+      requestTimeoutMs: connector?.errorTracking?.requestTimeoutMs,
       enabled: errorTrackingEnabled,
       mode: errorTrackingMode,
       enableExceptionAutocapture:
@@ -331,7 +359,21 @@ export function createPostHogSender(
     ? (testHooks.createExceptionClient?.(connector) ?? createDefaultExceptionClient(connector))
     : undefined;
 
+  let closed = false;
+  const pending = new Set<Promise<void>>();
+  let failure: unknown;
+  const track = (result: void | Promise<void>): void => {
+    const promise = Promise.resolve(result);
+    pending.add(promise);
+    void promise.then(() => pending.delete(promise), error => {
+      pending.delete(promise);
+      failure = error;
+      warnOnce(`posthog-work:${key}`, '[Blyp] PostHog delivery failed.', error);
+    });
+  };
+
   const shutdown = async (): Promise<void> => {
+    await Promise.allSettled([...pending]);
     if (transport?.shutdown) {
       await transport.shutdown();
     } else if (transport?.flush) {
@@ -343,9 +385,7 @@ export function createPostHogSender(
     }
   };
 
-  if (transport || exceptionClient) {
-    registerShutdownHooks(key, shutdown);
-  }
+  const removeShutdownHooks = transport || exceptionClient ? registerShutdownHooks(key, shutdown) : () => {};
 
   const emitUnavailableWarning = (): void => {
     warnOnce(
@@ -404,13 +444,25 @@ export function createPostHogSender(
       enableExceptionAutocapture: connector.errorTracking.enableExceptionAutocapture,
     },
     shouldAutoForwardServerLogs() {
-      return ready && connector.mode === 'auto';
+      return !closed && ready && connector.mode === 'auto';
     },
     shouldAutoCaptureExceptions() {
-      return connector.errorTracking.ready && connector.errorTracking.mode === 'auto';
+      return !closed && connector.errorTracking.ready && connector.errorTracking.mode === 'auto';
     },
     send(record, options = {}) {
+      if (closed) return;
       const source = options.source ?? 'server';
+      const exception = recordException(record);
+      if (exception && sender.shouldAutoCaptureExceptions()) {
+        const fields = exceptionFields(record, source);
+        sender.captureException(exception, { source,
+          distinctId: typeof fields.distinctId === 'string' ? fields.distinctId : typeof fields.userId === 'string' ? fields.userId : undefined,
+          properties: { ...fields, ...createExceptionPropertiesFromRecord(record, source),
+            ...(typeof fields.$session_id === 'string' ? { $session_id: fields.$session_id } : getClientSessionField(record, 'sessionId') ? { $session_id: getClientSessionField(record, 'sessionId') } : {}),
+            ...(source === 'client' ? { $current_url: getClientPageField(record, 'url'), $request_path: getClientPageField(record, 'pathname'), 'client.runtime': isPlainObject(fields.device) ? fields.device.runtime : undefined, 'client.metadata': fields.metadata } : {}),
+          },
+        });
+      }
 
       if (source !== 'client' && deliveryBinder) {
         deliveryBinder.enqueue('posthog', record, sender[CONNECTOR_BATCH_DISPATCH]!);
@@ -427,16 +479,9 @@ export function createPostHogSender(
       const normalized = normalizePostHogRecord(record, connector, source);
       try {
         const result = transport.emit(normalized);
-        if (result && typeof (result as Promise<void>).catch === 'function') {
-          void (result as Promise<void>).catch((error) => {
-            warnOnce(
-              `posthog-emit:${key}`,
-              '[Blyp] Failed to deliver log to PostHog.',
-              error
-            );
-          });
-        }
+        track(result);
       } catch (error) {
+        failure = error;
         warnOnce(
           `posthog-emit:${key}`,
           '[Blyp] Failed to deliver log to PostHog.',
@@ -445,6 +490,7 @@ export function createPostHogSender(
       }
     },
     captureException(error, options = {}) {
+      if (closed) return;
       if (!connector.errorTracking.ready || !exceptionClient) {
         if (options.warnIfUnavailable) {
           emitExceptionUnavailableWarning();
@@ -456,7 +502,7 @@ export function createPostHogSender(
         return;
       }
 
-  const normalized = normalizeExceptionInput(
+      const normalized = normalizeExceptionInput(
         error,
         options.source === 'client' ? 'Client error' : 'Server error'
       );
@@ -474,16 +520,9 @@ export function createPostHogSender(
         );
         markPostHogCapturedError(error);
         markPostHogCapturedError(normalized.error);
-        if (result && typeof (result as Promise<void>).catch === 'function') {
-          void (result as Promise<void>).catch((captureError) => {
-            warnOnce(
-              `posthog-capture:${key}`,
-              '[Blyp] Failed to capture exception in PostHog.',
-              captureError
-            );
-          });
-        }
+        track(result);
       } catch (captureError) {
+        failure = captureError;
         warnOnce(
           `posthog-capture:${key}`,
           '[Blyp] Failed to capture exception in PostHog.',
@@ -491,18 +530,22 @@ export function createPostHogSender(
         );
       }
     },
-    async flush() {
-      try {
-        if (transport?.flush) {
-          await transport.flush();
-        }
-      } catch (error) {
-        warnOnce(
-          `posthog-flush:${key}`,
-          '[Blyp] Failed to flush PostHog telemetry.',
-          error
-        );
-      }
+    flush(options = {}) {
+      // Snapshot now: later captures need not delay this barrier.
+      const accepted = [...pending];
+      return boundedFlush(async () => {
+        await Promise.allSettled(accepted);
+        await Promise.all([transport?.flush?.(), exceptionClient?.flush?.()]);
+        if (failure !== undefined) throw failure;
+      }, options, () => pending.size);
+    },
+    async shutdown(options = {}) {
+      const start = Date.now();
+      const result = await sender.flush(options);
+      if (result?.status !== 'delivered') return result;
+      const resultOfClose = await boundedFlush(shutdown, { timeoutMs: Math.max(0, (options.timeoutMs ?? 5000) - (Date.now() - start)) }, () => pending.size);
+      if (resultOfClose.status === 'delivered') { closed = true; removeShutdownHooks(); }
+      return resultOfClose;
     },
     [CONNECTOR_BATCH_DISPATCH]: {
       dispatchKey: 'posthog',

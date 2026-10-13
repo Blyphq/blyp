@@ -1,6 +1,6 @@
 {
   "name": "@blyp/core",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "description": "A high-performance, modular logger with Bun-first runtime detection and TypeScript support. Built on Pino and supports Elysia, Hono, Express, Fastify, NestJS, Next.js App Router, Farm.js, React Router, Astro, Nitro, Nuxt, TanStack Start, SolidStart, and SvelteKit.",
   "keywords": [
     "logger",
@@ -335,7 +335,9 @@
   "files": [
     "dist",
     "README.md",
-    "STABILITY.md"
+    "STABILITY.md",
+    "docs/connectors",
+    "RELEASE_NOTES.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -352,7 +354,9 @@
     "type-check": "bun x tsc --noEmit",
     "dev": "bun run test:watch",
     "lint": "bun run type-check",
-    "clean": "rm -rf dist .log"
+    "clean": "rm -rf dist .log",
+    "test:packed-connectors": "node scripts/test-packed-connectors.mjs",
+    "test:published-connectors": "node scripts/reproduce-published-connectors.mjs"
   },
   "devDependencies": {
     "@farm.js/core": "0.1.0-beta.40",
@@ -412,14 +416,15 @@
     "express": "^5",
     "fastify": "^5",
     "hono": "^4",
-    "next": "^15",
+    "next": "^15 || ^16",
     "nitropack": "^2",
     "nuxt": "^4",
     "posthog-node": "^5",
     "react-router": "^7",
     "rxjs": "^7",
     "@workos-inc/node": "^7",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@opentelemetry/api": "^1"
   },
   "peerDependenciesMeta": {
     "@farm.js/core": {
@@ -522,6 +527,9 @@
       "optional": true
     },
     "@workos-inc/node": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
       "optional": true
     }
   },

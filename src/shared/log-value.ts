@@ -1,4 +1,5 @@
-export function normalizeError(error: Error): Record<string, unknown> {
+export function normalizeError(error: Error, seen: WeakSet<object> = new WeakSet()): Record<string, unknown> {
+  seen.add(error);
   const normalized: Record<string, unknown> = {
     name: error.name,
     message: error.message,
@@ -10,7 +11,7 @@ export function normalizeError(error: Error): Record<string, unknown> {
 
   const errorWithCause = error as Error & { cause?: unknown };
   if (errorWithCause.cause !== undefined) {
-    normalized.cause = normalizeLogValue(errorWithCause.cause);
+    normalized.cause = normalizeLogValue(errorWithCause.cause, seen);
   }
 
   return normalized;
@@ -21,7 +22,11 @@ export function normalizeLogValue(
   seen: WeakSet<object> = new WeakSet()
 ): unknown {
   if (value instanceof Error) {
-    return normalizeError(value);
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    const normalized = normalizeError(value, seen);
+    seen.delete(value);
+    return normalized;
   }
 
   if (typeof value === 'function') {

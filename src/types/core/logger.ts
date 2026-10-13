@@ -1,3 +1,4 @@
+import type { FlushOptions, TelemetryFlushResult, ConnectorFlushResult } from '../../connectors/flush';
 import type { BetterStackSender } from '../connectors/betterstack';
 import type { DatabuddySender } from '../connectors/databuddy';
 import type { PostHogSender } from '../connectors/posthog';
@@ -17,8 +18,8 @@ export interface BlypLogger {
   error: (message: unknown, ...args: unknown[]) => void;
   warn: (message: unknown, ...args: unknown[]) => void;
   table: (message: string, data?: unknown) => void;
-  flush: () => Promise<void>;
-  shutdown: () => Promise<void>;
+  flush: (options?: FlushOptions) => Promise<void | TelemetryFlushResult | ConnectorFlushResult>;
+  shutdown: (options?: FlushOptions) => Promise<void | TelemetryFlushResult | ConnectorFlushResult>;
   createStructuredLog: (
     groupId: string,
     initial?: Record<string, unknown>

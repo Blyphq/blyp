@@ -30,7 +30,8 @@ function isMissingModuleError(error: unknown): boolean {
 export function loadOptionalModule<TModule>(
   subpath: string,
   peerDependencies: string[],
-  modulePath: string = `@blyp/core/${subpath}`
+  modulePath: string = `@blyp/core/${subpath}`,
+  sourceModulePath?: string
 ): TModule {
   const moduleId = `@blyp/core/${subpath}`;
   const cacheKey = `${moduleId}::${modulePath}`;
@@ -41,7 +42,12 @@ export function loadOptionalModule<TModule>(
   }
 
   try {
-    const loaded = jiti(modulePath) as TModule;
+    // Source execution uses the source sender. Bundled entrypoints resolve the
+    // public conditional export, independent of their location under dist/.
+    const filename = typeof __filename === 'string' ? __filename : new URL(import.meta.url).pathname;
+    const resolvedPath = sourceModulePath && filename.endsWith('/src/core/optional-module.ts')
+      ? sourceModulePath : modulePath;
+    const loaded = jiti(resolvedPath) as TModule;
     moduleCache.set(cacheKey, loaded);
     return loaded;
   } catch (error) {

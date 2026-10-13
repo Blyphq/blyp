@@ -307,8 +307,8 @@ export function sanitizeLogValue(
 }
 
 export function sanitizeLogMessage(message: unknown, config: ResolvedRedactionConfig): string {
-  if (typeof message === 'string') {
-    return sanitizeString(message, config, false);
+  if (typeof message === 'string' || message instanceof Error) {
+    return sanitizeString(message instanceof Error ? message.message || message.name : message, config, false);
   }
 
   return serializeLogMessage(sanitizeLogValue(message, config));

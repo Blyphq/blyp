@@ -1,3 +1,4 @@
+import type { FlushOptions, ConnectorFlushResult } from '../../connectors/flush';
 import type { SeverityNumber } from '@opentelemetry/api-logs';
 import type {
   BlypConnectorsConfig,
@@ -32,6 +33,7 @@ export interface PostHogLogTransport {
 }
 
 export interface PostHogExceptionClient {
+  flush?: () => Promise<void>;
   captureException: (
     error: unknown,
     distinctId?: string,
@@ -83,7 +85,8 @@ export interface PostHogSender {
     error: unknown,
     options?: PostHogCaptureExceptionOptions
   ) => void;
-  flush: () => Promise<void>;
+  flush: (options?: FlushOptions) => Promise<ConnectorFlushResult | void>;
+  shutdown?: (options?: FlushOptions) => Promise<ConnectorFlushResult | void>;
 }
 
 export interface PostHogTestHooks {

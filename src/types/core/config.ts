@@ -1,3 +1,4 @@
+import type { PostHogOptions } from 'posthog-node';
 import type { ConnectorMode } from '../connectors/mode';
 import type {
   BlypDestination,
@@ -143,12 +144,20 @@ export interface BetterStackErrorTrackingConfig {
 }
 
 export interface PostHogErrorTrackingConfig {
+  /** Applied after SDK enrichment. SDK hooks run in order; null drops an event. */
+  beforeSend?: PostHogOptions['before_send'];
+  /** Defaults to false to avoid transmitting local source lines. */
+  includeSourceContext?: boolean;
+  requestTimeoutMs?: number;
   enabled?: boolean;
   mode?: ConnectorMode;
   enableExceptionAutocapture?: boolean;
 }
 
 export interface ResolvedPostHogErrorTrackingConfig {
+  beforeSend?: PostHogOptions['before_send'];
+  includeSourceContext?: boolean;
+  requestTimeoutMs?: number;
   enabled: boolean;
   mode: ConnectorMode;
   enableExceptionAutocapture: boolean;
@@ -204,6 +213,9 @@ export interface ResolvedBetterStackErrorTrackingConfig {
 }
 
 export interface SentryConnectorConfig {
+  /** Runs on Blyp envelope payloads after SDK/app enrichment. null drops the item. */
+  finalPayloadFilter?: (payload: Record<string, unknown>, kind: 'log' | 'exception') => Record<string, unknown> | null;
+  includeSourceContext?: boolean;
   enabled?: boolean;
   mode?: ConnectorMode;
   dsn?: string;
@@ -212,6 +224,9 @@ export interface SentryConnectorConfig {
 }
 
 export interface ResolvedSentryConnectorConfig {
+  /** Runs on Blyp envelope payloads after SDK/app enrichment. null drops the item. */
+  finalPayloadFilter?: (payload: Record<string, unknown>, kind: 'log' | 'exception') => Record<string, unknown> | null;
+  includeSourceContext?: boolean;
   enabled: boolean;
   mode: ConnectorMode;
   dsn?: string;

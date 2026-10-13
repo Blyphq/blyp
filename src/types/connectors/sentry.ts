@@ -1,3 +1,5 @@
+type Envelope = [Record<string, unknown>, Array<[Record<string, unknown>, unknown]>];
+import type { FlushOptions, ConnectorFlushResult } from '../../connectors/flush';
 import type { Scope } from '@sentry/node';
 import type {
   BlypConfig,
@@ -23,6 +25,10 @@ export interface SentrySendOptions {
 }
 
 export interface SentryClientLike {
+  on?: {
+    (hook: 'beforeEnvelope', callback: (envelope: Envelope) => void): () => void;
+    (hook: 'afterSendEvent', callback: (event: Record<string, unknown>, response?: { statusCode?: number }) => void): () => void;
+  };
   getOptions?: () => {
     dsn?: unknown;
     environment?: unknown;
@@ -56,5 +62,6 @@ export interface SentrySender {
   readonly status: 'enabled' | 'missing';
   shouldAutoForwardServerLogs: () => boolean;
   send: (record: LogRecord, options?: SentrySendOptions) => void;
-  flush: () => Promise<void>;
+  flush: (options?: FlushOptions) => Promise<ConnectorFlushResult | void>;
+  shutdown?: (options?: FlushOptions) => Promise<ConnectorFlushResult | void>;
 }

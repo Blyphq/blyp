@@ -1,3 +1,4 @@
+import { exceptionFields } from '../exception';
 import type { LogRecord } from '../../core/file-logger';
 import { serializeLogRecord } from '../../core/file-logger';
 import type { PostHogSource } from '../../types/connectors/posthog';
@@ -32,6 +33,7 @@ export function buildPostHogRecordAttributes(
   };
 
   const ifTruthy: Array<[string, unknown]> = [
+    ...['userId', 'distinctId', 'organizationId', 'requestId', 'region', 'environment', 'release', 'service', '$session_id'].map(key => [key, exceptionFields(record, source)[key]] as [string, unknown]),
     ['blyp.type', recordType],
     ['blyp.caller', caller],
     ['blyp.group_id', groupId],

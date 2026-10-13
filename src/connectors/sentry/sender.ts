@@ -1,3 +1,5 @@
+import { exceptionFields, recordException, stripSourceContext } from '../exception';
+import { boundedFlush } from '../flush';
 import * as Sentry from '@sentry/node';
 import type {
   BlypConfig,
@@ -28,7 +30,6 @@ import {
   getClientPageField,
   getClientSessionField,
   getField,
-  getPrimaryPayload,
   getRecordType,
   isBlypConfig,
 } from '../shared';
@@ -53,6 +54,8 @@ function resolveConnectorConfig(
 
   return {
     enabled,
+    finalPayloadFilter: connector?.finalPayloadFilter,
+    includeSourceContext: connector?.includeSourceContext ?? false,
     mode: connector?.mode ?? 'auto',
     dsn,
     environment: connector?.environment,
@@ -85,6 +88,7 @@ function normalizeAttributes(
   const pageId = getClientSessionField(record, 'pageId');
 
   const ifTruthy: Array<[string, unknown]> = [
+    ...['userId', 'distinctId', 'organizationId', 'requestId', 'region', 'environment', 'release', 'service', '$session_id'].map(key => [key, exceptionFields(record, source)[key]] as [string, unknown]),
     ['blyp.type', recordType],
     ['blyp.caller', caller],
     ['blyp.group_id', groupId],
@@ -147,69 +151,6 @@ function normalizeScopeLevel(level: string): Sentry.SeverityLevel {
   }
 }
 
-function toExceptionCandidate(value: unknown): unknown {
-  if (!isPlainObject(value)) {
-    return undefined;
-  }
-
-  const message = typeof value.message === 'string' ? value.message : undefined;
-  const name = typeof value.name === 'string' ? value.name : undefined;
-  const stack = typeof value.stack === 'string' ? value.stack : undefined;
-
-  if (!message && !name && !stack) {
-    return undefined;
-  }
-
-  const error = new Error(message ?? name ?? 'Unknown error');
-  error.name = name ?? 'Error';
-  if (stack) {
-    error.stack = stack;
-  }
-
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === 'message' || key === 'name' || key === 'stack') {
-      continue;
-    }
-
-    ((error as unknown) as Record<string, unknown>)[key] = entry;
-  }
-
-  return error;
-}
-
-function extractExceptionCandidate(record: LogRecord): unknown {
-  if (record.level !== 'error' && record.level !== 'critical') {
-    return undefined;
-  }
-
-  const direct = toExceptionCandidate(record.error);
-  if (direct) {
-    return direct;
-  }
-
-  if (isPlainObject(record.data)) {
-    const directData = toExceptionCandidate(record.data);
-    if (directData) {
-      return directData;
-    }
-
-    const nested = toExceptionCandidate(record.data.error);
-    if (nested) {
-      return nested;
-    }
-  }
-
-  const payload = getPrimaryPayload(record);
-  if (isPlainObject(payload)) {
-    const nested = toExceptionCandidate(payload.error);
-    if (nested) {
-      return nested;
-    }
-  }
-
-  return undefined;
-}
-
 function getClientOptions(client: SentryClientLike | undefined): {
   dsn?: unknown;
   environment?: unknown;
@@ -264,6 +205,46 @@ export function createSentrySender(
     );
   }
 
+  // Filter only this sender's events, after existing beforeSend/beforeSendLog hooks.
+  let closed = false;
+  const owner = Math.random().toString(36).slice(2);
+  const capturedIds = new Set<string>();
+  let deliveryFailure: unknown;
+  const removeDeliveryObserver = client?.on?.('afterSendEvent', (event, response) => {
+    if (typeof event.event_id !== 'string' || !capturedIds.delete(event.event_id)) return;
+    if (!response?.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+      deliveryFailure = new Error(`Sentry exception delivery failed (${response?.statusCode ?? 'no response'})`);
+    }
+  });
+  const removeFilter = client?.on?.('beforeEnvelope', envelope => {
+    for (let i = envelope[1].length - 1; i >= 0; i--) {
+      const item = envelope[1][i]!;
+      const payload = item[1];
+      if (!isPlainObject(payload)) continue;
+      if (item[0].type === 'event' && ((isPlainObject(payload.extra) && payload.extra['blyp.owner'] === owner) || (typeof payload.event_id === 'string' && capturedIds.has(payload.event_id)))) {
+        if (isPlainObject(payload.extra)) delete payload.extra['blyp.owner'];
+        try {
+          const filtered = connector.finalPayloadFilter ? connector.finalPayloadFilter(payload, 'exception') : payload;
+          if (!filtered) { envelope[1].splice(i, 1); continue; }
+          if (!connector.includeSourceContext) stripSourceContext(filtered);
+          item[1] = filtered;
+        } catch { envelope[1].splice(i, 1); }
+      } else if (item[0].type === 'log' && Array.isArray(payload.items)) {
+        payload.items = payload.items.flatMap(log => {
+          if (!isPlainObject(log) || !isPlainObject(log.attributes) ||
+              !isPlainObject(log.attributes['blyp.owner']) || log.attributes['blyp.owner'].value !== owner) return [log];
+          delete log.attributes['blyp.owner'];
+          try {
+            const filtered = connector.finalPayloadFilter ? connector.finalPayloadFilter(log, 'log') : log;
+            return filtered ? [filtered] : [];
+          } catch { return []; }
+        });
+        item[0].item_count = (payload.items as unknown[]).length;
+        if (!(payload.items as unknown[]).length) envelope[1].splice(i, 1);
+      }
+    }
+  });
+
   const ready = connector.enabled && client !== undefined;
 
   const emitUnavailableWarning = (): void => {
@@ -286,12 +267,12 @@ export function createSentrySender(
 
     try {
       for (const record of records) {
-        const attributes = normalizeAttributes(record, 'server');
+        const attributes = { ...normalizeAttributes(record, 'server'), 'blyp.owner': owner };
         const logMethod = resolveLogMethod(module, record.level);
         logMethod(record.message, attributes);
       }
-      await module.flush(2000);
-      return { ok: true };
+      const flushed = await module.flush(2000);
+      return flushed ? { ok: true } : { ok: false, retryable: true, error: 'Sentry flush incomplete' };
     } catch (error) {
       return {
         ok: false,
@@ -307,9 +288,45 @@ export function createSentrySender(
     mode: connector.mode,
     status: ready ? 'enabled' : 'missing',
     shouldAutoForwardServerLogs() {
-      return ready && connector.mode === 'auto';
+      return !closed && ready && connector.mode === 'auto';
     },
     send(record, options = {}) {
+      if (closed) return;
+      if (ready) {
+        const exception = recordException(record);
+        if (exception) {
+          const fields = exceptionFields(record, options.source ?? 'server');
+          try {
+            module.withScope(scope => {
+              scope.setLevel(normalizeScopeLevel(record.level));
+              scope.setContext('blyp', normalizeAttributes(record, options.source ?? 'server'));
+              scope.setExtra('blyp.payload', serializeLogRecord(record));
+              scope.setExtra('blyp.owner', owner);
+              if (isPlainObject(fields.tags)) {
+                const tags = Object.fromEntries(Object.entries(fields.tags).filter(([,v]) => typeof v === 'string'));
+                scope.setTags?.(tags as Record<string, string>);
+              }
+              if (isPlainObject(fields.extra)) scope.setExtras?.(fields.extra);
+              if (Array.isArray(fields.fingerprint) && fields.fingerprint.every(v => typeof v === 'string')) scope.setFingerprint?.(fields.fingerprint);
+              if (isPlainObject(fields.contexts)) {
+                for (const [key,value] of Object.entries(fields.contexts)) {
+                  if (value === null || isPlainObject(value)) scope.setContext(key, value);
+                }
+              }
+              // Set explicitly to avoid inheriting another request's SDK user.
+              scope.setUser?.(typeof fields.userId === 'string' ? { id: fields.userId } : null);
+              const eventId = module.captureException(exception);
+              if (typeof eventId === 'string') {
+                if (capturedIds.size >= 4096) capturedIds.delete(capturedIds.values().next().value!);
+                capturedIds.add(eventId);
+              }
+            });
+          } catch (error) {
+            deliveryFailure = error;
+            warnOnce(`sentry-exception:${key}`, '[Blyp] Failed to capture exception in Sentry.', error);
+          }
+        }
+      }
       if ((options.source ?? 'server') !== 'client' && deliveryBinder) {
         deliveryBinder.enqueue('sentry', record, sender[CONNECTOR_BATCH_DISPATCH]!);
         return;
@@ -323,12 +340,13 @@ export function createSentrySender(
       }
 
       const source = options.source ?? 'server';
-      const attributes = normalizeAttributes(record, source);
+      const attributes = { ...normalizeAttributes(record, source), 'blyp.owner': owner };
       const logMethod = resolveLogMethod(module, record.level);
 
       try {
         logMethod(record.message, attributes);
       } catch (error) {
+        deliveryFailure = error;
         warnOnce(
           `sentry-log:${key}`,
           '[Blyp] Failed to deliver log to Sentry.',
@@ -336,36 +354,20 @@ export function createSentrySender(
         );
       }
 
-      const exception = extractExceptionCandidate(record);
-      if (!exception) {
-        return;
-      }
-
-      try {
-        module.withScope((scope) => {
-          scope.setLevel(normalizeScopeLevel(record.level));
-          scope.setContext('blyp', attributes);
-          scope.setExtra('blyp.payload', serializeLogRecord(record));
-          module.captureException(exception);
-        });
-      } catch (error) {
-        warnOnce(
-          `sentry-exception:${key}`,
-          '[Blyp] Failed to capture exception in Sentry.',
-          error
-        );
-      }
     },
-    async flush() {
-      try {
-        await module.flush(2000);
-      } catch (error) {
-        warnOnce(
-          `sentry-flush:${key}`,
-          '[Blyp] Failed to flush Sentry logs.',
-          error
-        );
-      }
+    flush(options = {}) {
+      return boundedFlush(async () => {
+        const accepted = [...capturedIds];
+        if (ready && !await module.flush(options.timeoutMs ?? 5000)) throw new Error('Sentry flush incomplete');
+        for (const id of accepted) capturedIds.delete(id);
+        if (deliveryFailure) throw deliveryFailure;
+      }, options);
+    },
+    async shutdown(options = {}) {
+      const result = await sender.flush(options);
+      // The application's framework client stays open.
+      if (result?.status === 'delivered') { closed = true; removeFilter?.(); removeDeliveryObserver?.(); }
+      return result;
     },
     [CONNECTOR_BATCH_DISPATCH]: {
       dispatchKey: 'sentry',

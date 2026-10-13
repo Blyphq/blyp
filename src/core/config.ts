@@ -743,6 +743,9 @@ function mergePostHogConnectorConfig(
       base?.serviceName ??
       resolveDefaultConnectorServiceName(),
     errorTracking: {
+      beforeSend: override?.errorTracking?.beforeSend ?? baseErrorTracking?.beforeSend,
+      includeSourceContext: override?.errorTracking?.includeSourceContext ?? baseErrorTracking?.includeSourceContext ?? false,
+      requestTimeoutMs: override?.errorTracking?.requestTimeoutMs ?? baseErrorTracking?.requestTimeoutMs,
       enabled: errorTrackingEnabled,
       mode: errorTrackingMode,
       enableExceptionAutocapture:
@@ -845,6 +848,8 @@ function mergeSentryConnectorConfig(
 
   return {
     enabled,
+    finalPayloadFilter: override?.finalPayloadFilter ?? base?.finalPayloadFilter,
+    includeSourceContext: override?.includeSourceContext ?? base?.includeSourceContext ?? false,
     mode: override?.mode ?? base?.mode ?? 'auto',
     dsn,
     environment: override?.environment ?? base?.environment,
@@ -1017,12 +1022,12 @@ export function mergeBlypConfig(
 
 export { defineConfig } from './define-config';
 
-export function loadConfig(): ResolvedBlypConfig {
+export function loadConfig(options: { bootstrap?: boolean } = {}): ResolvedBlypConfig {
   if (cachedConfig !== null) {
     return cachedConfig;
   }
 
-  bootstrapProjectFiles();
+  if (options.bootstrap !== false) bootstrapProjectFiles();
   const configFile = findConfigFile();
 
   if (configFile) {
@@ -1038,7 +1043,9 @@ export function loadConfig(): ResolvedBlypConfig {
 }
 
 export function resolveConfig(overrides: BlypUserConfig = {}): ResolvedBlypConfig {
-  return mergeBlypConfig(loadConfig(), overrides);
+  const noPersistence = overrides.file?.enabled === false &&
+    !overrides.database?.adapter && overrides.connectors?.delivery?.enabled === false;
+  return mergeBlypConfig(loadConfig({ bootstrap: !noPersistence }), overrides);
 }
 
 export function getConfig(): ResolvedBlypConfig {

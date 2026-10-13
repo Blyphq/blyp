@@ -88,8 +88,8 @@ function createSentryLoggerInstance(
     table: (message: string, data?: unknown) => {
       writeRecord('table', message, data === undefined ? [] : [data]);
     },
-    flush: async () => {},
-    shutdown: async () => {},
+    flush: options => sender.flush(options),
+    shutdown: options => sender.shutdown?.(options) ?? sender.flush(options),
     createStructuredLog: (
       groupId: string,
       initial?: Record<string, unknown>
@@ -139,3 +139,7 @@ export function createStructuredSentryLogger<
     },
   }) as StructuredLog<TFields>;
 }
+
+export { createSentrySender } from './sender';
+export type { SerializedException, ExceptionContext } from '../exception';
+export type { FlushOptions, ConnectorFlushResult } from '../flush';

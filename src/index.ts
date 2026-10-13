@@ -741,3 +741,7 @@ export function createStructuredNewRelicLogger<
 >(groupId: string, initial?: TFields, config: NewRelicLoggerConfig = {}): StructuredLog<TFields> {
   return createStructuredOtlpLogger(groupId, initial, { ...config, name: NEW_RELIC_TARGET_NAME });
 }
+
+export { createErrorCaptureRegistry } from './core/error-capture-registry';
+export type { FlushOptions, ConnectorFlushResult, TelemetryFlushResult } from './connectors/flush';
+export type { ExceptionContext, SerializedException } from './connectors/exception';

@@ -968,41 +968,7 @@ export async function handleClientLogIngestion<Ctx>(options: {
         source: 'client',
       });
 
-      if (
-        (sanitizedPayload.level === 'error' || sanitizedPayload.level === 'critical') &&
-        config.posthog.shouldAutoCaptureExceptions()
-      ) {
-        const metadata = structuredPayload.metadata;
-        const posthogDistinctId =
-          metadata &&
-          typeof metadata === 'object' &&
-          !Array.isArray(metadata) &&
-          typeof (metadata as Record<string, unknown>).posthogDistinctId === 'string' &&
-          (metadata as Record<string, unknown>).posthogDistinctId
-            ? String((metadata as Record<string, unknown>).posthogDistinctId)
-            : undefined;
 
-        const clientErrorCandidate =
-          sanitizedPayload.data &&
-          typeof sanitizedPayload.data === 'object' &&
-          !Array.isArray(sanitizedPayload.data) &&
-          typeof (sanitizedPayload.data as Record<string, unknown>).message === 'string'
-            ? sanitizedPayload.data
-            : sanitizedPayload.message;
-
-        config.posthog.captureException(clientErrorCandidate, {
-          source: 'client',
-          warnIfUnavailable: true,
-          distinctId: posthogDistinctId,
-          properties: buildPostHogExceptionProperties(forwardedRecord, 'client', {
-            $session_id: sanitizedPayload.session.sessionId,
-            $current_url: sanitizedPayload.page.url,
-            $request_path: sanitizedPayload.page.pathname,
-            'client.runtime': sanitizedPayload.device?.runtime,
-            'client.metadata': sanitizedPayload.metadata,
-          }),
-        });
-      }
     }
   } else if (sanitizedPayload.connector === 'sentry') {
     headers['x-blyp-sentry-status'] = config.sentry.ready ? 'enabled' : 'missing';

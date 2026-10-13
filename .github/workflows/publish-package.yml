@@ -36,6 +36,9 @@ jobs:
       - name: Run tests
         run: bun run test
 
+      - name: Test packed PostHog and Sentry connectors
+        run: bun run test:packed-connectors
+
       - name: Audit production dependencies
         run: bash .github/scripts/audit-production-deps.sh
 

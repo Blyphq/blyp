@@ -211,3 +211,7 @@ bun run type-check
 ## License
 
 MIT
+
+## Operational connector reliability
+
+See the [PostHog/Sentry contracts](docs/connectors/contracts.md), [published-package investigation](docs/connectors/investigation.md), and [CarsXE migration example](docs/connectors/carsxe-migration.md) for structured errors, verified identity, final-payload privacy, bounded flushing and no-persistence operation. Run `npm run test:packed-connectors` to verify the packed package with real SDKs in isolated Node CommonJS/ESM applications.

@@ -1,6 +1,7 @@
 import {
   attachLoggerInternals,
   createBaseLogger,
+  createLazyLogger,
   type BlypLogger,
 } from '../../core/logger';
 import { serializeLogMessage } from '../../shared/log-value';
@@ -8,10 +9,10 @@ import type { StandaloneLogger, StandaloneLoggerConfig } from '../../types/frame
 
 export type { StandaloneLogger } from '../../types/frameworks/standalone';
 
-function buildStructuredArgs(message: unknown, args: unknown[]): { text: string; data: unknown[] } {
+function buildStructuredArgs(message: unknown, args: unknown[]): { text: unknown; data: unknown[] } {
   const text = serializeMessage(message);
-  if (typeof message === 'string') {
-    return { text, data: args };
+  if (typeof message === 'string' || message instanceof Error) {
+    return { text: message instanceof Error ? message : text, data: args };
   }
   return { text, data: [message, ...args] };
 }
@@ -69,9 +70,9 @@ function wrapBaseLogger(baseLogger: BlypLogger, config: StandaloneLoggerConfig):
       baseLogger.table(message, data);
     },
 
-    flush: () => baseLogger.flush(),
+    flush: options => baseLogger.flush(options),
 
-    shutdown: () => baseLogger.shutdown(),
+    shutdown: options => baseLogger.shutdown(options),
 
     createStructuredLog: (groupId: string, initial?: Record<string, unknown>) => {
       return baseLogger.createStructuredLog(groupId, initial);
@@ -88,68 +89,10 @@ export function createStandaloneLogger(config: StandaloneLoggerConfig = {}): Sta
   return wrapBaseLogger(baseLogger, config);
 }
 
-let defaultLoggerInstance = createStandaloneLogger();
+let defaultLoggerInstance: StandaloneLogger | undefined;
 
 function getDefaultLogger(): StandaloneLogger {
-  return defaultLoggerInstance;
-}
-
-function createLoggerProxy(): StandaloneLogger {
-  return attachLoggerInternals({
-    debug: (message: unknown, ...args: unknown[]) => {
-      getDefaultLogger().debug(message, ...args);
-    },
-
-    info: (message: unknown, ...args: unknown[]) => {
-      getDefaultLogger().info(message, ...args);
-    },
-
-    error: (message: unknown, ...args: unknown[]) => {
-      getDefaultLogger().error(message, ...args);
-    },
-
-    warn: (message: unknown, ...args: unknown[]) => {
-      getDefaultLogger().warn(message, ...args);
-    },
-
-    warning: (message: unknown, ...args: unknown[]) => {
-      getDefaultLogger().warning(message, ...args);
-    },
-
-    success: (message: unknown, meta?: unknown) => {
-      if (meta === undefined) {
-        getDefaultLogger().success(message);
-        return;
-      }
-
-      getDefaultLogger().success(message, meta);
-    },
-
-    critical: (message: unknown, meta?: unknown) => {
-      if (meta === undefined) {
-        getDefaultLogger().critical(message);
-        return;
-      }
-
-      getDefaultLogger().critical(message, meta);
-    },
-
-    table: (message: string, data?: unknown) => {
-      getDefaultLogger().table(message, data);
-    },
-
-    flush: () => getDefaultLogger().flush(),
-
-    shutdown: () => getDefaultLogger().shutdown(),
-
-    createStructuredLog: (groupId: string, initial?: Record<string, unknown>) => {
-      return getDefaultLogger().createStructuredLog(groupId, initial);
-    },
-
-    child: (bindings: Record<string, unknown>) => {
-      return getDefaultLogger().child(bindings);
-    },
-  }, getDefaultLogger());
+  return defaultLoggerInstance ??= createStandaloneLogger();
 }
 
 export function configureDefaultStandaloneLogger(
@@ -159,4 +102,4 @@ export function configureDefaultStandaloneLogger(
   return defaultLoggerInstance;
 }
 
-export const logger = createLoggerProxy();
+export const logger = createLazyLogger(getDefaultLogger);
